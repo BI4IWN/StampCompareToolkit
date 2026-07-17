@@ -1,0 +1,2838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<!-- Build: BI4IWN · 印章对比工具 · Developer: 李劲松 (BI4IWN) -->
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>印章对比工具</title>
+<meta name="author" content="李劲松 (BI4IWN)">
+<meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
+<!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f8f6f3;
+    --surface: rgba(255,255,255,0.82);
+    --surface-solid: #ffffff;
+    --border: rgba(0,0,0,0.06);
+    --border-strong: rgba(0,0,0,0.10);
+    --text: #2d2926;
+    --text-secondary: #8a8279;
+    --accent: #c44133;
+    --accent-light: #e05a4d;
+    --accent-bg: rgba(196,65,51,0.06);
+    --warm-glow: rgba(196,65,51,0.08);
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 1px 3px rgba(45,41,38,0.04), 0 4px 16px rgba(45,41,38,0.03);
+    --shadow-hover: 0 2px 8px rgba(45,41,38,0.06), 0 8px 24px rgba(45,41,38,0.05);
+    --shadow-dialog: 0 8px 32px rgba(45,41,38,0.12), 0 2px 8px rgba(45,41,38,0.06);
+    --backdrop: blur(12px) saturate(1.4);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    background-image: radial-gradient(circle, rgba(45,41,38,0.025) 1px, transparent 1px);
+    background-size: 24px 24px;
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+  }
+
+  /* ---- Header ---- */
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 8px 0;
+  }
+
+  header h1 {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    color: var(--text);
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    letter-spacing: 0.2px;
+  }
+
+  /* ---- Paste Zone ---- */
+  .paste-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 24px;
+  }
+
+  .paste-zone {
+    background: var(--surface);
+    backdrop-filter: var(--backdrop);
+    -webkit-backdrop-filter: var(--backdrop);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .paste-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(ellipse at center, var(--warm-glow) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .paste-zone:hover::before, .paste-zone.dragover::before { opacity: 1; }
+
+  .paste-zone:hover, .paste-zone.dragover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  .paste-zone.has-image {
+    border-style: solid;
+    border-color: var(--border);
+    cursor: default;
+    transform: none;
+  }
+
+  .paste-zone.has-image:hover { box-shadow: var(--shadow); }
+
+  .paste-zone .placeholder {
+    text-align: center;
+    padding: 24px;
+    pointer-events: none;
+  }
+
+  .paste-zone .placeholder .icon {
+    font-size: 28px;
+    margin-bottom: 10px;
+    opacity: 0.3;
+    filter: grayscale(0.3);
+  }
+
+  .paste-zone .placeholder .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.3px;
+  }
+
+  .paste-zone .placeholder .hint {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    opacity: 0.55;
+    margin-top: 5px;
+  }
+
+  .paste-zone .preview-img {
+    max-width: 100%;
+    max-height: 260px;
+    object-fit: contain;
+    display: block;
+  }
+
+  .paste-zone .zone-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 20px;
+    z-index: 2;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(6px);
+  }
+
+  .paste-zone:first-child .zone-badge {
+    background: rgba(44,62,80,0.85);
+    color: #fff;
+  }
+
+  .paste-zone:last-child .zone-badge {
+    background: rgba(196,65,51,0.88);
+    color: #fff;
+  }
+
+  .paste-zone .remove-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(45,41,38,0.55);
+    backdrop-filter: blur(4px);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+
+  .paste-zone:hover .remove-btn { opacity: 1; }
+  .paste-zone .remove-btn:hover { transform: scale(1.1); }
+
+  .paste-zone input[type="file"] { display: none; }
+
+  /* ---- Paste Dialog ---- */
+  .paste-dialog-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(45,41,38,0.25);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .paste-dialog-overlay.visible { display: flex; }
+
+  .paste-dialog {
+    background: var(--surface-solid);
+    border-radius: 20px;
+    padding: 32px 36px 24px;
+    box-shadow: var(--shadow-dialog);
+    text-align: center;
+    min-width: 320px;
+    border: 1px solid var(--border);
+  }
+
+  .paste-dialog-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 22px;
+    color: var(--text);
+  }
+
+  .paste-dialog-buttons {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .paste-dialog-btn {
+    flex: 1;
+    padding: 14px 20px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 12px;
+    background: var(--surface-solid);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .paste-dialog-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+    color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(196,65,51,0.1);
+  }
+
+  .paste-dialog-cancel {
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 6px 14px;
+    border-radius: 8px;
+    transition: background 0.15s;
+  }
+
+  .paste-dialog-cancel:hover {
+    background: rgba(0,0,0,0.04);
+    color: var(--text);
+  }
+
+  /* ---- Extracted preview ---- */
+  .extracted-strip {
+    display: none;
+    gap: 18px;
+    margin-bottom: 22px;
+    padding: 18px 20px;
+    background: var(--surface);
+    backdrop-filter: var(--backdrop);
+    -webkit-backdrop-filter: var(--backdrop);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    align-items: flex-start;
+  }
+
+  .extracted-strip.visible { display: flex; }
+
+  .extracted-item {
+    flex: 1;
+    text-align: center;
+    min-width: 0;
+  }
+
+  .extracted-item canvas {
+    max-width: 160px;
+    max-height: 160px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: repeating-conic-gradient(#f0eeeb 0% 25%, #fff 0% 50%) 50% / 12px 12px;
+  }
+
+  .extracted-item .ext-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  /* ---- Toolbar ---- */
+  .toolbar {
+    background: var(--surface);
+    backdrop-filter: var(--backdrop);
+    -webkit-backdrop-filter: var(--backdrop);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    padding: 16px 22px;
+    margin-bottom: 22px;
+    display: none;
+  }
+
+  .toolbar.visible { display: block; }
+
+  .toolbar.visible + .rotate-strip.visible {
+    margin-top: -12px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-row + .toolbar-row {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .toolbar label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .mode-group {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: rgba(0,0,0,0.015);
+  }
+
+  .mode-btn {
+    padding: 7px 18px;
+    font-size: 12.5px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-right: 1px solid var(--border);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .mode-btn:last-child { border-right: none; }
+
+  .mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(196,65,51,0.2);
+  }
+
+  .mode-btn:hover:not(.active) {
+    background: rgba(0,0,0,0.03);
+    color: var(--text);
+  }
+
+  #target-group .mode-btn.active[data-target="ref"] {
+    background: #3d5468;
+    box-shadow: 0 1px 4px rgba(61,84,104,0.25);
+  }
+
+  #target-group .mode-btn.active[data-target="test"] {
+    background: var(--accent);
+  }
+
+  #axis-group .mode-btn {
+    padding: 7px 12px;
+    font-size: 11.5px;
+  }
+
+  #axis-group .mode-btn.active {
+    background: #2a9d8f;
+    box-shadow: 0 1px 4px rgba(42,157,143,0.2);
+  }
+
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .slider-group input[type="range"] {
+    width: 120px;
+    accent-color: var(--accent);
+  }
+
+  .slider-group .val {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .btn {
+    padding: 7px 16px;
+    font-size: 12.5px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-solid);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    transition: all 0.2s;
+  }
+
+  .btn:hover {
+    background: #faf8f6;
+    border-color: rgba(0,0,0,0.14);
+    box-shadow: 0 2px 6px rgba(45,41,38,0.06);
+  }
+
+  .btn.active {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-icon {
+    padding: 7px 11px;
+    font-size: 14px;
+  }
+
+  .spacer { flex: 1; }
+
+  /* ---- Rotate Strip ---- */
+  .rotate-strip {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--surface);
+    backdrop-filter: var(--backdrop);
+    -webkit-backdrop-filter: var(--backdrop);
+    border-radius: var(--radius) var(--radius) 0 0;
+    border: 1px solid var(--border);
+    border-bottom: 1px dashed var(--border-strong);
+  }
+  .rotate-strip.visible { display: flex; }
+  .rotate-strip label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .rotate-strip .slider-group { flex: 1; }
+  .rotate-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.5;
+    white-space: nowrap;
+  }
+
+  /* ---- Capture Area Hint ---- */
+  .capture-hint {
+    position: absolute;
+    bottom: 10px;
+    right: 14px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(6px);
+    padding: 4px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    z-index: 5;
+    font-weight: 500;
+  }
+  .comparison.visible:hover .capture-hint { opacity: 0.7; }
+
+  /* ---- Comparison Area ---- */
+  .comparison {
+    background: var(--surface-solid);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    min-height: 400px;
+    position: relative;
+    overflow: hidden;
+    display: none;
+  }
+
+  .comparison.visible { display: block; }
+
+  .rotate-strip.visible + .comparison {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    margin-top: 0;
+  }
+
+  .comparison canvas {
+    display: block;
+    width: 100%;
+    cursor: crosshair;
+  }
+
+  /* Slider handle */
+  .slider-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    cursor: ew-resize;
+    z-index: 10;
+    transform: translateX(-50%);
+  }
+
+  .slider-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 2px 10px rgba(196,65,51,0.3);
+    border: 3px solid #fff;
+    transition: box-shadow 0.2s;
+  }
+
+  .slider-handle:hover::after {
+    box-shadow: 0 3px 14px rgba(196,65,51,0.4);
+  }
+
+  .slider-handle::before {
+    content: '◂ ▸';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    color: #fff;
+    font-size: 10px;
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  /* ---- Status ---- */
+  .status-bar {
+    text-align: center;
+    padding: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: none;
+    font-weight: 500;
+  }
+
+  .status-bar.visible { display: block; }
+
+  /* ---- Magnifier ---- */
+  .magnifier {
+    position: fixed;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    border: 2.5px solid var(--accent);
+    box-shadow: 0 4px 20px rgba(196,65,51,0.15), 0 0 0 1px rgba(196,65,51,0.08);
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .magnifier canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  /* ---- Keyboard hints ---- */
+  .kbd-hints {
+    text-align: center;
+    padding: 14px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.55;
+    display: none;
+    letter-spacing: 0.2px;
+  }
+
+  .kbd-hints.visible { display: block; }
+
+  kbd {
+    display: inline-block;
+    padding: 2px 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    background: rgba(255,255,255,0.7);
+    font-family: inherit;
+    font-size: 10.5px;
+    margin: 0 2px;
+    font-weight: 600;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+
+  /* ---- Responsive (BI4IWN · 李劲松) ---- */
+  @media (max-width: 640px) {
+    .paste-row { grid-template-columns: 1fr; }
+    .paste-zone { min-height: 150px; }
+    .toolbar-row { gap: 8px; }
+    .slider-group input[type="range"] { width: 80px; }
+    .rotate-strip { flex-wrap: wrap; }
+    .rotate-strip .slider-group input[type="range"] { width: 160px; }
+    .rotate-hint { display: none; }
+  }
+
+  /* ---- Product Mark & Developer (BI4IWN 李劲松) ---- */
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .product-mark {
+    flex-shrink: 0;
+    opacity: 0.9;
+    transition: all 0.3s;
+  }
+  .product-mark:hover {
+    opacity: 1;
+    transform: rotate(8deg) scale(1.08);
+  }
+  .dev-footer {
+    text-align: center;
+    padding: 20px 0 6px;
+    font-size: 0;
+    color: transparent;
+    transition: all 0.5s cubic-bezier(0.4,0,0.2,1);
+    user-select: none;
+    line-height: 1.6;
+  }
+  .dev-footer:hover {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.5;
+  }
+  .dev-footer:hover .dev-seal {
+    opacity: 0.6;
+  }
+  .dev-seal {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 4px;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .status-seal {
+    display: inline-block;
+    vertical-align: -2px;
+    margin-right: 3px;
+    opacity: 0.5;
+  }
+
+  /* ---- OCR Inline Results (BI4IWN) ---- */
+  .ocr-inline {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--accent-bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    display: none;
+    font-size: 12px;
+  }
+  .ocr-inline.visible { display: block; }
+  .ocr-inline-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 3px;
+    line-height: 1.4;
+  }
+  .ocr-inline-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    min-width: 28px;
+    flex-shrink: 0;
+  }
+  .ocr-inline-val {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-all;
+    flex: 1;
+  }
+  .ocr-inline-progress {
+    margin-top: 6px;
+  }
+  .ocr-inline-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .ocr-inline-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .ocr-inline-status {
+    font-size: 10px;
+    color: var(--text-secondary);
+  }
+  .ocr-cancel-btn {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    margin-top: 5px;
+    padding: 3px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 0.3px;
+  }
+  .ocr-cancel-btn.visible { display: inline-flex; }
+  .ocr-cancel-btn:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* ---- OCR 服务状态指示条 (非阻断) ---- */
+  #ocr-status-bar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-solid);
+    position: relative;
+    z-index: 100;
+  }
+  #ocr-status-bar.visible { display: flex; }
+  #ocr-status-bar .ocr-sdot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  #ocr-status-bar .ocr-sdot.checking { background: #f0ad4e; animation: pulse-dot 1s infinite; }
+  #ocr-status-bar .ocr-sdot.ok { background: #4caf50; }
+  #ocr-status-bar .ocr-sdot.fail { background: #e74c3c; }
+  #ocr-status-bar .ocr-stext { color: var(--text-secondary); flex: 1; }
+  #ocr-status-bar .ocr-sclose {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-secondary); font-size: 14px; padding: 0 2px;
+    opacity: 0.5; transition: opacity 0.15s;
+  }
+  #ocr-status-bar .ocr-sclose:hover { opacity: 1; }
+  #ocr-status-bar .ocr-slaunch {
+    padding: 2px 10px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  #ocr-status-bar .ocr-slaunch:hover { background: var(--accent-light); }
+  /* OCR 按钮不可用状态 */
+  .btn-ocr-disabled {
+    opacity: 0.45;
+    cursor: not-allowed !important;
+    position: relative;
+  }
+  .btn-ocr-disabled::after {
+    content: '无服务';
+    position: absolute;
+    top: -16px; right: -4px;
+    font-size: 9px;
+    color: #e74c3c;
+    background: var(--surface-solid);
+    border: 1px solid #e74c3c;
+    border-radius: 3px;
+    padding: 0 4px;
+    line-height: 16px;
+    font-weight: 600;
+    pointer-events: none;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<!-- OCR 服务状态指示条 (非阻断，其他功能正常使用) -->
+<div id="ocr-status-bar">
+  <span class="ocr-sdot checking" id="ocr-sdot"></span>
+  <span class="ocr-stext" id="ocr-stext">正在检测 OCR 服务...</span>
+  <a class="ocr-slaunch" id="ocr-slaunch" href="#" style="display:none">启动指南</a>
+  <button class="ocr-sclose" id="ocr-sclose" title="关闭">&times;</button>
+</div>
+
+<div class="app">
+  <header>
+    <div class="header-row">
+      <svg class="product-mark" width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具">
+        <circle cx="50" cy="50" r="46" fill="none" stroke="#c0392b" stroke-width="4"/>
+        <circle cx="50" cy="50" r="38" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
+        <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>印章对比工具</h1>
+    </div>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比</p>
+  </header>
+
+  <div class="paste-row">
+    <div class="paste-zone" id="zone-ref" tabindex="0">
+      <span class="zone-badge">参考章</span>
+      <button class="remove-btn" title="清除">×</button>
+      <div class="placeholder">
+        <div class="icon">📋</div>
+        <div class="label">Ctrl+V 粘贴截图</div>
+        <div class="hint">合同印章作为参考基准</div>
+      </div>
+    </div>
+    <div class="paste-zone" id="zone-test" tabindex="0">
+      <span class="zone-badge">待验章</span>
+      <button class="remove-btn" title="清除">×</button>
+      <div class="placeholder">
+        <div class="icon">📋</div>
+        <div class="label">Ctrl+V 粘贴截图</div>
+        <div class="hint">待对比单据上的印章</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paste target selection dialog -->
+  <div class="paste-dialog-overlay" id="paste-dialog-overlay">
+    <div class="paste-dialog">
+      <div class="paste-dialog-title">选择粘贴位置</div>
+      <div class="paste-dialog-buttons">
+        <button class="paste-dialog-btn" id="paste-ref-btn">参考章</button>
+        <button class="paste-dialog-btn" id="paste-test-btn">待验章</button>
+      </div>
+      <button class="paste-dialog-cancel" id="paste-cancel-btn">取消</button>
+    </div>
+  </div>
+
+  <div class="extracted-strip" id="extracted-strip">
+    <div class="extracted-item">
+      <canvas id="ext-ref" width="160" height="160"></canvas>
+      <div class="ext-label">参考章提取</div>
+      <div class="ocr-inline" id="ocr-ref">
+        <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-ref-company">—</span></div>
+        <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-ref-code">—</span></div>
+        <div class="ocr-inline-row"><span class="ocr-inline-label">类型</span><span class="ocr-inline-val" id="ocr-ref-type">—</span></div>
+        <div class="ocr-inline-progress" id="ocr-ref-progress" style="display:none;">
+          <div class="ocr-inline-bar"><div class="ocr-inline-fill" id="ocr-ref-fill"></div></div>
+          <span class="ocr-inline-status" id="ocr-ref-status">准备中</span>
+          <button class="ocr-cancel-btn" id="ocr-ref-cancel" title="中断识别">■ 中断</button>
+        </div>
+      </div>
+    </div>
+    <div class="extracted-item">
+      <canvas id="ext-test" width="160" height="160"></canvas>
+      <div class="ext-label">待验章提取</div>
+      <div class="ocr-inline" id="ocr-test">
+        <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-test-company">—</span></div>
+        <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-test-code">—</span></div>
+        <div class="ocr-inline-row"><span class="ocr-inline-label">类型</span><span class="ocr-inline-val" id="ocr-test-type">—</span></div>
+        <div class="ocr-inline-progress" id="ocr-test-progress" style="display:none;">
+          <div class="ocr-inline-bar"><div class="ocr-inline-fill" id="ocr-test-fill"></div></div>
+          <span class="ocr-inline-status" id="ocr-test-status">准备中</span>
+          <button class="ocr-cancel-btn" id="ocr-test-cancel" title="中断识别">■ 中断</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-row">
+      <label>操作目标</label>
+      <div class="mode-group" id="target-group">
+        <button class="mode-btn" data-target="ref">参考章</button>
+        <button class="mode-btn active" data-target="test">待验章</button>
+      </div>
+      <div class="spacer"></div>
+      <label>对比模式</label>
+      <div class="mode-group">
+        <button class="mode-btn active" data-mode="overlay">叠加</button>
+        <button class="mode-btn" data-mode="slider">滑块</button>
+        <button class="mode-btn" data-mode="sidebyside">并排</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
+      <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
+      <button class="btn" id="btn-export" title="导出对比结果">导出</button>
+      <button class="btn" id="btn-verify" title="打开全国印章查询平台">印章核实</button>
+      <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码">全部识别</button>
+    </div>
+    <div class="toolbar-row">
+      <label>透明度</label>
+      <div class="slider-group">
+        <input type="range" id="sl-opacity" min="0" max="100" value="50">
+        <span class="val" id="val-opacity">50%</span>
+      </div>
+      <label style="margin-left:12px">缩放</label>
+      <div class="slider-group">
+        <input type="range" id="sl-scale" min="30" max="200" value="100" step="0.5">
+        <span class="val" id="val-scale">100%</span>
+      </div>
+      <div class="mode-group" id="axis-group" style="margin-left:6px">
+        <button class="mode-btn active" data-axis="uniform" title="等比缩放">等比</button>
+        <button class="mode-btn" data-axis="x" title="仅调水平缩放">水平</button>
+        <button class="mode-btn" data-axis="y" title="仅调垂直缩放">垂直</button>
+      </div>
+      <label style="margin-left:12px">水平偏移</label>
+      <div class="slider-group">
+        <input type="range" id="sl-offset-x" min="-100" max="100" value="0" step="0.5">
+        <span class="val" id="val-offset-x">0px</span>
+      </div>
+      <label style="margin-left:12px">垂直偏移</label>
+      <div class="slider-group">
+        <input type="range" id="sl-offset-y" min="-100" max="100" value="0" step="0.5">
+        <span class="val" id="val-offset-y">0px</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-icon" id="btn-reset" title="重置调整">↺</button>
+    </div>
+  </div>
+
+  <!-- 旋转快调条：紧贴对比区域，最小间距 -->
+  <div class="rotate-strip" id="rotate-strip">
+    <label>旋转</label>
+    <div class="slider-group">
+      <input type="range" id="sl-rotate" min="-180" max="180" value="0" step="0.1" style="width:260px">
+      <span class="val" id="val-rotate">0°</span>
+    </div>
+    <span class="rotate-hint">悬停滑块滚轮调节</span>
+  </div>
+
+  <div class="comparison" id="comparison">
+    <canvas id="cmp-canvas"></canvas>
+    <div class="slider-handle" id="slider-handle" style="display:none;"></div>
+    <!-- 鼠标捕获区域提示角标 -->
+    <div class="capture-hint" id="capture-hint">滚轮缩放 · 拖拽移动</div>
+  </div>
+
+  <!-- OCR results are now inline under each stamp -->
+
+  <div class="status-bar" id="status-bar"></div>
+
+  <div class="kbd-hints" id="kbd-hints">
+    <kbd>1</kbd> 叠加 &nbsp; <kbd>2</kbd> 滑块 &nbsp; <kbd>3</kbd> 并排 &nbsp;
+    <kbd>Tab</kbd> 切换目标 &nbsp; <kbd>D</kbd> 差异高亮 &nbsp; <kbd>R</kbd> 重置 &nbsp;
+    <kbd>← →</kbd> 旋转 &nbsp; <kbd>↑ ↓</kbd> 缩放 &nbsp;
+    鼠标拖拽移动 &nbsp; <kbd>Ctrl+V</kbd> 粘贴
+  </div>
+
+  <!-- BI4IWN · 李劲松 — 开发者标识，悬停可见 -->
+  <div class="dev-footer" title="BI4IWN">
+    <svg class="dev-seal" width="14" height="14" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" stroke-width="5"/>
+      <polygon points="50,18 57,38 78,38 61,50 67,70 50,58 33,70 39,50 22,38 43,38" fill="currentColor"/>
+    </svg>
+    BI4IWN · 李劲松
+  </div>
+</div>
+
+<div class="magnifier" id="magnifier">
+  <canvas id="mag-canvas" width="150" height="150"></canvas>
+</div>
+
+<script>
+/* ============================================================
+   State
+   ============================================================ */
+const state = {
+  ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
+  test: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
+  target: 'test',          // 当前操作目标: 'ref' | 'test'
+  scaleAxis: 'uniform',   // 缩放轴: 'uniform' | 'x' | 'y'
+  mode: 'overlay',
+  opacity: 50,
+  diffMode: false,
+  sliderPos: 0.5,
+  draggingSlider: false,
+  draggingStamp: false,   // 是否正在拖拽印章
+  dragLastX: 0,
+  dragLastY: 0,
+  dragAccX: 0,           // 亚像素累积（X）
+  dragAccY: 0,           // 亚像素累积（Y）
+  dragRect: null,         // mousedown 时缓存的 canvas rect
+  resizing: false,        // 是否正在拖拽缩放手柄
+  resizeHandle: null,     // 当前拖拽的手柄: 'n','s','e','w','ne','nw','se','sw'
+  resizeStartScaleX: 100,
+  resizeStartScaleY: 100,
+  resizeAnchorX: 0,       // 缩放锚点（对边中心）
+  resizeAnchorY: 0,
+  magnifierActive: false,
+  shiftHeld: false,       // 独立追踪 Shift 键状态（macOS 滚轮事件中 e.shiftKey 可能不可靠）
+  _renderRequested: false, // requestAnimationFrame 节流标记
+  _isInteracting: false,  // 是否正在拖拽/缩放（用于跳过昂贵的差异高亮）
+  _ocrControllers: {},     // AbortController per target: { ref: AbortController, test: AbortController }
+};
+
+// 帧节流：多次连续 render() 调用合并为一帧一次渲染
+function scheduleRender() {
+  if (!state._renderRequested) {
+    state._renderRequested = true;
+    requestAnimationFrame(() => {
+      state._renderRequested = false;
+      render();
+      // Flush deferred slider sync from resize drag
+      if (state._pendingSliderSync) {
+        state._pendingSliderSync = false;
+        syncSlidersToTarget();
+      }
+    });
+  }
+}
+
+/* ============================================================
+   DOM refs
+   ============================================================ */
+const $ = (s) => document.querySelector(s);
+const zoneRef = $('#zone-ref');
+const zoneTest = $('#zone-test');
+const extractedStrip = $('#extracted-strip');
+const toolbar = $('#toolbar');
+const comparison = $('#comparison');
+const cmpCanvas = $('#cmp-canvas');
+const cmpCtx = cmpCanvas.getContext('2d');
+const sliderHandle = $('#slider-handle');
+const magnifier = $('#magnifier');
+const magCanvas = $('#mag-canvas');
+const magCtx = magCanvas.getContext('2d');
+const statusBar = $('#status-bar');
+const kbdHints = $('#kbd-hints');
+
+/* ============================================================
+   Stamp Detection — 核心算法
+   ============================================================ */
+
+// 判断像素是否为红色印章墨水 — HSV 色相检测，覆盖深浅红、偏橙红、浅红
+function isRedPixel(r, g, b) {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const delta = max - min;
+  if (delta < 0.04 || max < 0.06) return false;
+  const sat = delta / max;
+  if (sat < 0.08) return false;
+  let hue;
+  if (max === rn) hue = 60 * (((gn - bn) / delta) % 6);
+  else if (max === gn) hue = 60 * ((bn - rn) / delta + 2);
+  else hue = 60 * ((rn - gn) / delta + 4);
+  if (hue < 0) hue += 360;
+  // 扩展红色色相环：0-40°（含橙红）和 320-360°（含紫红）
+  return hue < 40 || hue > 320;
+}
+
+function detectStampRegion(imageData) {
+  const { data, width, height } = imageData;
+  const N = width * height;
+
+  // Pass 1: 标记所有红色像素
+  const redMask = new Uint8Array(N);
+  let redCount = 0;
+  let sumX = 0, sumY = 0;
+  let rawMinX = width, rawMinY = height, rawMaxX = 0, rawMaxY = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (isRedPixel(data[i], data[i + 1], data[i + 2])) {
+        redMask[y * width + x] = 1;
+        redCount++;
+        sumX += x;
+        sumY += y;
+        if (x < rawMinX) rawMinX = x;
+        if (x > rawMaxX) rawMaxX = x;
+        if (y < rawMinY) rawMinY = y;
+        if (y > rawMaxY) rawMaxY = y;
+      }
+    }
+  }
+
+  if (redCount < 80) {
+    return { x: 0, y: 0, w: width, h: height, circular: false, cx: width / 2, cy: height / 2, radius: Math.max(width, height) / 2 };
+  }
+
+  // Pass 2: 形态学膨胀 — 向外扩展边界，填补印章边缘的断裂和缺口
+  const dilateR = Math.max(3, Math.round(Math.max(rawMaxX - rawMinX, rawMaxY - rawMinY) * 0.025));
+  const dilated = new Uint8Array(N);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!redMask[y * width + x]) continue;
+      for (let dy = -dilateR; dy <= dilateR; dy++) {
+        for (let dx = -dilateR; dx <= dilateR; dx++) {
+          if (dx * dx + dy * dy > dilateR * dilateR) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            dilated[ny * width + nx] = 1;
+          }
+        }
+      }
+    }
+  }
+
+  // Pass 3: 在膨胀后的区域上计算精确边界框
+  let minX = width, minY = height, maxX = 0, maxY = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (dilated[y * width + x]) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  // Pass 4: 质心（Center of Mass）— 比几何中心更准确地定位印章中心
+  let comX = 0, comY = 0, comCount = 0;
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (redMask[y * width + x]) {
+        comX += x;
+        comY += y;
+        comCount++;
+      }
+    }
+  }
+  comX /= comCount;
+  comY /= comCount;
+
+  // Pass 5: 从质心到所有红色像素的最大距离 → 印章半径
+  let maxR = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (redMask[y * width + x]) {
+        const d = Math.sqrt((x - comX) ** 2 + (y - comY) ** 2);
+        if (d > maxR) maxR = d;
+      }
+    }
+  }
+
+  // 判断圆形章
+  const bw = maxX - minX + 1;
+  const bh = maxY - minY + 1;
+  const circular = Math.abs(bw - bh) / Math.max(bw, bh) < 0.18;
+
+  // 对圆形章：用第 97 百分位距离做半径（抗毛刺），然后外扩 2px
+  let finalRadius = maxR;
+  if (circular) {
+    const distances = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (redMask[y * width + x]) {
+          distances.push(Math.sqrt((x - comX) ** 2 + (y - comY) ** 2));
+        }
+      }
+    }
+    distances.sort((a, b) => a - b);
+    const p97 = distances[Math.floor(distances.length * 0.97)] || maxR;
+    finalRadius = p97 + 2;
+  }
+
+  // 最终裁剪区域：以质心为中心，用半径生成正方形（保证印章居中）
+  const cropHalf = Math.ceil(finalRadius) + 2;
+  let cx = Math.round(comX);
+  let cy = Math.round(comY);
+  // 确保不超出图像边界
+  cx = Math.max(cropHalf, Math.min(width - cropHalf, cx));
+  cy = Math.max(cropHalf, Math.min(height - cropHalf, cy));
+
+  return {
+    x: cx - cropHalf,
+    y: cy - cropHalf,
+    w: cropHalf * 2,
+    h: cropHalf * 2,
+    circular,
+    cx,
+    cy,
+    radius: finalRadius,
+  };
+}
+
+/* ============================================================
+   Stamp Extraction — 提取 + 归一化
+   ============================================================ */
+function loadImageToCanvas(img) {
+  const c = document.createElement('canvas');
+  const maxDim = 1600;
+  let w = img.naturalWidth || img.width;
+  let h = img.naturalHeight || img.height;
+  if (w > maxDim || h > maxDim) {
+    const s = maxDim / Math.max(w, h);
+    w = Math.round(w * s);
+    h = Math.round(h * s);
+  }
+  c.width = w;
+  c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c;
+}
+
+function extractStamp(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const imageData = ctx.getImageData(0, 0, W, H);
+  const region = detectStampRegion(imageData);
+
+  const OUT = 800; // 统一输出尺寸（高分辨率保留细节）
+  const out = document.createElement('canvas');
+  out.width = OUT;
+  out.height = OUT;
+  const octx = out.getContext('2d');
+
+  // 从原图中裁剪印章区域，以质心为中心映射到输出画布中心
+  const srcX = region.x, srcY = region.y, srcW = region.w, srcH = region.h;
+  // 等比缩放，取较短边保证不变形
+  const fitSize = Math.max(srcW, srcH);
+  const scaleRatio = OUT / fitSize;
+  const drawW = Math.round(srcW * scaleRatio);
+  const drawH = Math.round(srcH * scaleRatio);
+  const drawX = Math.round((OUT - drawW) / 2);
+  const drawY = Math.round((OUT - drawH) / 2);
+
+  // 先画到临时画布（高质量缩放）
+  const tmp = document.createElement('canvas');
+  tmp.width = OUT; tmp.height = OUT;
+  const tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = true;
+  tctx.imageSmoothingQuality = 'high';
+  tctx.drawImage(canvas, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
+
+  // 逐像素处理：基于置信度的 alpha 通道，消除背景杂色
+  const td = tctx.getImageData(0, 0, OUT, OUT);
+  const alphaMap = new Uint8Array(OUT * OUT);
+
+  for (let y = 0; y < OUT; y++) {
+    for (let x = 0; x < OUT; x++) {
+      const idx = (y * OUT + x) * 4;
+      const r = td.data[idx], g = td.data[idx + 1], b = td.data[idx + 2];
+      const rn = r / 255, gn = g / 255, bn = b / 255;
+      const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+      const delta = max - min;
+
+      let alpha = 0;
+
+      if (delta >= 0.02 && max >= 0.03) {
+        const sat = delta / max;
+        let hue;
+        if (max === rn) hue = 60 * (((gn - bn) / delta) % 6);
+        else if (max === gn) hue = 60 * ((bn - rn) / delta + 2);
+        else hue = 60 * ((rn - gn) / delta + 4);
+        if (hue < 0) hue += 360;
+
+        const isRedHue = hue < 45 || hue > 315;
+
+        if (isRedHue && sat >= 0.03) {
+          // 置信度：更宽松以保留印章细节（ faded edges、浅色纹理）
+          const satFactor = Math.min(1, (sat - 0.03) / 0.30);
+          const hueDist = hue <= 45 ? hue : (360 - hue);
+          const hueFactor = Math.min(1, 1 - hueDist / 45);
+          const confidence = 0.1 + 0.9 * (satFactor * 0.5 + hueFactor * 0.5);
+          alpha = Math.round(Math.min(1, confidence) * 255);
+
+          // 轻微增强：保留更多原始细节
+          const boost = 1.06;
+          const suppress = 0.92;
+          td.data[idx]     = Math.min(255, Math.round(r * boost));
+          td.data[idx + 1] = Math.min(255, Math.round(g * suppress));
+          td.data[idx + 2] = Math.min(255, Math.round(b * suppress));
+        }
+      }
+
+      td.data[idx + 3] = alpha;
+      alphaMap[y * OUT + x] = alpha;
+    }
+  }
+
+  // 噪点清理：移除孤立的小像素群（面积 < 4 像素的连通域）
+  const visited = new Uint8Array(OUT * OUT);
+  const MIN_CLUSTER = 4;
+  for (let y = 0; y < OUT; y++) {
+    for (let x = 0; x < OUT; x++) {
+      const pi = y * OUT + x;
+      if (visited[pi] || alphaMap[pi] < 20) continue;
+      // BFS 收集连通域
+      const cluster = [];
+      const queue = [pi];
+      visited[pi] = 1;
+      let qi = 0;
+      while (qi < queue.length) {
+        const ci = queue[qi++];
+        cluster.push(ci);
+        const cx2 = ci % OUT, cy2 = (ci - cx2) / OUT;
+        const neighbors = [
+          cx2 > 0 ? ci - 1 : -1,
+          cx2 < OUT - 1 ? ci + 1 : -1,
+          cy2 > 0 ? ci - OUT : -1,
+          cy2 < OUT - 1 ? ci + OUT : -1,
+        ];
+        for (const ni of neighbors) {
+          if (ni >= 0 && !visited[ni] && alphaMap[ni] >= 20) {
+            visited[ni] = 1;
+            queue.push(ni);
+          }
+        }
+      }
+      // 面积太小的连通域 → 清除
+      if (cluster.length < MIN_CLUSTER) {
+        for (const ci of cluster) {
+          td.data[ci * 4 + 3] = 0;
+          alphaMap[ci] = 0;
+        }
+      }
+    }
+  }
+
+  octx.putImageData(td, 0, 0);
+
+  return { canvas: out, circular: region.circular, bbox: { x: srcX, y: srcY, w: srcW, h: srcH, fitSize } };
+}
+
+/* ============================================================
+   Image Loading
+   ============================================================ */
+function loadImageFromFile(file, target) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => processStamp(img, target);
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function processStamp(img, target) {
+  const canvas = loadImageToCanvas(img);
+
+  // === 阶段 1：立即显示预览图 ===
+  const zone = target === 'ref' ? zoneRef : zoneTest;
+  zone.classList.add('has-image');
+  const ph = zone.querySelector('.placeholder');
+  if (ph) ph.style.display = 'none';
+
+  let preview = zone.querySelector('.preview-img');
+  if (!preview) {
+    preview = document.createElement('img');
+    preview.className = 'preview-img';
+    zone.appendChild(preview);
+  }
+  preview.src = img.src;
+  showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 — 正在提取印章...`);
+
+  // === 阶段 2：提取印章（同步，快速）===
+  const extracted = extractStamp(canvas);
+
+  state[target] = {
+    ...state[target],
+    original: canvas,
+    extracted: extracted.canvas,
+    circular: extracted.circular,
+    bbox: extracted.bbox,
+  };
+
+  // 绘制提取结果到小画布
+  const extCanvas = target === 'ref' ? $('#ext-ref') : $('#ext-test');
+  const ectx = extCanvas.getContext('2d');
+  ectx.clearRect(0, 0, 160, 160);
+  ectx.drawImage(extracted.canvas, 0, 0, 160, 160);
+
+  updateVisibility();
+  render();
+  showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extracted.circular ? '圆形章' : '异形章'})  — 已自动提取并对齐`);
+
+  // 自动触发 OCR 文字识别（检查服务是否可用）
+  if (window._ocrAvailable) {
+    runStampOCR(target);
+  } else {
+    // OCR 服务不可用，在 inline 区域显示提示
+    var inlineEl = document.getElementById('ocr-' + target);
+    var statusEl = document.getElementById('ocr-' + target + '-status');
+    if (inlineEl) {
+      inlineEl.classList.add('visible');
+      document.getElementById('ocr-' + target + '-company').textContent = '需启动服务';
+      document.getElementById('ocr-' + target + '-code').textContent = '—';
+      document.getElementById('ocr-' + target + '-type').textContent = '—';
+    }
+  }
+}
+
+function removeStamp(target) {
+  // 取消进行中的 OCR
+  cancelStampOCR(target);
+
+  state[target] = { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 };
+  const zone = target === 'ref' ? zoneRef : zoneTest;
+  zone.classList.remove('has-image');
+  const ph = zone.querySelector('.placeholder');
+  if (ph) ph.style.display = '';
+  const preview = zone.querySelector('.preview-img');
+  if (preview) preview.remove();
+
+  const extCanvas = target === 'ref' ? $('#ext-ref') : $('#ext-test');
+  extCanvas.getContext('2d').clearRect(0, 0, 160, 160);
+
+  // 重置 OCR 结果显示
+  const ocrInline = $(`#ocr-${target}`);
+  ocrInline.classList.remove('visible');
+  $(`#ocr-${target}-progress`).style.display = 'none';
+  $(`#ocr-${target}-cancel`).classList.remove('visible');
+  $(`#ocr-${target}-company`).textContent = '—';
+  $(`#ocr-${target}-code`).textContent = '—';
+  $(`#ocr-${target}-type`).textContent = '—';
+
+  updateVisibility();
+  render();
+}
+
+/* ============================================================
+   UI Visibility
+   ============================================================ */
+function updateVisibility() {
+  const hasBoth = state.ref.extracted && state.test.extracted;
+  const hasOne = state.ref.extracted || state.test.extracted;
+  extractedStrip.classList.toggle('visible', hasOne);
+  toolbar.classList.toggle('visible', hasBoth);
+  $('#rotate-strip').classList.toggle('visible', hasBoth);
+  comparison.classList.toggle('visible', hasBoth);
+  statusBar.classList.toggle('visible', hasBoth);
+  kbdHints.classList.toggle('visible', hasBoth);
+}
+
+function showStatus(msg) {
+  statusBar.textContent = msg;
+  statusBar.classList.add('visible');
+}
+
+/* ============================================================
+   Resize helpers — handles follow stamp rotation
+   ============================================================ */
+function getHandleGeom() {
+  const w = cmpCanvas.width, h = cmpCanvas.height;
+  const stampSize = Math.min(w, h) * 0.6;
+  const cx = w / 2, cy = h / 2;
+  const t = state[state.target];
+  const halfW = stampSize * t.scaleX / 200;
+  const halfH = stampSize * t.scaleY / 200;
+  const rad = (t.rotate || 0) * Math.PI / 180;
+  const cosR = Math.cos(rad), sinR = Math.sin(rad);
+
+  // Handle corners in local space (scaled extents)
+  const raw = [
+    { id: 'nw', lx: -halfW, ly: -halfH },
+    { id: 'ne', lx:  halfW, ly: -halfH },
+    { id: 'sw', lx: -halfW, ly:  halfH },
+    { id: 'se', lx:  halfW, ly:  halfH },
+    { id: 'n',  lx: 0,      ly: -halfH },
+    { id: 's',  lx: 0,      ly:  halfH },
+    { id: 'w',  lx: -halfW, ly: 0      },
+    { id: 'e',  lx:  halfW, ly: 0      },
+  ];
+
+  // New transform: screenPos = center + R(rot) * (offset + localPos)
+  // 印章屏幕中心 = (cx, cy) + R(rot) * (offsetX, offsetY)
+  const centerX = cx + t.offsetX * cosR - t.offsetY * sinR;
+  const centerY = cy + t.offsetX * sinR + t.offsetY * cosR;
+  const handles = raw.map(r => ({
+    id: r.id,
+    x: centerX + r.lx * cosR - r.ly * sinR,
+    y: centerY + r.lx * sinR + r.ly * cosR,
+  }));
+
+  return { centerX, centerY, halfW, halfH, rad, handles };
+}
+
+function getHandleAtPoint(canvasX, canvasY) {
+  const geom = getHandleGeom();
+  const t = state[state.target];
+  const hs = 10; // hit area half-size (generous for easy clicking)
+  // Transform mouse into stamp's local (unrotated) coordinate space
+  const dx = canvasX - geom.centerX;
+  const dy = canvasY - geom.centerY;
+  const cosR = Math.cos(-geom.rad), sinR = Math.sin(-geom.rad);
+  const localMX = dx * cosR - dy * sinR;
+  const localMY = dx * sinR + dy * cosR;
+
+  const rawCorners = [
+    { id: 'nw', lx: -geom.halfW, ly: -geom.halfH },
+    { id: 'ne', lx:  geom.halfW, ly: -geom.halfH },
+    { id: 'sw', lx: -geom.halfW, ly:  geom.halfH },
+    { id: 'se', lx:  geom.halfW, ly:  geom.halfH },
+    { id: 'n',  lx: 0,           ly: -geom.halfH },
+    { id: 's',  lx: 0,           ly:  geom.halfH },
+    { id: 'w',  lx: -geom.halfW, ly: 0           },
+    { id: 'e',  lx:  geom.halfW, ly: 0           },
+  ];
+  for (const c of rawCorners) {
+    if (Math.abs(localMX - c.lx) <= hs && Math.abs(localMY - c.ly) <= hs) return c.id;
+  }
+  return null;
+}
+
+function handleCursor(id) {
+  const t = state[state.target];
+  const rad = (t.rotate || 0) * Math.PI / 180;
+  const deg = ((rad * 180 / Math.PI) % 360 + 360) % 360;
+  // Rotate the cursor direction by the stamp's angle
+  const baseAngles = { n: 90, s: 90, e: 0, w: 0, ne: 45, sw: 45, nw: 135, se: 135 };
+  const angle = (baseAngles[id] || 0) + deg;
+  const norm = ((angle % 180) + 180) % 180;
+  if (norm < 22.5 || norm > 157.5) return 'ew-resize';
+  if (norm > 67.5 && norm < 112.5) return 'ns-resize';
+  if (norm > 22.5 && norm < 67.5) return (norm < 45 ? 'nwse-resize' : 'nesw-resize');
+  return (norm < 135 ? 'nesw-resize' : 'nwse-resize');
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+function render() {
+  if (!state.ref.extracted || !state.test.extracted) return;
+
+  const container = comparison;
+  const w = container.clientWidth || 800;
+  const h = Math.max(400, Math.round(w * 0.6));
+
+  // 仅在尺寸变化时重设画布，避免滚轮连续触发时反复清除/重建导致抖动
+  if (cmpCanvas.width !== w || cmpCanvas.height !== h) {
+    cmpCanvas.width = w;
+    cmpCanvas.height = h;
+    cmpCanvas.style.height = h + 'px';
+  }
+
+  cmpCtx.clearRect(0, 0, w, h);
+
+  // Background — pure white for clean stamp visibility
+  cmpCtx.fillStyle = '#ffffff';
+  cmpCtx.fillRect(0, 0, w, h);
+
+  // Grid — 单一路径批量绘制，减少状态切换开销（交互中跳过以提升性能）
+  if (!state._isInteracting) {
+    cmpCtx.strokeStyle = '#eee';
+    cmpCtx.lineWidth = 0.5;
+    cmpCtx.beginPath();
+    for (let x = 0; x < w; x += 40) {
+      cmpCtx.moveTo(x, 0); cmpCtx.lineTo(x, h);
+    }
+    for (let y = 0; y < h; y += 40) {
+      cmpCtx.moveTo(0, y); cmpCtx.lineTo(w, y);
+    }
+    cmpCtx.stroke();
+  }
+
+  // Crosshair
+  cmpCtx.strokeStyle = '#ddd';
+  cmpCtx.lineWidth = 1;
+  cmpCtx.setLineDash([6, 4]);
+  cmpCtx.beginPath(); cmpCtx.moveTo(w / 2, 0); cmpCtx.lineTo(w / 2, h); cmpCtx.stroke();
+  cmpCtx.beginPath(); cmpCtx.moveTo(0, h / 2); cmpCtx.lineTo(w, h / 2); cmpCtx.stroke();
+  cmpCtx.setLineDash([]);
+
+  const stampSize = Math.min(w, h) * 0.6;
+  const cx = w / 2;
+  const cy = h / 2;
+  const scale = 1; // base scale; per-stamp scale applied in render functions
+
+  if (state.mode === 'overlay') {
+    renderOverlay(cx, cy, stampSize, scale);
+  } else if (state.mode === 'slider') {
+    renderSlider(cx, cy, stampSize, scale, w, h);
+  } else if (state.mode === 'sidebyside') {
+    renderSideBySide(cx, cy, stampSize, scale, w, h);
+  }
+
+  if (state.diffMode && state.mode === 'overlay' && !state._isInteracting) {
+    renderDiffOverlay(cx, cy, stampSize, scale);
+  }
+
+  // Mode label
+  cmpCtx.fillStyle = 'rgba(0,0,0,0.3)';
+  cmpCtx.font = '11px -apple-system, sans-serif';
+  const modeNames = { overlay: '叠加模式', slider: '滑块模式', sidebyside: '并排模式' };
+  cmpCtx.fillText(modeNames[state.mode], 12, h - 12);
+
+  // Draw resize handles for selected stamp (rotated with stamp)
+  const geom = getHandleGeom();
+  const { centerX: bx, centerY: by, halfW: bhw, halfH: bhh, rad: bRad, handles: bHandles } = geom;
+  // 印章屏幕中心 = (cx, cy) + R(rot) * (offsetX, offsetY)
+  const selT = state[state.target];
+  const selRad = (selT.rotate || 0) * Math.PI / 180;
+  const selCosR = Math.cos(selRad), selSinR = Math.sin(selRad);
+  const stampScreenX = w / 2 + selT.offsetX * selCosR - selT.offsetY * selSinR;
+  const stampScreenY = h / 2 + selT.offsetX * selSinR + selT.offsetY * selCosR;
+  cmpCtx.save();
+  cmpCtx.translate(stampScreenX, stampScreenY);
+  if (selRad) cmpCtx.rotate(selRad);
+  cmpCtx.strokeStyle = 'rgba(52,152,219,0.6)';
+  cmpCtx.lineWidth = 1;
+  cmpCtx.setLineDash([4, 3]);
+  cmpCtx.strokeRect(-bhw, -bhh, bhw * 2, bhh * 2);
+  cmpCtx.setLineDash([]);
+  cmpCtx.restore();
+
+  const hs = 5; // handle visual half-size
+  for (const hp of bHandles) {
+    cmpCtx.fillStyle = '#fff';
+    cmpCtx.fillRect(hp.x - hs, hp.y - hs, hs * 2, hs * 2);
+    cmpCtx.strokeStyle = '#3498db';
+    cmpCtx.lineWidth = 1.5;
+    cmpCtx.strokeRect(hp.x - hs, hp.y - hs, hs * 2, hs * 2);
+  }
+}
+
+function drawStamp(ctx, canvas, cx, cy, size, scaleX, scaleY, rotate, alpha, tint, ox, oy) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // 变换顺序：平移到画布中心 → 旋转（围绕画布中心）→ 偏移 → 缩放
+  ctx.translate(cx, cy);
+  if (rotate) ctx.rotate(rotate * Math.PI / 180);
+  ctx.translate(ox || 0, oy || 0);
+  ctx.scale(scaleX, scaleY);
+
+  const s = size;
+  ctx.drawImage(canvas, -s / 2, -s / 2, s, s);
+
+  if (tint) {
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = tint;
+    ctx.fillRect(-s / 2, -s / 2, s, s);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
+}
+
+function renderOverlay(cx, cy, stampSize, scale) {
+  const refT = state.ref;
+  const testT = state.test;
+  // 参考章（极浅蓝色调，最大程度保留细节）
+  drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
+    scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1,
+    'rgba(30,80,200,0.15)', refT.offsetX, refT.offsetY);
+  // 待验章（极浅红色调，最大程度保留细节）
+  drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
+    scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, state.opacity / 100,
+    'rgba(220,40,40,0.15)', testT.offsetX, testT.offsetY);
+
+  // 高亮当前选中印章的轮廓
+  const sel = state.target === 'ref' ? refT : testT;
+  const selW = stampSize * scale * (sel.scaleX / 100);
+  const selH = stampSize * scale * (sel.scaleY / 100);
+  cmpCtx.save();
+  cmpCtx.translate(cx, cy);
+  if (sel.rotate) cmpCtx.rotate(sel.rotate * Math.PI / 180);
+  cmpCtx.translate(sel.offsetX, sel.offsetY);
+  cmpCtx.strokeStyle = state.target === 'ref' ? 'rgba(44,62,80,0.6)' : 'rgba(192,57,43,0.6)';
+  cmpCtx.lineWidth = 1.5;
+  cmpCtx.setLineDash([6, 4]);
+  cmpCtx.strokeRect(-selW / 2, -selH / 2, selW, selH);
+  cmpCtx.setLineDash([]);
+  cmpCtx.restore();
+
+  // Labels
+  cmpCtx.font = 'bold 11px -apple-system, sans-serif';
+  cmpCtx.fillStyle = 'rgba(0,0,80,0.7)';
+  cmpCtx.fillText('■ 参考章' + (state.target === 'ref' ? ' ✦' : ''), 12, 24);
+  cmpCtx.fillStyle = 'rgba(200,0,0,0.7)';
+  cmpCtx.fillText('■ 待验章' + (state.target === 'test' ? ' ✦' : '') + ' (透明度 ' + state.opacity + '%)', 12, 40);
+
+  sliderHandle.style.display = 'none';
+}
+
+function renderSlider(cx, cy, stampSize, scale, w, h) {
+  const sliderX = Math.round(w * state.sliderPos);
+  const refT = state.ref, testT = state.test;
+
+  cmpCtx.save();
+  cmpCtx.beginPath();
+  cmpCtx.rect(0, 0, sliderX, h);
+  cmpCtx.clip();
+  drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
+    scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
+  cmpCtx.restore();
+
+  cmpCtx.save();
+  cmpCtx.beginPath();
+  cmpCtx.rect(sliderX, 0, w - sliderX, h);
+  cmpCtx.clip();
+  drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
+    scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+  cmpCtx.restore();
+
+  cmpCtx.font = 'bold 12px -apple-system, sans-serif';
+  cmpCtx.fillStyle = 'rgba(44,62,80,0.8)';
+  cmpCtx.fillText('参考章', 16, 28);
+  cmpCtx.fillStyle = 'rgba(192,57,43,0.8)';
+  cmpCtx.fillText('待验章', w - 64, 28);
+
+  sliderHandle.style.display = 'block';
+  sliderHandle.style.left = sliderX + 'px';
+}
+
+function renderSideBySide(cx, cy, stampSize, scale, w, h) {
+  const eachSize = Math.min(stampSize, (w - 120) / 2);
+  const leftCx = w / 4;
+  const rightCx = w * 3 / 4;
+  const refT = state.ref, testT = state.test;
+
+  drawStamp(cmpCtx, refT.extracted, leftCx, cy, eachSize,
+    scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
+  drawStamp(cmpCtx, testT.extracted, rightCx, cy, eachSize,
+    scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+
+  cmpCtx.strokeStyle = '#ddd';
+  cmpCtx.lineWidth = 1;
+  cmpCtx.setLineDash([4, 4]);
+  cmpCtx.beginPath();
+  cmpCtx.moveTo(w / 2, 20);
+  cmpCtx.lineTo(w / 2, h - 20);
+  cmpCtx.stroke();
+  cmpCtx.setLineDash([]);
+
+  cmpCtx.font = 'bold 12px -apple-system, sans-serif';
+  cmpCtx.fillStyle = 'rgba(44,62,80,0.8)';
+  cmpCtx.textAlign = 'center';
+  cmpCtx.fillText('参考章', leftCx, h - 16);
+  cmpCtx.fillStyle = 'rgba(192,57,43,0.8)';
+  cmpCtx.fillText('待验章', rightCx, h - 16);
+  cmpCtx.textAlign = 'start';
+
+  sliderHandle.style.display = 'none';
+}
+
+function renderDiffOverlay(cx, cy, stampSize, scale) {
+  const s = Math.round(stampSize * scale);
+  if (s < 10) return;
+
+  // Helper: render a stamp canvas with its transforms applied
+  function renderStampToTmp(stampState) {
+    const tmp = document.createElement('canvas');
+    tmp.width = s; tmp.height = s;
+    const tctx = tmp.getContext('2d');
+    // 新变换顺序：平移到中心 → 旋转（围绕中心）→ 偏移 → 缩放
+    tctx.translate(s / 2, s / 2);
+    if (stampState.rotate) tctx.rotate(stampState.rotate * Math.PI / 180);
+    tctx.translate(stampState.offsetX, stampState.offsetY);
+    tctx.scale(stampState.scaleX / 100, stampState.scaleY / 100);
+    tctx.drawImage(stampState.extracted, -s / 2, -s / 2, s, s);
+    return tmp;
+  }
+
+  const tmpRef = renderStampToTmp(state.ref);
+  const refData = tmpRef.getContext('2d').getImageData(0, 0, s, s);
+
+  const tmpTest = renderStampToTmp(state.test);
+  const testData = tmpTest.getContext('2d').getImageData(0, 0, s, s);
+
+  const diffCanvas = document.createElement('canvas');
+  diffCanvas.width = s; diffCanvas.height = s;
+  const dctx = diffCanvas.getContext('2d');
+  const diffData = dctx.createImageData(s, s);
+
+  let totalPixels = 0, diffPixels = 0;
+
+  for (let i = 0; i < refData.data.length; i += 4) {
+    const ra = refData.data[i + 3];
+    const ta = testData.data[i + 3];
+
+    if (ra > 30 && ta > 30) {
+      const dr = Math.abs(refData.data[i] - testData.data[i]);
+      const dg = Math.abs(refData.data[i + 1] - testData.data[i + 1]);
+      const db = Math.abs(refData.data[i + 2] - testData.data[i + 2]);
+      const diff = (dr + dg + db) / 3;
+
+      totalPixels++;
+      if (diff > 20) {
+        diffPixels++;
+        diffData.data[i] = 255;
+        diffData.data[i + 1] = Math.round(60 + diff);
+        diffData.data[i + 2] = 0;
+        diffData.data[i + 3] = Math.min(230, Math.round(diff * 3));
+      } else {
+        diffData.data[i] = 0;
+        diffData.data[i + 1] = 180;
+        diffData.data[i + 2] = 0;
+        diffData.data[i + 3] = 35;
+      }
+    } else if (ra > 30 || ta > 30) {
+      totalPixels++;
+      diffPixels++;
+      diffData.data[i] = 255;
+      diffData.data[i + 1] = 0;
+      diffData.data[i + 2] = 0;
+      diffData.data[i + 3] = 180;
+    }
+  }
+
+  dctx.putImageData(diffData, 0, 0);
+  cmpCtx.save();
+  cmpCtx.globalAlpha = 0.55;
+  cmpCtx.drawImage(diffCanvas, cx - s / 2, cy - s / 2, s, s);
+  cmpCtx.restore();
+
+  const matchPct = totalPixels > 0 ? (100 - (diffPixels / totalPixels) * 100).toFixed(1) : '0.0';
+  cmpCtx.font = 'bold 14px -apple-system, sans-serif';
+  cmpCtx.fillStyle = parseFloat(matchPct) > 85 ? '#27ae60' : '#c0392b';
+  cmpCtx.textAlign = 'right';
+  cmpCtx.fillText(`相似度: ${matchPct}%`, cmpCanvas.width - 16, 28);
+  cmpCtx.textAlign = 'start';
+}
+
+/* ============================================================
+   Magnifier
+   ============================================================ */
+function updateMagnifier(clientX, clientY) {
+  if (!state.magnifierActive) { magnifier.style.display = 'none'; return; }
+
+  const rect = cmpCanvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+    magnifier.style.display = 'none';
+    return;
+  }
+
+  magnifier.style.display = 'block';
+  magnifier.style.left = (clientX + 20) + 'px';
+  magnifier.style.top = (clientY - 170) + 'px';
+
+  const zoom = 4;
+  const magSize = 150;
+  const srcSize = magSize / zoom;
+
+  magCtx.clearRect(0, 0, magSize, magSize);
+  magCtx.fillStyle = '#fff';
+  magCtx.fillRect(0, 0, magSize, magSize);
+
+  const scaleX = cmpCanvas.width / rect.width;
+  const scaleY = cmpCanvas.height / rect.height;
+
+  magCtx.drawImage(
+    cmpCanvas,
+    x * scaleX - srcSize / 2, y * scaleY - srcSize / 2, srcSize, srcSize,
+    0, 0, magSize, magSize
+  );
+
+  magCtx.strokeStyle = 'rgba(192,57,43,0.5)';
+  magCtx.lineWidth = 1;
+  magCtx.beginPath();
+  magCtx.moveTo(magSize / 2, 0); magCtx.lineTo(magSize / 2, magSize);
+  magCtx.moveTo(0, magSize / 2); magCtx.lineTo(magSize, magSize / 2);
+  magCtx.stroke();
+}
+
+/* ============================================================
+   Event Handlers
+   ============================================================ */
+
+// Paste — 弹出选择对话框
+const pasteOverlay = $('#paste-dialog-overlay');
+let pendingPasteFile = null;
+
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      pendingPasteFile = item.getAsFile();
+      pasteOverlay.classList.add('visible');
+      return;
+    }
+  }
+});
+
+// Paste dialog buttons
+$('#paste-ref-btn').addEventListener('click', () => {
+  if (pendingPasteFile) {
+    loadImageFromFile(pendingPasteFile, 'ref');
+    pendingPasteFile = null;
+  }
+  pasteOverlay.classList.remove('visible');
+});
+
+$('#paste-test-btn').addEventListener('click', () => {
+  if (pendingPasteFile) {
+    loadImageFromFile(pendingPasteFile, 'test');
+    pendingPasteFile = null;
+  }
+  pasteOverlay.classList.remove('visible');
+});
+
+$('#paste-cancel-btn').addEventListener('click', () => {
+  pendingPasteFile = null;
+  pasteOverlay.classList.remove('visible');
+});
+
+// 点击遮罩关闭
+pasteOverlay.addEventListener('click', (e) => {
+  if (e.target === pasteOverlay) {
+    pendingPasteFile = null;
+    pasteOverlay.classList.remove('visible');
+  }
+});
+
+// Remove buttons
+[zoneRef, zoneTest].forEach((zone) => {
+  const target = zone === zoneRef ? 'ref' : 'test';
+  zone.querySelector('.remove-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeStamp(target);
+  });
+});
+
+// Mode buttons (comparison mode only, not target selector or axis selector)
+document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group) .mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    setMode(btn.dataset.mode);
+  });
+});
+
+// Target selector
+document.querySelectorAll('#target-group .mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#target-group .mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.target = btn.dataset.target;
+    syncSlidersToTarget();
+    render();
+  });
+});
+
+// Axis selector — 控制缩放滑块影响哪个轴
+document.querySelectorAll('#axis-group .mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#axis-group .mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.scaleAxis = btn.dataset.axis;
+    syncSlidersToTarget();
+  });
+});
+
+function syncSlidersToTarget() {
+  const t = state[state.target];
+  $('#sl-rotate').value = t.rotate;
+  $('#val-rotate').textContent = fmtNum(t.rotate) + '°';
+  // 根据缩放轴选择显示的值
+  const scaleVal = state.scaleAxis === 'y' ? t.scaleY : t.scaleX;
+  $('#sl-scale').value = scaleVal;
+  $('#val-scale').textContent = fmtNum(scaleVal) + '%';
+  $('#sl-offset-x').value = t.offsetX;
+  $('#val-offset-x').textContent = fmtNum(t.offsetX) + 'px';
+  $('#sl-offset-y').value = t.offsetY;
+  $('#val-offset-y').textContent = fmtNum(t.offsetY) + 'px';
+}
+
+// 格式化数值：整数不显示小数点，非整数保留一位小数
+function fmtNum(v) { return Number.isInteger(v) ? String(v) : v.toFixed(1); }
+
+// Sliders — operate on selected target
+$('#sl-opacity').addEventListener('input', (e) => {
+  state.opacity = parseInt(e.target.value);
+  $('#val-opacity').textContent = state.opacity + '%';
+  scheduleRender();
+});
+
+$('#sl-rotate').addEventListener('input', (e) => {
+  state[state.target].rotate = parseFloat(e.target.value);
+  $('#val-rotate').textContent = fmtNum(state[state.target].rotate) + '°';
+  scheduleRender();
+});
+
+$('#sl-scale').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  const t = state[state.target];
+  if (state.scaleAxis === 'uniform') {
+    t.scaleX = v; t.scaleY = v;
+  } else if (state.scaleAxis === 'x') {
+    t.scaleX = v;
+  } else {
+    t.scaleY = v;
+  }
+  $('#val-scale').textContent = fmtNum(v) + '%';
+  scheduleRender();
+});
+
+$('#sl-offset-x').addEventListener('input', (e) => {
+  state[state.target].offsetX = parseFloat(e.target.value);
+  $('#val-offset-x').textContent = fmtNum(state[state.target].offsetX) + 'px';
+  scheduleRender();
+});
+
+$('#sl-offset-y').addEventListener('input', (e) => {
+  state[state.target].offsetY = parseFloat(e.target.value);
+  $('#val-offset-y').textContent = fmtNum(state[state.target].offsetY) + 'px';
+  scheduleRender();
+});
+
+// Buttons
+$('#btn-diff').addEventListener('click', () => {
+  state.diffMode = !state.diffMode;
+  $('#btn-diff').classList.toggle('active', state.diffMode);
+  render();
+});
+
+$('#btn-magnifier').addEventListener('click', () => {
+  state.magnifierActive = !state.magnifierActive;
+  $('#btn-magnifier').classList.toggle('active', state.magnifierActive);
+  if (!state.magnifierActive) magnifier.style.display = 'none';
+});
+
+$('#btn-reset').addEventListener('click', () => {
+  const t = state[state.target];
+  t.rotate = 0; t.scaleX = 100; t.scaleY = 100; t.offsetX = 0; t.offsetY = 0;
+  syncSlidersToTarget();
+  render();
+  showStatus(`已重置${state.target === 'ref' ? '参考章' : '待验章'}的调整`);
+});
+
+$('#btn-export').addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = '印章对比_' + new Date().toISOString().slice(0, 10) + '.png';
+  link.href = cmpCanvas.toDataURL('image/png');
+  link.click();
+  showStatus('对比结果已导出');
+});
+
+// Slider drag (comparison slider mode)
+sliderHandle.addEventListener('mousedown', () => { state.draggingSlider = true; });
+
+function clientToCanvas(e, cachedRect) {
+  const rect = cachedRect || cmpCanvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (cmpCanvas.width / rect.width),
+    y: (e.clientY - rect.top) * (cmpCanvas.height / rect.height),
+  };
+}
+
+// Canvas mousedown — resize handle or move stamp
+cmpCanvas.addEventListener('mousedown', (e) => {
+  if (state.mode === 'slider' && state.draggingSlider) return;
+  if (state.magnifierActive) return;
+  if (!state.ref.extracted || !state.test.extracted) return;
+
+  const pos = clientToCanvas(e);
+  const handle = getHandleAtPoint(pos.x, pos.y);
+
+  if (handle) {
+    // Start resize
+    state.resizing = true;
+    state._isInteracting = true;
+    state.resizeHandle = handle;
+    const t = state[state.target];
+    state.resizeStartScaleX = t.scaleX;
+    state.resizeStartScaleY = t.scaleY;
+    const geom = getHandleGeom();
+    // Anchor = handle on opposite side (find by checking which handle is opposite)
+    const opposites = { e: 'w', w: 'e', n: 's', s: 'n', ne: 'sw', sw: 'ne', nw: 'se', se: 'nw' };
+    const oppId = opposites[handle];
+    const oppHandle = geom.handles.find(h => h.id === oppId);
+    state.resizeAnchorX = oppHandle.x;
+    state.resizeAnchorY = oppHandle.y;
+    state.dragLastX = e.clientX;
+    state.dragLastY = e.clientY;
+    state.resizeRect = cmpCanvas.getBoundingClientRect(); // 缓存，避免resize中反复查询布局
+    cmpCanvas.style.cursor = handleCursor(handle);
+  } else {
+    // Start move
+    state.draggingStamp = true;
+    state._isInteracting = true;
+    state.dragLastX = e.clientX;
+    state.dragLastY = e.clientY;
+    state.dragAccX = 0;
+    state.dragAccY = 0;
+    state.dragRect = cmpCanvas.getBoundingClientRect(); // 缓存，避免拖拽中反复查询布局
+    cmpCanvas.style.cursor = 'grabbing';
+  }
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (state.draggingSlider) {
+    const rect = comparison.getBoundingClientRect();
+    state.sliderPos = Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
+    scheduleRender();
+  }
+  if (state.draggingStamp) {
+    const rect = state.dragRect;
+    const cssScale = rect.width / cmpCanvas.width;
+    const sdx = (e.clientX - state.dragLastX) / cssScale;
+    const sdy = (e.clientY - state.dragLastY) / cssScale;
+    state.dragAccX += sdx;
+    state.dragAccY += sdy;
+    const ix = Math.trunc(state.dragAccX);
+    const iy = Math.trunc(state.dragAccY);
+    state.dragAccX -= ix;
+    state.dragAccY -= iy;
+    // 屏幕空间增量 → 旋转空间增量（offset 在 rotate 之后，需要反旋转）
+    const t = state[state.target];
+    const rad = (t.rotate || 0) * Math.PI / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+    t.offsetX += ix * cosR + iy * sinR;
+    t.offsetY += -ix * sinR + iy * cosR;
+    state.dragLastX = e.clientX;
+    state.dragLastY = e.clientY;
+    syncSlidersToTarget();
+    scheduleRender();
+  }
+  if (state.resizing) {
+    const pos = clientToCanvas(e, state.resizeRect); // 使用缓存的rect
+    const h = state.resizeHandle;
+    const t = state[state.target];
+    const w = cmpCanvas.width, cH = cmpCanvas.height;
+    const stampSz = Math.min(w, cH) * 0.6;
+
+    // Stamp's rotation angle and local axis unit vectors
+    const rad = (t.rotate || 0) * Math.PI / 180;
+    const cosR = Math.cos(rad), sinR = Math.sin(rad);
+
+    // Mouse position relative to ANCHOR (not center!) — this is the key fix
+    const amx = pos.x - state.resizeAnchorX;
+    const amy = pos.y - state.resizeAnchorY;
+
+    // Project anchor-to-mouse vector onto stamp's local axes
+    const projRight = amx * cosR + amy * sinR;   // along local right
+    const projDown  = amx * (-sinR) + amy * cosR; // along local down
+
+    // Distance from anchor to mouse in local space = full extent (2 * halfExtent)
+    // because anchor is at one edge and mouse drags the opposite edge
+    let newSX = t.scaleX, newSY = t.scaleY;
+    let affectsX = false, affectsY = false;
+
+    if (h.includes('e')) {
+      newSX = 200 * projRight / (2 * stampSz);
+      affectsX = true;
+    } else if (h.includes('w')) {
+      newSX = 200 * (-projRight) / (2 * stampSz);
+      affectsX = true;
+    }
+    if (h.includes('s')) {
+      newSY = 200 * projDown / (2 * stampSz);
+      affectsY = true;
+    } else if (h.includes('n')) {
+      newSY = 200 * (-projDown) / (2 * stampSz);
+      affectsY = true;
+    }
+
+    // Axis constraint
+    if (affectsX && affectsY) {
+      // Corner handle — 遵循 scaleAxis 设置
+      if (state.scaleAxis === 'uniform') {
+        const rX = state.resizeStartScaleX > 0 ? newSX / state.resizeStartScaleX : 1;
+        const rY = state.resizeStartScaleY > 0 ? newSY / state.resizeStartScaleY : 1;
+        // 放大取大值，缩小取小值，保证视觉一致
+        const r = (rX >= 1 && rY >= 1) ? Math.max(rX, rY) : Math.min(rX, rY);
+        newSX = state.resizeStartScaleX * r;
+        newSY = state.resizeStartScaleY * r;
+      }
+      // scaleAxis === 'x' or 'y': keep both computed values as-is (non-uniform)
+    }
+    // Edge handle (affects only one axis): always non-uniform — 不强制等比
+    // 保持 newSX / newSY 原样，仅调整受影响的轴
+
+    // Clamp scale
+    newSX = Math.max(30, Math.min(200, newSX));
+    newSY = Math.max(30, Math.min(200, newSY));
+
+    // --- Adjust offset so anchor stays fixed on screen ---
+    // New transform: screenPos = center + R(rot) * (offset + localScaled)
+    // Inverse: offset = R(-rot) * (anchor - center) - anchorLocal
+    const newHalfW = stampSz * newSX / 200;
+    const newHalfH = stampSz * newSY / 200;
+    let anchorLocalX = 0, anchorLocalY = 0;
+    if (h.includes('e')) anchorLocalX = -newHalfW;      // anchor at west side
+    else if (h.includes('w')) anchorLocalX = newHalfW;   // anchor at east side
+    if (h.includes('n')) anchorLocalY = newHalfH;        // anchor at south side
+    else if (h.includes('s')) anchorLocalY = -newHalfH;  // anchor at north side
+
+    const baseCX = w / 2, baseCY = cH / 2;
+    const dax = state.resizeAnchorX - baseCX;
+    const day = state.resizeAnchorY - baseCY;
+    // R(-rot) * (anchor - center)
+    const invX = dax * cosR + day * sinR;
+    const invY = -dax * sinR + day * cosR;
+
+    let newOffsetX = t.offsetX, newOffsetY = t.offsetY;
+    if (affectsX && affectsY) {
+      // 角柄：两轴都调整，保持锚点完全固定
+      newOffsetX = invX - anchorLocalX;
+      newOffsetY = invY - anchorLocalY;
+    } else if (affectsX) {
+      // 横向边柄 (e/w)：只调整 offsetX
+      newOffsetX = invX - anchorLocalX;
+    } else if (affectsY) {
+      // 纵向边柄 (n/s)：只调整 offsetY
+      newOffsetY = invY - anchorLocalY;
+    }
+
+    t.scaleX = state.resizing ? newSX : Math.round(newSX * 10) / 10;
+    t.scaleY = state.resizing ? newSY : Math.round(newSY * 10) / 10;
+    if (affectsX) t.offsetX = state.resizing ? newOffsetX : Math.round(newOffsetX);
+    if (affectsY) t.offsetY = state.resizing ? newOffsetY : Math.round(newOffsetY);
+    // syncSliders deferred to render frame — 不在每次mousemove都更新DOM
+    state._pendingSliderSync = true;
+    scheduleRender();
+  }
+
+  // Hover cursor for resize handles
+  if (!state.draggingStamp && !state.resizing && !state.draggingSlider) {
+    const rect = cmpCanvas.getBoundingClientRect();
+    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+      const pos = clientToCanvas(e);
+      const handle = getHandleAtPoint(pos.x, pos.y);
+      cmpCanvas.style.cursor = handle ? handleCursor(handle) : 'crosshair';
+    }
+  }
+
+  updateMagnifier(e.clientX, e.clientY);
+});
+
+document.addEventListener('mouseup', () => {
+  state.draggingSlider = false;
+  if (state.draggingStamp) {
+    state.draggingStamp = false;
+    state.dragRect = null;
+    cmpCanvas.style.cursor = 'crosshair';
+  }
+  if (state.resizing) {
+    // 拖拽结束：将浮点值取整到显示精度
+    const t = state[state.target];
+    t.scaleX = Math.round(t.scaleX * 10) / 10;
+    t.scaleY = Math.round(t.scaleY * 10) / 10;
+    t.offsetX = Math.round(t.offsetX);
+    t.offsetY = Math.round(t.offsetY);
+    state.resizing = false;
+    state.resizeHandle = null;
+    state.resizeRect = null;
+    cmpCanvas.style.cursor = 'crosshair';
+  }
+  // 交互结束：清除标记，立即重绘以恢复差异高亮等完整渲染
+  if (state._isInteracting) {
+    state._isInteracting = false;
+    render();
+  }
+});
+
+comparison.addEventListener('mousemove', (e) => {
+  if (!state.draggingStamp && !state.resizing) updateMagnifier(e.clientX, e.clientY);
+});
+comparison.addEventListener('mouseleave', () => { magnifier.style.display = 'none'; });
+
+// Mouse wheel — scale or rotate selected stamp
+// 使用 document 级别监听 + capture 阶段，确保优先于浏览器默认行为
+// 使用 state.shiftHeld 而非 e.shiftKey（macOS 滚轮事件中 e.shiftKey 可能不可靠）
+let zoomAccum = 0;
+let rotAccum = 0;
+const WHEEL_ZOOM_THRESH = 15;
+const WHEEL_ROT_THRESH = 10;
+
+document.addEventListener('wheel', (e) => {
+  if (!state.ref.extracted || !state.test.extracted) return;
+  // 仅当鼠标在对比区域上方时生效
+  const rect = comparison.getBoundingClientRect();
+  if (e.clientX < rect.left || e.clientX > rect.right ||
+      e.clientY < rect.top  || e.clientY > rect.bottom) return;
+  e.preventDefault();
+
+  const t = state[state.target];
+  let changed = false;
+
+  if (state.shiftHeld) {
+    // Shift + 滚轮 → 旋转（精细 0.5°/步）
+    rotAccum += e.deltaY;
+    if (Math.abs(rotAccum) >= WHEEL_ROT_THRESH) {
+      const steps = Math.floor(Math.abs(rotAccum) / WHEEL_ROT_THRESH);
+      const dir = rotAccum > 0 ? 1 : -1;
+      t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * steps * 0.5));
+      rotAccum %= WHEEL_ROT_THRESH;
+      changed = true;
+    }
+  } else {
+    // 普通滚轮 → 缩放
+    zoomAccum += e.deltaY;
+    if (Math.abs(zoomAccum) >= WHEEL_ZOOM_THRESH) {
+      const steps = Math.floor(Math.abs(zoomAccum) / WHEEL_ZOOM_THRESH);
+      const dir = zoomAccum > 0 ? -1 : 1;
+      const delta = dir * steps;
+      if (state.scaleAxis === 'uniform') {
+        t.scaleX = Math.max(30, Math.min(200, t.scaleX + delta));
+        t.scaleY = Math.max(30, Math.min(200, t.scaleY + delta));
+      } else if (state.scaleAxis === 'x') {
+        t.scaleX = Math.max(30, Math.min(200, t.scaleX + delta));
+      } else {
+        t.scaleY = Math.max(30, Math.min(200, t.scaleY + delta));
+      }
+      zoomAccum %= WHEEL_ZOOM_THRESH;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    syncSlidersToTarget();
+    scheduleRender();
+  }
+}, { passive: false });
+
+// 滑块区域滚轮支持：鼠标悬停在旋转/缩放滑块上时，滚轮直接调节对应参数
+$('#sl-rotate').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const t = state[state.target];
+  const dir = e.deltaY > 0 ? -1 : 1;
+  t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * 0.5));
+  syncSlidersToTarget();
+  scheduleRender();
+}, { passive: false });
+
+$('#sl-scale').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const t = state[state.target];
+  const dir = e.deltaY > 0 ? -1 : 1;
+  if (state.scaleAxis === 'uniform') {
+    t.scaleX = Math.max(30, Math.min(200, t.scaleX + dir));
+    t.scaleY = Math.max(30, Math.min(200, t.scaleY + dir));
+  } else if (state.scaleAxis === 'x') {
+    t.scaleX = Math.max(30, Math.min(200, t.scaleX + dir));
+  } else {
+    t.scaleY = Math.max(30, Math.min(200, t.scaleY + dir));
+  }
+  syncSlidersToTarget();
+  scheduleRender();
+}, { passive: false });
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Shift 键追踪必须在所有 early return 之前，确保 shiftHeld 始终正确
+  if (e.key === 'Shift') {
+    state.shiftHeld = true;
+    state.magnifierActive = true;
+    $('#btn-magnifier').classList.add('active');
+  }
+
+  if (!state.ref.extracted || !state.test.extracted) return;
+  if (e.target.tagName === 'INPUT') return;
+
+  const t = state[state.target];
+  switch (e.key) {
+    case '1': setMode('overlay'); break;
+    case '2': setMode('slider'); break;
+    case '3': setMode('sidebyside'); break;
+    case 'd': case 'D': $('#btn-diff').click(); break;
+    case 'r': case 'R': $('#btn-reset').click(); break;
+    case 'Tab':
+      e.preventDefault();
+      state.target = state.target === 'ref' ? 'test' : 'ref';
+      document.querySelectorAll('#target-group .mode-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.target === state.target));
+      syncSlidersToTarget();
+      render();
+      showStatus(`当前操作: ${state.target === 'ref' ? '参考章' : '待验章'}`);
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      t.rotate = Math.max(-180, t.rotate - 0.1);
+      syncSlidersToTarget();
+      render();
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      t.rotate = Math.min(180, t.rotate + 0.1);
+      syncSlidersToTarget();
+      render();
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      if (state.scaleAxis === 'uniform') {
+        t.scaleX = Math.min(200, t.scaleX + 0.5);
+        t.scaleY = Math.min(200, t.scaleY + 0.5);
+      } else if (state.scaleAxis === 'x') {
+        t.scaleX = Math.min(200, t.scaleX + 0.5);
+      } else {
+        t.scaleY = Math.min(200, t.scaleY + 0.5);
+      }
+      syncSlidersToTarget();
+      render();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (state.scaleAxis === 'uniform') {
+        t.scaleX = Math.max(30, t.scaleX - 0.5);
+        t.scaleY = Math.max(30, t.scaleY - 0.5);
+      } else if (state.scaleAxis === 'x') {
+        t.scaleX = Math.max(30, t.scaleX - 0.5);
+      } else {
+        t.scaleY = Math.max(30, t.scaleY - 0.5);
+      }
+      syncSlidersToTarget();
+      render();
+      break;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Shift') {
+    state.shiftHeld = false;
+    state.magnifierActive = false;
+    $('#btn-magnifier').classList.remove('active');
+    magnifier.style.display = 'none';
+  }
+});
+
+// 窗口失焦时重置 Shift 状态，避免按键状态卡住
+window.addEventListener('blur', () => {
+  state.shiftHeld = false;
+  state.magnifierActive = false;
+  $('#btn-magnifier').classList.remove('active');
+  magnifier.style.display = 'none';
+});
+
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group) .mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  if (mode !== 'slider') sliderHandle.style.display = 'none';
+  render();
+}
+
+window.addEventListener('resize', () => { render(); });
+
+
+
+// 「印章核实」按钮
+$('#btn-verify').addEventListener('click', () => {
+  window.open('https://dzyz.gat.shandong.gov.cn/v1/menhu/view/sealQuery.html?nav=2', '_blank', 'noopener');
+});
+
+
+/* ============================================================
+   OCR — 印章文字及编码提取 (BI4IWN)
+   管线：发送原图 → Python PaddleOCR 后端 → 返回识别结果
+   使用相对路径，由统一启动文件 stamp_app.py 提供服务
+   ============================================================ */
+
+const OCR_SERVER = '';
+
+// 检查 OCR 服务是否可用
+async function checkOCRSpecServer() {
+  try {
+    const resp = await fetch(OCR_SERVER + '/health');
+    const data = await resp.json();
+    return data.status === 'ok';
+  } catch (e) {
+    return false;
+  }
+}
+
+// 将 Canvas 转为 base64 PNG
+function canvasToBase64(canvas) {
+  return canvas.toDataURL('image/png').split(',')[1];
+}
+
+// 解析 OCR 结果（从服务端返回的文本中分类）
+function parseOCRText(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  let company = '', code = '', type = '';
+
+  for (const line of lines) {
+    if (!company && /[\u4e00-\u9fa5]{4,}/.test(line) &&
+        !/专用章|公章|合同章|财务章|发票章|业务章|分公|子公/.test(line)) {
+      company = line.replace(/[^a-zA-Z0-9\u4e00-\u9fa5（）()]/g, '').trim();
+    }
+    if (!code && /[\d]{10,}/.test(line)) {
+      code = line.replace(/\s/g, '');
+    }
+    if (!type && /专用章|公章|合同章|财务章|发票章|业务章|分公|子公/.test(line)) {
+      type = line.replace(/[^a-zA-Z0-9\u4e00-\u9fa5（）()]/g, '').trim();
+    }
+  }
+
+  return { company, code, type, fullText: text.trim() };
+}
+
+// 取消指定目标的 OCR 请求
+function cancelStampOCR(target) {
+  const ctrl = state._ocrControllers[target];
+  if (ctrl) {
+    ctrl.abort();
+    state._ocrControllers[target] = null;
+  }
+}
+
+// 主 OCR 流程：发送原图到 Python PaddleOCR 后端（支持中断）
+async function runStampOCR(target) {
+  const stampState = state[target];
+  if (!stampState || !stampState.original) return null;
+
+  // 如果已有进行中的 OCR，先取消
+  cancelStampOCR(target);
+
+  const controller = new AbortController();
+  state._ocrControllers[target] = controller;
+
+  const progressEl = $(`#ocr-${target}-progress`);
+  const fillEl = $(`#ocr-${target}-fill`);
+  const statusEl = $(`#ocr-${target}-status`);
+  const inlineEl = $(`#ocr-${target}`);
+  const cancelBtn = $(`#ocr-${target}-cancel`);
+
+  inlineEl.classList.add('visible');
+  progressEl.style.display = 'block';
+  cancelBtn.classList.add('visible');
+  fillEl.style.width = '10%';
+  statusEl.textContent = '检查 OCR 服务...';
+
+  // 检查服务是否可用
+  const serverOk = await checkOCRSpecServer();
+  if (!serverOk) {
+    fillEl.style.width = '100%';
+    statusEl.textContent = 'OCR 服务未启动';
+    cancelBtn.classList.remove('visible');
+    $(`#ocr-${target}-company`).textContent = '需启动服务';
+    $(`#ocr-${target}-code`).textContent = '—';
+    $(`#ocr-${target}-type`).textContent = '—';
+    showStatus('OCR 服务未连接，请运行: python3 stamp_app.py');
+    state._ocrControllers[target] = null;
+    return null;
+  }
+
+  fillEl.style.width = '20%';
+  statusEl.textContent = '发送图像到 OCR 服务...';
+
+  // 将原始画布转为 base64 发送
+  const imgB64 = canvasToBase64(stampState.original);
+
+  fillEl.style.width = '30%';
+  statusEl.textContent = 'PaddleOCR 识别中...';
+
+  try {
+    const resp = await fetch(OCR_SERVER + '/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imgB64 }),
+      signal: controller.signal
+    });
+
+    if (!resp.ok) {
+      throw new Error('Server returned ' + resp.status);
+    }
+
+    const data = await resp.json();
+
+    fillEl.style.width = '80%';
+    statusEl.textContent = '解析结果...';
+
+    if (!data.success || !data.stamps || data.stamps.length === 0) {
+      $(`#ocr-${target}-company`).textContent = '未识别到印章';
+      $(`#ocr-${target}-code`).textContent = '—';
+      $(`#ocr-${target}-type`).textContent = '—';
+      fillEl.style.width = '100%';
+      statusEl.textContent = '未检测到印章文字';
+      cancelBtn.classList.remove('visible');
+      state._ocrControllers[target] = null;
+      return null;
+    }
+
+    // 合并所有印章的识别结果，去除中文字符间的多余空格
+    const allTexts = data.stamps.map(s => {
+      return s.texts.map(t => t.text).join('');
+    }).join('\n');
+    // 去除中文字符之间的空格（保留非中文间隔）
+    const cleaned = allTexts.replace(/(?<=[\u4e00-\u9fa5])\s+(?=[\u4e00-\u9fa5])/g, '');
+    const parsed = parseOCRText(cleaned);
+
+    const company = parsed.company || parsed.fullText || '';
+    const code = parsed.code || '';
+    const type = parsed.type || '';
+
+    $(`#ocr-${target}-company`).textContent = company || '未识别';
+    $(`#ocr-${target}-code`).textContent = code || '未检测到';
+    $(`#ocr-${target}-type`).textContent = type || '未检测到';
+
+    fillEl.style.width = '100%';
+    statusEl.textContent = `完成 (${data.stamps.length} 个印章)`;
+    cancelBtn.classList.remove('visible');
+    state._ocrControllers[target] = null;
+
+    return { company, code, type };
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      fillEl.style.width = '100%';
+      statusEl.textContent = '已中断';
+      cancelBtn.classList.remove('visible');
+      state._ocrControllers[target] = null;
+      return null;
+    }
+    fillEl.style.width = '100%';
+    statusEl.textContent = '识别失败: ' + err.message;
+    cancelBtn.classList.remove('visible');
+    state._ocrControllers[target] = null;
+    console.error('OCR error:', err);
+    showStatus('OCR 请求失败: ' + err.message);
+    return null;
+  }
+}
+
+// 全部识别按钮
+$('#btn-ocr').addEventListener('click', async () => {
+  // 检查 OCR 服务是否可用
+  if (!window._ocrAvailable) {
+    showStatus('OCR 服务未连接 — 请运行 launcher 启动服务后重试');
+    return;
+  }
+
+  const hasRef = state.ref.original;
+  const hasTest = state.test.original;
+
+  if (!hasRef && !hasTest) {
+    showStatus('请先加载印章图片');
+    return;
+  }
+
+  showStatus('正在识别印章文字...');
+
+  if (hasRef) await runStampOCR('ref');
+  if (hasTest) await runStampOCR('test');
+
+  showStatus('文字识别完成');
+});
+
+// OCR 中断按钮
+$('#ocr-ref-cancel').addEventListener('click', () => {
+  cancelStampOCR('ref');
+  showStatus('参考章识别已中断');
+});
+$('#ocr-test-cancel').addEventListener('click', () => {
+  cancelStampOCR('test');
+  showStatus('待验章识别已中断');
+});
+
+/* ============================================================
+   Init — BI4IWN · 李劲松
+   ============================================================ */
+showStatus('请粘贴或拖入印章图片开始对比 — 自动提取印章边缘并对齐');
+statusBar.classList.add('visible');
+
+</script>
+<span style="position:absolute;font-size:0;opacity:0;pointer-events:none" data-by="BI4IWN" data-dev="李劲松" aria-hidden="true">BI4IWN · 李劲松</span>
+
+<script>
+// OCR 服务可用性检测 — 不阻断其他功能
+(function() {
+  var bar = document.getElementById('ocr-status-bar');
+  var dot = document.getElementById('ocr-sdot');
+  var txt = document.getElementById('ocr-stext');
+  var launch = document.getElementById('ocr-slaunch');
+  var closeBtn = document.getElementById('ocr-sclose');
+  var ocrBtn = document.getElementById('btn-ocr');
+  var dismissed = false;
+
+  // 全局标记
+  window._ocrAvailable = false;
+
+  // 关闭按钮
+  closeBtn.addEventListener('click', function() {
+    bar.classList.remove('visible');
+    dismissed = true;
+  });
+
+  // 启动指南弹窗
+  launch.addEventListener('click', function(e) {
+    e.preventDefault();
+    var msg = '印章对比工具的 OCR 功能需要后端服务支持。\n\n';
+    if (navigator.platform.indexOf('Mac') >= 0) {
+      msg += 'macOS: 双击同目录下的 launcher.sh\n';
+    } else {
+      msg += 'Windows: 双击同目录下的 launcher.bat\n';
+    }
+    msg += '\n或命令行运行: python3 stamp_app.py\n\n';
+    msg += '注意: 即使没有 OCR 服务，印章对比、差异高亮、\n导出等其他功能仍可正常使用。';
+    alert(msg);
+  });
+
+  function showBar() {
+    if (!dismissed) bar.classList.add('visible');
+  }
+
+  function setOcrUnavailable() {
+    window._ocrAvailable = false;
+    dot.className = 'ocr-sdot fail';
+    txt.textContent = 'OCR 服务未连接 — 对比/导出等功能可正常使用，文字识别不可用';
+    launch.style.display = 'inline-block';
+    if (ocrBtn) {
+      ocrBtn.disabled = true;
+      ocrBtn.classList.add('btn-ocr-disabled');
+      ocrBtn.title = 'OCR 服务未连接，文字识别不可用';
+    }
+    showBar();
+  }
+
+  function setOcrAvailable() {
+    window._ocrAvailable = true;
+    dot.className = 'ocr-sdot ok';
+    txt.textContent = 'OCR 服务已就绪';
+    launch.style.display = 'none';
+    if (ocrBtn) {
+      ocrBtn.disabled = false;
+      ocrBtn.classList.remove('btn-ocr-disabled');
+      ocrBtn.title = '提取两个印章的文字及编码';
+    }
+    showBar();
+    // 3 秒后自动隐藏（如果未被 dismiss）
+    setTimeout(function() {
+      if (!dismissed) bar.classList.remove('visible');
+    }, 3000);
+  }
+
+  // 检测 OCR 服务
+  var checkCount = 0;
+  var maxChecks = 5;
+
+  function checkServer() {
+    checkCount++;
+    var baseUrl = location.protocol === 'file:'
+      ? 'http://127.0.0.1:8765'
+      : '';
+    fetch(baseUrl + '/health', { mode: 'cors' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.status === 'ok') {
+          setOcrAvailable();
+        } else {
+          if (checkCount < maxChecks) {
+            setTimeout(checkServer, 1500);
+          } else {
+            setOcrUnavailable();
+          }
+        }
+      })
+      .catch(function() {
+        if (checkCount < maxChecks) {
+          setTimeout(checkServer, 1500);
+        } else {
+          setOcrUnavailable();
+        }
+      });
+  }
+
+  // 如果通过 HTTP 服务打开（非 file://），直接检测
+  // 如果是 file:// 打开，也检测 localhost
+  showBar();
+  checkServer();
+
+  // 提供手动重连功能
+  window._retryOCRConnection = function() {
+    checkCount = 0;
+    dot.className = 'ocr-sdot checking';
+    txt.textContent = '正在重新检测 OCR 服务...';
+    launch.style.display = 'none';
+    dismissed = false;
+    showBar();
+    checkServer();
+  };
+})();
+</script>
+</body>
+</html>
