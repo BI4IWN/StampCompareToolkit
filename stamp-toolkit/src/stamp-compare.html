@@ -306,8 +306,9 @@
   }
 
   .extracted-item canvas {
-    max-width: 160px;
-    max-height: 160px;
+    max-width: 640px;
+    max-height: 640px;
+    cursor: zoom-in;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: repeating-conic-gradient(#f0eeeb 0% 25%, #fff 0% 50%) 50% / 12px 12px;
@@ -319,6 +320,189 @@
     margin-top: 8px;
     font-weight: 500;
     letter-spacing: 0.3px;
+  }
+
+  /* 多印章候选切换芯片：一张图检出多个印章时显示 */
+  .stamp-candidates {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .cand-btn {
+    padding: 4px 12px;
+    font-size: 11.5px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .cand-btn:hover { background: rgba(0,0,0,0.04); color: var(--text); }
+
+  .cand-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* 印章墨色面板：每枚印章独立（预设多选 + 手工取色 + 剔除） */
+  .stamp-color-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 8px 10px 9px;
+    background: rgba(0,0,0,0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .stamp-color-panel .scp-title {
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.3px;
+    text-align: center;
+  }
+
+  .stamp-color-panel .scp-presets {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .stamp-color-panel .scp-custom-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+  }
+
+  .stamp-color-panel .scp-custom-tag {
+    flex: none;
+    font-size: 10px;
+    color: var(--text-secondary);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.05);
+  }
+
+  .stamp-color-panel .scp-custom-tag-exclude {
+    color: #c0392b;
+    background: rgba(192,57,43,0.08);
+  }
+
+  .stamp-color-panel .scp-custom {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    flex: 1;
+  }
+
+  .stamp-color-panel .scp-custom .scp-empty {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    opacity: 0.65;
+  }
+
+  .stamp-color-panel .scp-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .stamp-color-panel .mode-btn.ink-custom { padding: 4px 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; border-radius: 6px; border: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+
+  .stamp-color-panel .mode-btn.ink-custom.active { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18); }
+
+  .stamp-color-panel .ink-custom .ink-hex {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .stamp-color-panel .ink-custom .ink-rm {
+    font-size: 13px; line-height: 1; color: inherit;
+    padding: 0 2px; border-radius: 3px;
+    cursor: pointer;
+    opacity: 0.75;
+  }
+
+  .stamp-color-panel .ink-custom .ink-rm:hover { opacity: 1; background: rgba(0,0,0,0.2); }
+
+
+  .scp-pick.active { background: #3d5468; color: #fff; }
+
+  .stamp-color-panel .scp-hint {
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0.9;
+    line-height: 1.5;
+    text-align: center;
+    margin-top: 2px;
+  }
+
+  .scp-pick.scp-pick-exclude.active { background: #c0392b; color: #fff; }
+
+  .stamp-color-panel .ink-custom .ink-mode {
+    font-size: 10px;
+    cursor: pointer;
+    opacity: 0.85;
+  }
+
+  /* 取色模式：原图预览与提取结果上显示十字光标 */
+  body.pick-mode .paste-zone .preview-img { cursor: crosshair; }
+  body.pick-mode .extracted-item canvas { cursor: crosshair; }
+
+  /* 取色放大镜 */
+  .pick-loupe {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    display: none;
+    background: #fff;
+    border: 1px solid var(--border-strong, #ccc);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #2c3e50;
+    white-space: nowrap;
+  }
+
+  .pick-loupe canvas {
+    display: block;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.15);
+    background: #fff;
+  }
+
+  .pick-loupe .pick-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    white-space: nowrap;
+  }
+
+  .pick-loupe .swatch {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.2);
+    vertical-align: -3px;
+    margin-right: 6px;
   }
 
   /* ---- Toolbar ---- */
@@ -874,7 +1058,7 @@
       </svg>
       <h1>印章对比工具</h1>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比</p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.7.0</span></p>
   </header>
 
   <div class="paste-row">
@@ -912,8 +1096,30 @@
 
   <div class="extracted-strip" id="extracted-strip">
     <div class="extracted-item">
+      <div class="stamp-color-panel" id="color-panel-ref">
+        <div class="scp-title">参考章墨色</div>
+        <div class="scp-presets">
+          <button class="mode-btn active" data-color="red">红</button>
+          <button class="mode-btn" data-color="blue">蓝</button>
+          <button class="mode-btn" data-color="purple">紫</button>
+        </div>
+        <div class="scp-custom-row">
+          <span class="scp-custom-tag">提取</span>
+          <div class="scp-custom" id="scp-custom-ref"></div>
+        </div>
+        <div class="scp-custom-row">
+          <span class="scp-custom-tag scp-custom-tag-exclude">排除</span>
+          <div class="scp-custom" id="scp-exclude-ref"></div>
+        </div>
+        <div class="scp-row">
+          <button class="btn btn-icon scp-pick" id="pick-ref" data-target="ref" data-exclude="0" title="提取取色：点击后在参考章原图预览上点选要保留的印章墨水颜色">💧 提取</button>
+          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-ref" data-target="ref" data-exclude="1" title="排除取色：点击后在参考章原图预览上点选要从印章中排除的颜色">⊘ 排除</button>
+        </div>
+        <div class="scp-hint">💧 提取＝保留所选颜色作印章墨迹　·　⊘ 排除＝从结果中去除所选颜色</div>
+      </div>
       <canvas id="ext-ref" width="160" height="160"></canvas>
       <div class="ext-label">参考章提取</div>
+      <div class="stamp-candidates" id="cand-ref"></div>
       <div class="ocr-inline" id="ocr-ref">
         <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-ref-company">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-ref-code">—</span></div>
@@ -926,8 +1132,30 @@
       </div>
     </div>
     <div class="extracted-item">
+      <div class="stamp-color-panel" id="color-panel-test">
+        <div class="scp-title">待验章墨色</div>
+        <div class="scp-presets">
+          <button class="mode-btn active" data-color="red">红</button>
+          <button class="mode-btn" data-color="blue">蓝</button>
+          <button class="mode-btn" data-color="purple">紫</button>
+        </div>
+        <div class="scp-custom-row">
+          <span class="scp-custom-tag">提取</span>
+          <div class="scp-custom" id="scp-custom-test"></div>
+        </div>
+        <div class="scp-custom-row">
+          <span class="scp-custom-tag scp-custom-tag-exclude">排除</span>
+          <div class="scp-custom" id="scp-exclude-test"></div>
+        </div>
+        <div class="scp-row">
+          <button class="btn btn-icon scp-pick" id="pick-test" data-target="test" data-exclude="0" title="提取取色：点击后在待验章原图预览上点选要保留的印章墨水颜色">💧 提取</button>
+          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-test" data-target="test" data-exclude="1" title="排除取色：点击后在待验章原图预览上点选要从印章中排除的颜色">⊘ 排除</button>
+        </div>
+        <div class="scp-hint">💧 提取＝保留所选颜色作印章墨迹　·　⊘ 排除＝从结果中去除所选颜色</div>
+      </div>
       <canvas id="ext-test" width="160" height="160"></canvas>
       <div class="ext-label">待验章提取</div>
+      <div class="stamp-candidates" id="cand-test"></div>
       <div class="ocr-inline" id="ocr-test">
         <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-test-company">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-test-code">—</span></div>
@@ -956,9 +1184,11 @@
         <button class="mode-btn" data-mode="sidebyside">并排</button>
       </div>
       <div class="spacer"></div>
+      <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）">⚡ 自动对齐</button>
       <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
       <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
-      <button class="btn" id="btn-export" title="导出对比结果">导出</button>
+      <button class="btn" id="btn-export" title="导出对比结果为 PNG">导出</button>
+      <button class="btn" id="btn-report" title="导出含图片、相似度、OCR 的对比报告">报告</button>
       <button class="btn" id="btn-verify" title="打开全国印章查询平台">印章核实</button>
       <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码">全部识别</button>
     </div>
@@ -970,7 +1200,7 @@
       </div>
       <label style="margin-left:12px">缩放</label>
       <div class="slider-group">
-        <input type="range" id="sl-scale" min="30" max="200" value="100" step="0.5">
+        <input type="range" id="sl-scale" min="20" max="400" value="100" step="0.5">
         <span class="val" id="val-scale">100%</span>
       </div>
       <div class="mode-group" id="axis-group" style="margin-left:6px">
@@ -1016,7 +1246,7 @@
 
   <div class="kbd-hints" id="kbd-hints">
     <kbd>1</kbd> 叠加 &nbsp; <kbd>2</kbd> 滑块 &nbsp; <kbd>3</kbd> 并排 &nbsp;
-    <kbd>Tab</kbd> 切换目标 &nbsp; <kbd>D</kbd> 差异高亮 &nbsp; <kbd>R</kbd> 重置 &nbsp;
+    <kbd>Tab</kbd> 切换目标 &nbsp; <kbd>A</kbd> 自动对齐 &nbsp; <kbd>D</kbd> 差异高亮 &nbsp; <kbd>R</kbd> 重置 &nbsp;
     <kbd>← →</kbd> 旋转 &nbsp; <kbd>↑ ↓</kbd> 缩放 &nbsp;
     鼠标拖拽移动 &nbsp; <kbd>Ctrl+V</kbd> 粘贴
   </div>
@@ -1035,15 +1265,33 @@
   <canvas id="mag-canvas" width="150" height="150"></canvas>
 </div>
 
+<div class="pick-loupe" id="pick-loupe">
+  <canvas id="pick-zoom" width="120" height="120"></canvas>
+  <div class="pick-meta">
+    <span class="swatch" id="pick-swatch"></span>
+    <span id="pick-info">—</span>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    State
    ============================================================ */
+const APP_VERSION = '2.7.0';
+
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
   test: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
   target: 'test',          // 当前操作目标: 'ref' | 'test'
   scaleAxis: 'uniform',   // 缩放轴: 'uniform' | 'x' | 'y'
+  // 每枚印章独立的墨色设置（预设多选 + 手工取色），参考章与待验章互不影响
+  ink: {
+    ref:  { presets: ['red'], customs: [] },   // customs: [{hue, hex, on}]
+    test: { presets: ['red'], customs: [] },
+  },
+  pickingTarget: null,    // 取色模式目标: 'ref' | 'test' | null
+  pickExclude: false,     // 取色类型: false=提取色, true=排除色
+  previewZoom: { ref: 1, test: 1 },  // 提取缩略图缩放倍数（1× / 2×）
   mode: 'overlay',
   opacity: 50,
   diffMode: false,
@@ -1107,40 +1355,106 @@ const kbdHints = $('#kbd-hints');
    ============================================================ */
 
 // 判断像素是否为红色印章墨水 — HSV 色相检测，覆盖深浅红、偏橙红、浅红
-function isRedPixel(r, g, b) {
+// 墨色色带定义：红（默认）/ 蓝 / 紫，检测与提取共用
+// INK_CUSTOM_TOL：手工取色（提取）的色相容差（±度数）
+// INK_EXCLUDE_TOL：排除色的色相容差（收紧，避免误伤整枚印章）
+const INK_CUSTOM_TOL = 18;
+const INK_EXCLUDE_TOL = 6;
+const MAX_INK_COLORS = 10;  // 每枚印章最多支持的手工颜色数（超出提示）
+const INK_BANDS = {
+  red:    { name: '红章', hueLo: [0, 40],   hueHi: [320, 360], center: 0   },
+  blue:   { name: '蓝章', hueLo: [180, 265], hueHi: null,       center: 222.5 },
+  purple: { name: '紫章', hueLo: [250, 330], hueHi: null,       center: 290 },
+};
+
+// 计算色相到色带的最短距离（用于置信度）；不在带内返回 -1
+function hueDistToBand(hue, band) {
+  if (band.hueHi) {
+    // 红带跨界 0°：0-40 与 320-360 两段
+    if (hue <= band.hueLo[1]) return hue - band.hueLo[0];
+    if (hue >= band.hueHi[0]) return band.hueHi[1] - hue;
+    return -1;
+  }
+  if (hue >= band.hueLo[0] && hue <= band.hueLo[1]) {
+    return Math.abs(hue - band.center);
+  }
+  return -1;
+}
+
+// RGB → {h, s, v}（h: 0-360, s/v: 0-1）
+function rgbToHsv(r, g, b) {
   const rn = r / 255, gn = g / 255, bn = b / 255;
   const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
   const delta = max - min;
-  if (delta < 0.04 || max < 0.06) return false;
-  const sat = delta / max;
-  if (sat < 0.08) return false;
-  let hue;
-  if (max === rn) hue = 60 * (((gn - bn) / delta) % 6);
-  else if (max === gn) hue = 60 * ((bn - rn) / delta + 2);
-  else hue = 60 * ((rn - gn) / delta + 4);
-  if (hue < 0) hue += 360;
-  // 扩展红色色相环：0-40°（含橙红）和 320-360°（含紫红）
-  return hue < 40 || hue > 320;
+  let hue = 0;
+  if (delta > 0) {
+    if (max === rn) hue = 60 * (((gn - bn) / delta) % 6);
+    else if (max === gn) hue = 60 * ((bn - rn) / delta + 2);
+    else hue = 60 * ((rn - gn) / delta + 4);
+    if (hue < 0) hue += 360;
+  }
+  return { h: hue, s: max === 0 ? 0 : delta / max, v: max };
 }
 
-function detectStampRegion(imageData) {
+// 色相环上两角的最短距离（0-180）
+function hueCircleDist(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+// 排除色匹配：色相 + 饱和度 + 亮度综合判断，区分无彩色（黑/白/灰，hue 恒为 0）与彩色（如红 hue 0）
+function isExcludedBy(hue, sat, val, excludeColors) {
+  for (const ex of excludeColors || []) {
+    const es = (ex.sat != null ? ex.sat : 1);
+    const ev = (ex.val != null ? ex.val : 1);
+    if (es < 0.15) {
+      // 无彩色排除（黑/白/灰）：按饱和度与亮度贴近度匹配
+      if (Math.abs(sat - es) < 0.25 && Math.abs(val - ev) < 0.22) return true;
+    } else {
+      // 彩色排除：按色相 + 亮度贴近度匹配（像素需有一定饱和度，避免误伤黑白灰）
+      if (sat > 0.06 && hueCircleDist(hue, ex.hue) <= INK_EXCLUDE_TOL && Math.abs(val - ev) < 0.45) return true;
+    }
+  }
+  return false;
+}
+
+// 判断像素是否为选中的任一墨色（排除色优先）
+// spec: 预设数组（兼容旧调用）或 {presets, hues, excludes, excludeColors}
+function isStampPixel(r, g, b, spec) {
+  const presets = Array.isArray(spec) ? spec : (spec && spec.presets) || [];
+  const hues = (spec && spec.hues) || [];
+  const excludeColors = (spec && spec.excludeColors) || [];
+  const { h: hue, s: sat, v } = rgbToHsv(r, g, b);
+  if (v < 0.06 || sat < 0.08) return false;
+  // 排除色优先：命中任一排除色 → 非墨迹（色相+饱和度+亮度综合，区分黑与红）
+  if (isExcludedBy(hue, sat, v, excludeColors)) return false;
+  for (const c of presets) {
+    const band = INK_BANDS[c];
+    if (band && hueDistToBand(hue, band) >= 0) return true;
+  }
+  for (const h of hues) {
+    if (hueCircleDist(hue, h) <= INK_CUSTOM_TOL) return true;
+  }
+  return false;
+}
+
+// 检测印章候选区域：标记墨色像素 → 形态学膨胀 → 连通域分析，返回按面积排序的前 3 个候选
+// spec: 预设数组或 {presets, hues}（预设 + 手工取色并集）
+function detectStampCandidates(imageData, spec) {
   const { data, width, height } = imageData;
   const N = width * height;
 
-  // Pass 1: 标记所有红色像素
-  const redMask = new Uint8Array(N);
-  let redCount = 0;
-  let sumX = 0, sumY = 0;
+  // Pass 1: 标记选中墨色的像素（预设色带 ∪ 手工取色色相）
+  const inkMask = new Uint8Array(N);
+  let inkCount = 0;
   let rawMinX = width, rawMinY = height, rawMaxX = 0, rawMaxY = 0;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
-      if (isRedPixel(data[i], data[i + 1], data[i + 2])) {
-        redMask[y * width + x] = 1;
-        redCount++;
-        sumX += x;
-        sumY += y;
+      if (isStampPixel(data[i], data[i + 1], data[i + 2], spec)) {
+        inkMask[y * width + x] = 1;
+        inkCount++;
         if (x < rawMinX) rawMinX = x;
         if (x > rawMaxX) rawMaxX = x;
         if (y < rawMinY) rawMinY = y;
@@ -1149,105 +1463,168 @@ function detectStampRegion(imageData) {
     }
   }
 
-  if (redCount < 80) {
-    return { x: 0, y: 0, w: width, h: height, circular: false, cx: width / 2, cy: height / 2, radius: Math.max(width, height) / 2 };
+  if (inkCount < 80) {
+    return {
+      spec,
+      regions: [{ x: 0, y: 0, w: width, h: height, circular: false, cx: width / 2, cy: height / 2, radius: Math.max(width, height) / 2, area: 0 }],
+    };
   }
 
   // Pass 2: 形态学膨胀 — 向外扩展边界，填补印章边缘的断裂和缺口
+  // 采用「可分膨胀」（先水平后垂直），复杂度 O(N·r)，远快于原 O(N·r²)，避免连续取色卡顿
   const dilateR = Math.max(3, Math.round(Math.max(rawMaxX - rawMinX, rawMaxY - rawMinY) * 0.025));
   const dilated = new Uint8Array(N);
+  const tmpH = new Uint8Array(N);
+  // 水平方向膨胀（每行：向前/向后各扫一遍，标记距墨迹 ≤ dilateR 的像素）
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    let run = -dilateR - 1;
+    for (let x = 0; x < width; x++) {
+      if (inkMask[row + x]) run = x;
+      if (x - run <= dilateR) tmpH[row + x] = 1;
+    }
+    run = width + dilateR;
+    for (let x = width - 1; x >= 0; x--) {
+      if (inkMask[row + x]) run = x;
+      if (run - x <= dilateR) tmpH[row + x] = 1;
+    }
+  }
+  // 垂直方向膨胀（每列：基于水平结果向上/向下各扫一遍）
+  for (let x = 0; x < width; x++) {
+    let run = -dilateR - 1;
+    for (let y = 0; y < height; y++) {
+      if (tmpH[y * width + x]) run = y;
+      if (y - run <= dilateR) dilated[y * width + x] = 1;
+    }
+    run = height + dilateR;
+    for (let y = height - 1; y >= 0; y--) {
+      if (tmpH[y * width + x]) run = y;
+      if (run - y <= dilateR) dilated[y * width + x] = 1;
+    }
+  }
+
+  // Pass 3: 连通域标记（BFS，4-连通）→ 每个域的面积与边界框
+  const labels = new Int32Array(N); // 0 = 未标记，正数为域编号
+  const components = []; // { area, minX, minY, maxX, maxY }
+  const queue = new Int32Array(N);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (!redMask[y * width + x]) continue;
-      for (let dy = -dilateR; dy <= dilateR; dy++) {
-        for (let dx = -dilateR; dx <= dilateR; dx++) {
-          if (dx * dx + dy * dy > dilateR * dilateR) continue;
-          const nx = x + dx, ny = y + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            dilated[ny * width + nx] = 1;
-          }
+      const pi = y * width + x;
+      if (!dilated[pi] || labels[pi]) continue;
+      const compId = components.length + 1;
+      let qh = 0, qt = 0;
+      queue[qt++] = pi;
+      labels[pi] = compId;
+      let area = 0, minX = width, minY = height, maxX = 0, maxY = 0;
+      while (qh < qt) {
+        const ci = queue[qh++];
+        const cx2 = ci % width, cy2 = (ci - cx2) / width;
+        area++;
+        if (cx2 < minX) minX = cx2;
+        if (cx2 > maxX) maxX = cx2;
+        if (cy2 < minY) minY = cy2;
+        if (cy2 > maxY) maxY = cy2;
+        if (cx2 > 0 && dilated[ci - 1] && !labels[ci - 1]) { labels[ci - 1] = compId; queue[qt++] = ci - 1; }
+        if (cx2 < width - 1 && dilated[ci + 1] && !labels[ci + 1]) { labels[ci + 1] = compId; queue[qt++] = ci + 1; }
+        if (cy2 > 0 && dilated[ci - width] && !labels[ci - width]) { labels[ci - width] = compId; queue[qt++] = ci - width; }
+        if (cy2 < height - 1 && dilated[ci + width] && !labels[ci + width]) { labels[ci + width] = compId; queue[qt++] = ci + width; }
+      }
+      components.push({ area, minX, minY, maxX, maxY });
+    }
+  }
+
+  if (!components.length) {
+    return {
+      spec,
+      regions: [{ x: 0, y: 0, w: width, h: height, circular: false, cx: width / 2, cy: height / 2, radius: Math.max(width, height) / 2, area: 0 }],
+    };
+  }
+
+  // Pass 4: 过滤小连通域（面积 ≥ 最大域的 12% 且 ≥ 500px），按面积取前 3 个候选
+  const largest = Math.max(...components.map(c => c.area));
+  const minArea = Math.max(500, largest * 0.12);
+  const selected = components
+    .filter(c => c.area >= minArea)
+    .sort((a, b) => b.area - a.area)
+    .slice(0, 3);
+
+  // Pass 5: 对每个候选计算质心、半径、圆形度（在原始墨色掩膜上，限候选框内）
+  const regions = selected.map(comp => {
+    const { minX, minY, maxX, maxY } = comp;
+    let comX = 0, comY = 0, comCount = 0;
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (inkMask[y * width + x]) {
+          comX += x;
+          comY += y;
+          comCount++;
         }
       }
     }
-  }
+    if (comCount === 0) return null;
+    comX /= comCount;
+    comY /= comCount;
 
-  // Pass 3: 在膨胀后的区域上计算精确边界框
-  let minX = width, minY = height, maxX = 0, maxY = 0;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (dilated[y * width + x]) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  // Pass 4: 质心（Center of Mass）— 比几何中心更准确地定位印章中心
-  let comX = 0, comY = 0, comCount = 0;
-  for (let y = minY; y <= maxY; y++) {
-    for (let x = minX; x <= maxX; x++) {
-      if (redMask[y * width + x]) {
-        comX += x;
-        comY += y;
-        comCount++;
-      }
-    }
-  }
-  comX /= comCount;
-  comY /= comCount;
-
-  // Pass 5: 从质心到所有红色像素的最大距离 → 印章半径
-  let maxR = 0;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (redMask[y * width + x]) {
-        const d = Math.sqrt((x - comX) ** 2 + (y - comY) ** 2);
-        if (d > maxR) maxR = d;
-      }
-    }
-  }
-
-  // 判断圆形章
-  const bw = maxX - minX + 1;
-  const bh = maxY - minY + 1;
-  const circular = Math.abs(bw - bh) / Math.max(bw, bh) < 0.18;
-
-  // 对圆形章：用第 97 百分位距离做半径（抗毛刺），然后外扩 2px
-  let finalRadius = maxR;
-  if (circular) {
     const distances = [];
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (redMask[y * width + x]) {
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (inkMask[y * width + x]) {
           distances.push(Math.sqrt((x - comX) ** 2 + (y - comY) ** 2));
         }
       }
     }
     distances.sort((a, b) => a - b);
+    const maxR = distances[distances.length - 1] || 0;
+
+    const bw = maxX - minX + 1;
+    const bh = maxY - minY + 1;
+
+    // 圆形度判定（双通道，圆环缺口/断笔时 bbox 宽高比会失效）：
+    // 1) bbox 宽高比接近 1；2) 距离分布呈环形 —— 半数墨迹位于 p97 半径外半段
+    const p50 = distances[Math.floor(distances.length * 0.5)] || 0;
     const p97 = distances[Math.floor(distances.length * 0.97)] || maxR;
-    finalRadius = p97 + 2;
+    const bboxCircular = Math.abs(bw - bh) / Math.max(bw, bh) < 0.18;
+    const ringLike = p97 > 0 && p50 > 0.5 * p97;
+    const circular = bboxCircular || ringLike;
+
+    // 半径估计：
+    // - 圆形章用 p97+2（97 百分位抗毛刺与缺口拖尾）；不低于 bbox 长边一半（保证完整包含）
+    // - 异形章直接用 bbox 长边一半（maxR 受拖尾影响易偏大）
+    const bboxHalf = Math.max(bw, bh) / 2;
+    let finalRadius = circular ? Math.max(p97 + 2, bboxHalf) : bboxHalf;
+
+    const cropHalf = Math.ceil(finalRadius) + 2;
+    let cx = Math.round(comX);
+    let cy = Math.round(comY);
+    cx = Math.max(cropHalf, Math.min(width - cropHalf, cx));
+    cy = Math.max(cropHalf, Math.min(height - cropHalf, cy));
+
+    return {
+      x: cx - cropHalf,
+      y: cy - cropHalf,
+      w: cropHalf * 2,
+      h: cropHalf * 2,
+      circular,
+      cx,
+      cy,
+      radius: finalRadius,
+      area: comp.area,
+    };
+  }).filter(Boolean);
+
+  if (!regions.length) {
+    return {
+      spec,
+      regions: [{ x: 0, y: 0, w: width, h: height, circular: false, cx: width / 2, cy: height / 2, radius: Math.max(width, height) / 2, area: 0 }],
+    };
   }
 
-  // 最终裁剪区域：以质心为中心，用半径生成正方形（保证印章居中）
-  const cropHalf = Math.ceil(finalRadius) + 2;
-  let cx = Math.round(comX);
-  let cy = Math.round(comY);
-  // 确保不超出图像边界
-  cx = Math.max(cropHalf, Math.min(width - cropHalf, cx));
-  cy = Math.max(cropHalf, Math.min(height - cropHalf, cy));
+  return { spec, regions };
+}
 
-  return {
-    x: cx - cropHalf,
-    y: cy - cropHalf,
-    w: cropHalf * 2,
-    h: cropHalf * 2,
-    circular,
-    cx,
-    cy,
-    radius: finalRadius,
-  };
+// 兼容旧调用：返回最大（第一个）候选区域
+function detectStampRegion(imageData, spec) {
+  return detectStampCandidates(imageData, spec || { presets: ['red'], hues: [] }).regions[0];
 }
 
 /* ============================================================
@@ -1255,7 +1632,7 @@ function detectStampRegion(imageData) {
    ============================================================ */
 function loadImageToCanvas(img) {
   const c = document.createElement('canvas');
-  const maxDim = 1600;
+  const maxDim = 2048; // 保留较高源图分辨率，保证提取清晰度
   let w = img.naturalWidth || img.width;
   let h = img.naturalHeight || img.height;
   if (w > maxDim || h > maxDim) {
@@ -1269,13 +1646,15 @@ function loadImageToCanvas(img) {
   return c;
 }
 
-function extractStamp(canvas) {
+function extractStamp(canvas, region, inkSpec) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
-  const imageData = ctx.getImageData(0, 0, W, H);
-  const region = detectStampRegion(imageData);
+  // spec 兼容：数组 = 仅预设色；对象 = {presets: [...], hues: [度数...]} 预设+手工取色并集
+  const presets = Array.isArray(inkSpec) ? inkSpec : (inkSpec && inkSpec.presets) || [];
+  const hues = (inkSpec && inkSpec.hues) || [];
+  if (!region) region = detectStampCandidates(ctx.getImageData(0, 0, W, H), inkSpec).regions[0];
 
-  const OUT = 800; // 统一输出尺寸（高分辨率保留细节）
+  const OUT = 1200; // 统一输出尺寸（高分辨率，保持印章细节清晰）
   const out = document.createElement('canvas');
   out.width = OUT;
   out.height = OUT;
@@ -1299,9 +1678,13 @@ function extractStamp(canvas) {
   tctx.imageSmoothingQuality = 'high';
   tctx.drawImage(canvas, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
 
-  // 逐像素处理：基于置信度的 alpha 通道，消除背景杂色
+  // 逐像素处理：基于置信度的 alpha 通道，消除背景杂色（预设 + 手工取色并集）
   const td = tctx.getImageData(0, 0, OUT, OUT);
   const alphaMap = new Uint8Array(OUT * OUT);
+  const extractBands = presets.map(c => INK_BANDS[c]).filter(Boolean);
+  const customHues = hues.slice();
+  const excludeColors = ((inkSpec && inkSpec.excludeColors) || []).slice();
+  const CUSTOM_EDGE = INK_CUSTOM_TOL + 5; // 边缘扩展，保留褪色边界
 
   for (let y = 0; y < OUT; y++) {
     for (let x = 0; x < OUT; x++) {
@@ -1321,22 +1704,60 @@ function extractStamp(canvas) {
         else hue = 60 * ((rn - gn) / delta + 4);
         if (hue < 0) hue += 360;
 
-        const isRedHue = hue < 45 || hue > 315;
+        // 排除色优先：命中任一排除色 → 该像素强制透明（不参与提取）
+        if (isExcludedBy(hue, sat, max, excludeColors)) {
+          td.data[idx + 3] = 0;
+          alphaMap[y * OUT + x] = 0;
+          continue;
+        }
 
-        if (isRedHue && sat >= 0.03) {
-          // 置信度：更宽松以保留印章细节（ faded edges、浅色纹理）
+        // 命中任一选中色带（提取阶段色带略宽，保留褪色边缘）；取距离最近者计算置信度
+        let bestBand = null, bestDist = -1, bestIsCustom = false;
+        for (const band of extractBands) {
+          const WIDE = 5; // 边缘扩展度数
+          let d;
+          if (band.hueHi) {
+            if (hue <= band.hueLo[1] + WIDE) d = hue <= band.hueLo[1] ? hue - band.hueLo[0] : hue - band.hueLo[1];
+            else if (hue >= band.hueHi[0] - WIDE) d = hue >= band.hueHi[0] ? band.hueHi[1] - hue : band.hueHi[0] - hue;
+            else continue;
+          } else {
+            if (hue < band.hueLo[0] - WIDE || hue > band.hueLo[1] + WIDE) continue;
+            d = Math.abs(hue - band.center);
+          }
+          if (bestDist < 0 || d < bestDist) { bestDist = d; bestBand = band; bestIsCustom = false; }
+        }
+        // 手工取色：色相环距离
+        for (const h of customHues) {
+          const d = hueCircleDist(hue, h);
+          if (d > CUSTOM_EDGE) continue;
+          if (bestDist < 0 || d < bestDist) { bestDist = d; bestBand = { center: h }; bestIsCustom = true; }
+        }
+
+        if (bestBand && sat >= 0.03) {
           const satFactor = Math.min(1, (sat - 0.03) / 0.30);
-          const hueDist = hue <= 45 ? hue : (360 - hue);
-          const hueFactor = Math.min(1, 1 - hueDist / 45);
+          const hueFactor = Math.max(0, Math.min(1, 1 - bestDist / 45));
           const confidence = 0.1 + 0.9 * (satFactor * 0.5 + hueFactor * 0.5);
           alpha = Math.round(Math.min(1, confidence) * 255);
 
-          // 轻微增强：保留更多原始细节
-          const boost = 1.06;
-          const suppress = 0.92;
-          td.data[idx]     = Math.min(255, Math.round(r * boost));
-          td.data[idx + 1] = Math.min(255, Math.round(g * suppress));
-          td.data[idx + 2] = Math.min(255, Math.round(b * suppress));
+          if (!bestIsCustom) {
+            // 预设色：轻微增强对应墨色通道，保留更多原始细节
+            const boost = 1.06;
+            const suppress = 0.92;
+            if (bestBand === INK_BANDS.blue) {
+              td.data[idx]     = Math.min(255, Math.round(r * suppress));
+              td.data[idx + 1] = Math.min(255, Math.round(g * suppress));
+              td.data[idx + 2] = Math.min(255, Math.round(b * boost));
+            } else if (bestBand === INK_BANDS.purple) {
+              td.data[idx]     = Math.min(255, Math.round(r * boost));
+              td.data[idx + 1] = Math.min(255, Math.round(g * suppress));
+              td.data[idx + 2] = Math.min(255, Math.round(b * boost));
+            } else {
+              td.data[idx]     = Math.min(255, Math.round(r * boost));
+              td.data[idx + 1] = Math.min(255, Math.round(g * suppress));
+              td.data[idx + 2] = Math.min(255, Math.round(b * suppress));
+            }
+          }
+          // 手工取色保持原始像素颜色，仅通过 alpha 分离背景
         }
       }
 
@@ -1422,7 +1843,11 @@ function processStamp(img, target) {
   showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 — 正在提取印章...`);
 
   // === 阶段 2：提取印章（同步，快速）===
-  const extracted = extractStamp(canvas);
+  const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+  const inkSpec = activeInkSpec(target);
+  const detection = detectStampCandidates(imageData, inkSpec);
+  const region = detection.regions[0];
+  const extracted = extractStamp(canvas, region, inkSpec);
 
   state[target] = {
     ...state[target],
@@ -1430,17 +1855,30 @@ function processStamp(img, target) {
     extracted: extracted.canvas,
     circular: extracted.circular,
     bbox: extracted.bbox,
+    candidates: detection.regions,
+    candidateIndex: 0,
+    inkSpec,
+    _sig: (state[target]._sig || 0) + 1,
+    ocrResult: null,
   };
 
-  // 绘制提取结果到小画布
-  const extCanvas = target === 'ref' ? $('#ext-ref') : $('#ext-test');
-  const ectx = extCanvas.getContext('2d');
-  ectx.clearRect(0, 0, 160, 160);
-  ectx.drawImage(extracted.canvas, 0, 0, 160, 160);
+  // 只加载了一枚时，操作目标自动指向已加载的印章（画布/手柄立即可用）
+  const other = target === 'ref' ? 'test' : 'ref';
+  if (!state[other].extracted) {
+    state.target = target;
+    document.querySelectorAll('#target-group .mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.target === target));
+  }
 
+  // 绘制提取结果到小画布
+  drawExtractedPreview(target, extracted.canvas);
+
+  renderCandidates(target);
+  renderInkPanel(target);
   updateVisibility();
   render();
-  showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extracted.circular ? '圆形章' : '异形章'})  — 已自动提取并对齐`);
+  const extra = detection.regions.length > 1 ? `，检出 ${detection.regions.length} 个印章可选` : '';
+  showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extracted.circular ? '圆形章' : '异形章'}) — 已自动提取${extra}${state[other].extracted ? '' : '，加载另一枚印章后可开始对比'}`);
 
   // 自动触发 OCR 文字识别（检查服务是否可用）
   if (window._ocrAvailable) {
@@ -1458,11 +1896,506 @@ function processStamp(img, target) {
   }
 }
 
+// 绘制提取结果到小预览画布
+function drawExtractedPreview(target, extractedCanvas) {
+  const extCanvas = target === 'ref' ? $('#ext-ref') : $('#ext-test');
+  const zoom = state.previewZoom[target] || 1;
+  const size = Math.round(160 * zoom);
+  if (extCanvas.width !== size) { extCanvas.width = size; extCanvas.height = size; }
+  const ectx = extCanvas.getContext('2d');
+  ectx.clearRect(0, 0, size, size);
+  ectx.imageSmoothingEnabled = true;
+  ectx.imageSmoothingQuality = 'high';
+  ectx.drawImage(extractedCanvas, 0, 0, size, size);
+  extCanvas.style.width = size + 'px';
+  extCanvas.style.height = size + 'px';
+  extCanvas.title = zoom > 1 ? `当前 ${zoom}× · 点击继续放大（1×→2×→3×→4× 循环）` : '点击放大（1×→2×→3×→4× 循环）';
+}
+
+// 提取缩略图：非取色模式点击循环缩放 1×→2×→3×→4×；取色模式下可在其上点选颜色
+const PREVIEW_ZOOM_LEVELS = [1, 2, 3, 4];
+[['ref', '#ext-ref'], ['test', '#ext-test']].forEach((pair) => {
+  const target = pair[0];
+  const canvasEl = $(pair[1]);
+
+  canvasEl.addEventListener('mousemove', (e) => {
+    if (state.pickingTarget !== target) return;
+    const rgb = sampleCanvasColor(canvasEl, e);
+    if (!rgb) { pickLoupe.style.display = 'none'; return; }
+    const [r, g, b] = rgb;
+    const { h, s } = rgbToHsv(r, g, b);
+    const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    pickSwatch.style.background = hex;
+    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 色相 ${Math.round(h)}°${s < 0.12 ? ' · 偏灰' : ''}`;
+    renderCanvasZoom(canvasEl, e);
+    pickLoupe.style.display = 'block';
+    const lx = Math.min(window.innerWidth - 150, e.clientX + 16);
+    const ly = Math.max(8, e.clientY - 170);
+    pickLoupe.style.left = lx + 'px';
+    pickLoupe.style.top = ly + 'px';
+  });
+  canvasEl.addEventListener('mouseleave', () => {
+    if (state.pickingTarget === target) pickLoupe.style.display = 'none';
+  });
+  canvasEl.addEventListener('click', (e) => {
+    // 取色模式下：在提取结果上点选颜色（透明区域忽略）
+    if (state.pickingTarget === target) {
+      const rgb = sampleCanvasColor(canvasEl, e);
+      if (rgb) addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
+      return;
+    }
+    if (!state[target].extracted) return;
+    const cur = state.previewZoom[target] || 1;
+    const next = PREVIEW_ZOOM_LEVELS[(PREVIEW_ZOOM_LEVELS.indexOf(cur) + 1) % PREVIEW_ZOOM_LEVELS.length];
+    state.previewZoom[target] = next;
+    drawExtractedPreview(target, state[target].extracted);
+  });
+});
+
+/* ============================================================
+   多印章候选 — 一张图检出多个印章时可切换提取目标
+   ============================================================ */
+function renderCandidates(target) {
+  const el = $('#cand-' + target);
+  const st = state[target];
+  el.innerHTML = '';
+  if (!st.candidates || st.candidates.length < 2) return;
+  st.candidates.forEach((rg, i) => {
+    const b = document.createElement('button');
+    b.className = 'cand-btn' + (i === st.candidateIndex ? ' active' : '');
+    b.textContent = '印章 ' + (i + 1);
+    b.title = `候选 ${i + 1}：区域 ${Math.round(rg.w)}×${Math.round(rg.h)}${rg.circular ? '（圆形章）' : ''}`;
+    b.addEventListener('click', () => switchCandidate(target, i));
+    el.appendChild(b);
+  });
+}
+
+function switchCandidate(target, i) {
+  const st = state[target];
+  if (!st.original || !st.candidates || !st.candidates[i] || i === st.candidateIndex) return;
+  st.candidateIndex = i;
+  // 候选切换后重置该印章的变换参数
+  st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0;
+
+  const extracted = extractStamp(st.original, st.candidates[i], st.inkSpec || activeInkSpec(target));
+  st.extracted = extracted.canvas;
+  st.circular = extracted.circular;
+  st.bbox = extracted.bbox;
+  st._sig = (st._sig || 0) + 1;
+  st.ocrResult = null;
+
+  drawExtractedPreview(target, extracted.canvas);
+  renderCandidates(target);
+  syncSlidersToTarget();
+  updateVisibility();
+  render();
+  showStatus(`已切换到${target === 'ref' ? '参考章' : '待验章'}候选 ${i + 1} (${extracted.circular ? '圆形章' : '异形章'})`);
+
+  // 候选变化后重新识别文字
+  if (window._ocrAvailable) runStampOCR(target);
+}
+
+/* ============================================================
+   墨色选择 — 每枚印章独立（参考章 / 待验章互不影响）
+   预设多选（红 / 蓝 / 紫）+ 💧 手工取色（提取/排除，支持多种）+ × 剔除
+   排除色优先：命中所选排除色的像素在提取时被去除
+   任一改动后按该印章的选择重新提取
+   ============================================================ */
+
+// 当前生效的墨色规格：预设色带 ∪ 自选提取色相，另附排除色相（按印章区分）
+function activeInkSpec(target) {
+  const ink = state.ink[target];
+  const presets = ink.presets;
+  const hues = ink.customs.filter(c => c.on && !c.exclude).map(c => c.hue);
+  const excludeList = ink.customs.filter(c => c.on && c.exclude);
+  const excludes = excludeList.map(c => c.hue);
+  const excludeColors = excludeList.map(c => ({ hue: c.hue, sat: c.sat != null ? c.sat : 1, val: c.val != null ? c.val : 1 }));
+  // 无任何选择时兜底红章（用于初始自动提取）；一旦有手工颜色则完全按手工选择，不叠加默认色
+  if (presets.length === 0 && hues.length === 0 && excludes.length === 0) {
+    return { presets: ['red'], hues: [], excludes: [], excludeColors: [] };
+  }
+  return { presets, hues, excludes, excludeColors };
+}
+
+// 墨色规格的可读名称（状态提示用）
+function inkSpecLabel(spec) {
+  const parts = spec.presets.map(c => INK_BANDS[c] ? INK_BANDS[c].name : c);
+  const nCustom = (spec.hues || []).length;
+  if (nCustom) parts.push(`自选×${nCustom}`);
+  const nExclude = (spec.excludes || []).length;
+  if (nExclude) parts.push(`排除×${nExclude}`);
+  return parts.join('+');
+}
+
+const stampLabel = (t) => (t === 'ref' ? '参考章' : '待验章');
+
+// 同步面板上预设芯片的选中态
+function renderInkPanel(target) {
+  const ink = state.ink[target];
+  document.querySelectorAll(`#color-panel-${target} .mode-btn[data-color]`).forEach(b => {
+    b.classList.toggle('active', ink.presets.includes(b.dataset.color));
+  });
+  renderCustomInkChips(target);
+}
+
+// 根据背景色计算可读的文字颜色（深色背景用白字，浅色背景用深字）
+function contrastColor(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) || 0;
+  const g = parseInt(hex.slice(3, 5), 16) || 0;
+  const b = parseInt(hex.slice(5, 7), 16) || 0;
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 150 ? '#1a1a1a' : '#ffffff';
+}
+
+// 渲染自选色芯片：提取色与排除色分行显示；芯片背景直接显示所选颜色（不再用红色），便于观察
+function renderCustomInkChips(target) {
+  const incContainer = $('#scp-custom-' + target);
+  const excContainer = $('#scp-exclude-' + target);
+  incContainer.innerHTML = '';
+  excContainer.innerHTML = '';
+  const customs = state.ink[target].customs;
+
+  const renderGroup = (container, list) => {
+    if (!list.length) {
+      const ph = document.createElement('span');
+      ph.className = 'scp-empty';
+      ph.textContent = '—';
+      container.appendChild(ph);
+      return;
+    }
+    list.forEach((ink) => {
+      const b = document.createElement('button');
+      b.className = 'mode-btn ink-custom' + (ink.on ? ' active' : '') + (ink.exclude ? ' exclude' : '');
+      b.style.background = ink.hex;
+      b.style.color = contrastColor(ink.hex);
+      b.style.opacity = ink.on ? '1' : '0.45';
+      b.title = `${ink.hex} · 色相 ${Math.round(ink.hue)}°（${ink.exclude ? '排除' : '提取'}）\n点击启用/停用；点「提取/排除」切换；× 剔除`;
+      const mode = document.createElement('span');
+      mode.className = 'ink-mode';
+      mode.textContent = ink.exclude ? '排除' : '提取';
+      mode.title = ink.exclude ? '点击改为提取色' : '点击改为排除色';
+      mode.addEventListener('click', (e) => {
+        e.stopPropagation();
+        ink.exclude = !ink.exclude;
+        renderCustomInkChips(target);
+        applyInkSelection(target, ink.exclude ? `已将 ${ink.hex} 设为排除色` : `已将 ${ink.hex} 设为提取色`);
+      });
+      const hex = document.createElement('span');
+      hex.className = 'ink-hex';
+      hex.textContent = ink.hex;
+      const rm = document.createElement('span');
+      rm.className = 'ink-rm';
+      rm.textContent = '×';
+      rm.title = '剔除该颜色';
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = state.ink[target].customs.indexOf(ink);
+        if (idx >= 0) state.ink[target].customs.splice(idx, 1);
+        // 移除所有手工颜色后，若无预设则恢复默认红章，避免"无任何选择"
+        if (!state.ink[target].customs.length && state.ink[target].presets.length === 0) {
+          state.ink[target].presets = ['red'];
+        }
+        renderInkPanel(target);
+        applyInkSelection(target, `已剔除墨色 ${ink.hex}`);
+      });
+      b.appendChild(mode);
+      b.appendChild(hex);
+      b.appendChild(rm);
+      b.addEventListener('click', () => {
+        ink.on = !ink.on;
+        renderCustomInkChips(target);
+        // 停用最后一个生效墨色时自动恢复默认红章，避免出现"无墨色可选"状态
+        if (!ink.on) {
+          const anyPreset = state.ink[target].presets.length > 0;
+          const anyCustom = state.ink[target].customs.some(c => c.on);
+          if (!anyPreset && !anyCustom) {
+            state.ink[target].presets = ['red'];
+            renderInkPanel(target);
+          }
+        }
+        applyInkSelection(target, ink.on ? `已启用墨色 ${ink.hex}` : `已停用墨色 ${ink.hex}`);
+      });
+      container.appendChild(b);
+    });
+  };
+
+  renderGroup(incContainer, customs.filter(c => !c.exclude));
+  renderGroup(excContainer, customs.filter(c => c.exclude));
+}
+
+// 手工添加墨色（来自取色器）：exclude=true 表示加入排除列表
+function addCustomInk(target, r, g, b, exclude) {
+  const { h, s, v } = rgbToHsv(r, g, b);
+  if (exclude) {
+    // 排除色允许黑色/深色；仅拒绝"接近白色的背景纸"（低饱和 + 高亮度）
+    if (s < 0.12 && v > 0.85) {
+      showStatus('取色失败：该处接近白色（背景纸），请点选需要排除的颜色');
+      return false;
+    }
+  } else {
+    // 提取色：拒绝过浅或过暗的像素（非墨迹）
+    if (s < 0.12 || v < 0.08) {
+      showStatus(`取色失败：该处颜色饱和度或亮度太低（S=${(s * 100).toFixed(0)}%），请点选印章墨迹处`);
+      return false;
+    }
+  }
+  const ink = state.ink[target];
+  // 颜色数量上限：超过 MAX_INK_COLORS 给与提示
+  if (ink.customs.length >= MAX_INK_COLORS) {
+    showStatus(`已达颜色上限：最多支持 ${MAX_INK_COLORS} 种颜色，请先剔除不需要的颜色`);
+    return false;
+  }
+  // 相近颜色（色相、饱和度、亮度均接近）视为同一颜色；重复选取以「最后操作」为准（提取↔排除切换）
+  const dup = ink.customs.find(c =>
+    hueCircleDist(c.hue, h) <= 3
+    && Math.abs((c.sat != null ? c.sat : 1) - s) < 0.25
+    && Math.abs((c.val != null ? c.val : 1) - v) < 0.25);
+  if (dup) {
+    const modeChanged = dup.exclude !== !!exclude;
+    dup.exclude = !!exclude;
+    dup.on = true;
+    renderCustomInkChips(target);
+    applyInkSelection(target, modeChanged
+      ? `${stampLabel(target)}颜色 ${dup.hex} 已改为「${exclude ? '排除' : '提取'}」（以最后操作为准）`
+      : `已重新启用相近的${exclude ? '排除' : '提取'}色 ${dup.hex}`);
+    return true;
+  }
+  // 首次使用手工取色时，自动取消默认预设色（如默认红章），仅按手工选择的颜色提取
+  if (!ink.customs.length) {
+    ink.presets = [];
+  }
+  const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+  ink.customs.push({ hue: h, sat: s, val: v, hex, on: true, exclude: !!exclude });
+  renderInkPanel(target);
+  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（色相 ${Math.round(h)}°），可继续点选下一种`);
+  return true;
+}
+
+// 按当前墨色选择重新提取指定印章（参考章 / 待验章各自独立）
+const _inkTimers = {};
+function applyInkSelection(target, reasonMsg) {
+  const st = state[target];
+  if (!st.original) {
+    showStatus(`${reasonMsg}（未加载图片，加载后自动生效）`);
+    return;
+  }
+  const spec = activeInkSpec(target);
+  st.inkSpec = spec;
+  showStatus(`${stampLabel(target)} ${reasonMsg} — 正在按「${inkSpecLabel(spec)}」重新提取...`);
+  // 防抖：连续取色/切换时合并为一次重提取，避免反复同步重提取导致卡顿"没反应"
+  clearTimeout(_inkTimers[target]);
+  _inkTimers[target] = setTimeout(() => {
+    const imageData = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
+    const detection = detectStampCandidates(imageData, spec);
+    const extracted = extractStamp(st.original, detection.regions[0], spec);
+    st.extracted = extracted.canvas;
+    st.circular = extracted.circular;
+    st.bbox = extracted.bbox;
+    st.candidates = detection.regions;
+    st.candidateIndex = 0;
+    st.inkSpec = spec;
+    st._sig = (st._sig || 0) + 1;
+    st.ocrResult = null;
+    st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0;
+    drawExtractedPreview(target, extracted.canvas);
+    renderCandidates(target);
+    if (window._ocrAvailable) runStampOCR(target);
+    syncSlidersToTarget();
+    updateVisibility();
+    render();
+    showStatus(`${stampLabel(target)}已按「${inkSpecLabel(spec)}」重新提取`);
+  }, 350);
+}
+
+// 绑定两枚印章各自的墨色面板
+['ref', 'test'].forEach(target => {
+  const panel = $('#color-panel-' + target);
+  // 预设芯片：多选 toggle，至少保留一种
+  panel.querySelectorAll('.mode-btn[data-color]').forEach(b => {
+    b.addEventListener('click', () => {
+      const ink = state.ink[target];
+      const color = b.dataset.color;
+      const turningOff = ink.presets.includes(color);
+      if (turningOff) {
+        const activeCustom = ink.customs.filter(c => c.on).length;
+        if (ink.presets.length === 1 && activeCustom === 0) {
+          showStatus('至少保留一种墨色');
+          return;
+        }
+        ink.presets = ink.presets.filter(c => c !== color);
+        applyInkSelection(target, `已取消墨色「${INK_BANDS[color].name}」`);
+      } else {
+        ink.presets.push(color);
+        applyInkSelection(target, `已添加墨色「${INK_BANDS[color].name}」`);
+      }
+      renderInkPanel(target);
+    });
+  });
+  // 💧 提取取色按钮
+  $('#pick-' + target).addEventListener('click', () => {
+    const active = state.pickingTarget === target && !state.pickExclude;
+    setPickMode(active ? null : target, false);
+  });
+  // ⊘ 排除取色按钮
+  $('#pick-exclude-' + target).addEventListener('click', () => {
+    const active = state.pickingTarget === target && state.pickExclude;
+    setPickMode(active ? null : target, true);
+  });
+});
+
+/* ============================================================
+   💧 手工取色 — 在原图预览上点选墨水颜色（提取/排除，每枚印章独立）
+   ============================================================ */
+const pickLoupe = $('#pick-loupe');
+const pickSwatch = $('#pick-swatch');
+const pickInfo = $('#pick-info');
+const pickZoomCanvas = $('#pick-zoom');
+const pickZoomCtx = pickZoomCanvas.getContext('2d');
+const _pickCanvas = document.createElement('canvas');
+const _pickCtx = _pickCanvas.getContext('2d', { willReadFrequently: true });
+
+function setPickMode(target, exclude) {
+  state.pickingTarget = target;
+  state.pickExclude = !!exclude;
+  document.body.classList.toggle('pick-mode', !!target);
+  document.querySelectorAll('.scp-pick').forEach(b => {
+    b.classList.toggle('active', !!target && b.dataset.target === target && b.dataset.exclude === (exclude ? '1' : '0'));
+  });
+  if (!target) pickLoupe.style.display = 'none';
+  const hasImg = target ? !!state[target].original : false;
+  showStatus(target
+    ? (hasImg
+        ? `取色模式（${stampLabel(target)}·${exclude ? '排除' : '提取'}）：点击原图预览的墨迹处，${exclude ? '把该颜色从印章中排除' : '提取该颜色'}（可连续选多种；Esc 退出）`
+        : `取色模式（${stampLabel(target)}）：请先加载图片，再在原图预览上点选印章墨色`)
+    : '已退出取色模式');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.pickingTarget) setPickMode(null, false);
+});
+
+// 光标在预览图上的自然坐标（供取色采样与放大镜共用）
+function previewCursorPos(zone, e) {
+  const img = zone.querySelector('.preview-img');
+  if (!img) return null;
+  const rect = img.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
+  const px = (e.clientX - rect.left) / rect.width * img.naturalWidth;
+  const py = (e.clientY - rect.top) / rect.height * img.naturalHeight;
+  const nx = Math.floor(px), ny = Math.floor(py);
+  if (nx < 0 || ny < 0 || nx >= img.naturalWidth || ny >= img.naturalHeight) return null;
+  return { img, nx, ny };
+}
+
+// 采样原图预览上光标处的颜色（3×3 均值抗锯齿），供放大镜与点击取色共用
+function samplePreviewColor(zone, e) {
+  const pos = previewCursorPos(zone, e);
+  if (!pos) return null;
+  const { img, nx, ny } = pos;
+  // 采样源矩形夹紧到图片内，避免边缘越界取到黑色
+  const sx = Math.max(0, Math.min(img.naturalWidth - 3, nx - 1));
+  const sy = Math.max(0, Math.min(img.naturalHeight - 3, ny - 1));
+  _pickCanvas.width = 3; _pickCanvas.height = 3;
+  _pickCtx.drawImage(img, sx, sy, 3, 3, 0, 0, 3, 3);
+  const d = _pickCtx.getImageData(0, 0, 3, 3).data;
+  let r = 0, g = 0, b = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+  r = Math.round(r / 9); g = Math.round(g / 9); b = Math.round(b / 9);
+  return [r, g, b];
+}
+
+// 取色放大镜：显示光标处 4× 放大的图像区域 + 十字准线
+function renderPickZoom(zone, e) {
+  const pos = previewCursorPos(zone, e);
+  if (!pos) return;
+  const { img, nx, ny } = pos;
+  const Z = 120;
+  const zoom = 4;
+  const srcSize = Z / zoom;  // 30px 源区域
+  const sx = Math.max(0, Math.min(img.naturalWidth - srcSize, nx - srcSize / 2));
+  const sy = Math.max(0, Math.min(img.naturalHeight - srcSize, ny - srcSize / 2));
+  pickZoomCtx.imageSmoothingEnabled = true;
+  pickZoomCtx.imageSmoothingQuality = 'high';
+  pickZoomCtx.clearRect(0, 0, Z, Z);
+  pickZoomCtx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, Z, Z);
+  pickZoomCtx.strokeStyle = 'rgba(192,57,43,0.9)';
+  pickZoomCtx.lineWidth = 1;
+  pickZoomCtx.beginPath();
+  pickZoomCtx.moveTo(Z / 2, 0); pickZoomCtx.lineTo(Z / 2, Z);
+  pickZoomCtx.moveTo(0, Z / 2); pickZoomCtx.lineTo(Z, Z / 2);
+  pickZoomCtx.stroke();
+}
+
+// 在已提取印章画布上采样颜色（透明区域忽略）
+function sampleCanvasColor(canvas, e) {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
+  const x = Math.floor((e.clientX - rect.left) / rect.width * canvas.width);
+  const y = Math.floor((e.clientY - rect.top) / rect.height * canvas.height);
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return null;
+  const d = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
+  if (d[3] < 30) return null;
+  return [d[0], d[1], d[2]];
+}
+
+// 提取结果画布放大镜
+function renderCanvasZoom(canvas, e) {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  const x = Math.floor((e.clientX - rect.left) / rect.width * canvas.width);
+  const y = Math.floor((e.clientY - rect.top) / rect.height * canvas.height);
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+  const Z = 120, zoom = 4, srcSize = Z / zoom;
+  const sx = Math.max(0, Math.min(canvas.width - srcSize, x - srcSize / 2));
+  const sy = Math.max(0, Math.min(canvas.height - srcSize, y - srcSize / 2));
+  pickZoomCtx.imageSmoothingEnabled = true;
+  pickZoomCtx.imageSmoothingQuality = 'high';
+  pickZoomCtx.clearRect(0, 0, Z, Z);
+  pickZoomCtx.drawImage(canvas, sx, sy, srcSize, srcSize, 0, 0, Z, Z);
+  pickZoomCtx.strokeStyle = 'rgba(192,57,43,0.9)';
+  pickZoomCtx.lineWidth = 1;
+  pickZoomCtx.beginPath();
+  pickZoomCtx.moveTo(Z / 2, 0); pickZoomCtx.lineTo(Z / 2, Z);
+  pickZoomCtx.moveTo(0, Z / 2); pickZoomCtx.lineTo(Z, Z / 2);
+  pickZoomCtx.stroke();
+}
+
+// 在原图预览上取色：hover 显示放大镜，click 取色（点击时实时采样，避免颜色未选中的问题）
+[zoneRef, zoneTest].forEach(zone => {
+  const target = zone === zoneRef ? 'ref' : 'test';
+  zone.addEventListener('mousemove', (e) => {
+    if (state.pickingTarget !== target) return;
+    const rgb = samplePreviewColor(zone, e);
+    if (!rgb) return;
+    const [r, g, b] = rgb;
+    const { h, s } = rgbToHsv(r, g, b);
+    const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    pickSwatch.style.background = hex;
+    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 色相 ${Math.round(h)}°${s < 0.12 ? ' · 偏灰' : ''}`;
+    renderPickZoom(zone, e);
+    pickLoupe.style.display = 'block';
+    const lx = Math.min(window.innerWidth - 150, e.clientX + 16);
+    const ly = Math.max(8, e.clientY - 170);
+    pickLoupe.style.left = lx + 'px';
+    pickLoupe.style.top = ly + 'px';
+  });
+  zone.addEventListener('mouseleave', () => {
+    if (state.pickingTarget === target) pickLoupe.style.display = 'none';
+  });
+  zone.addEventListener('click', (e) => {
+    if (state.pickingTarget !== target) return;
+    const rgb = samplePreviewColor(zone, e);
+    if (!rgb) return;
+    addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
+  });
+});
+
 function removeStamp(target) {
   // 取消进行中的 OCR
   cancelStampOCR(target);
 
-  state[target] = { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 };
+  state[target] = { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
+                    candidates: null, candidateIndex: 0, inkSpec: null, _sig: (state[target]._sig || 0) + 1, ocrResult: null };
   const zone = target === 'ref' ? zoneRef : zoneTest;
   zone.classList.remove('has-image');
   const ph = zone.querySelector('.placeholder');
@@ -1471,7 +2404,20 @@ function removeStamp(target) {
   if (preview) preview.remove();
 
   const extCanvas = target === 'ref' ? $('#ext-ref') : $('#ext-test');
+  state.previewZoom[target] = 1;
+  extCanvas.width = 160; extCanvas.height = 160;
+  extCanvas.style.width = '160px'; extCanvas.style.height = '160px';
   extCanvas.getContext('2d').clearRect(0, 0, 160, 160);
+  $('#cand-' + target).innerHTML = '';
+
+  // 移除的是当前操作目标时，切到另一枚已加载的印章
+  const other = target === 'ref' ? 'test' : 'ref';
+  if (state.target === target && state[other].extracted) {
+    state.target = other;
+    document.querySelectorAll('#target-group .mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.target === other));
+    syncSlidersToTarget();
+  }
 
   // 重置 OCR 结果显示
   const ocrInline = $(`#ocr-${target}`);
@@ -1493,11 +2439,12 @@ function updateVisibility() {
   const hasBoth = state.ref.extracted && state.test.extracted;
   const hasOne = state.ref.extracted || state.test.extracted;
   extractedStrip.classList.toggle('visible', hasOne);
-  toolbar.classList.toggle('visible', hasBoth);
-  $('#rotate-strip').classList.toggle('visible', hasBoth);
-  comparison.classList.toggle('visible', hasBoth);
-  statusBar.classList.toggle('visible', hasBoth);
-  kbdHints.classList.toggle('visible', hasBoth);
+  // 单枚印章加载后即显示对比区域与工具栏，可先行查看提取结果并做人工比对
+  toolbar.classList.toggle('visible', hasOne);
+  $('#rotate-strip').classList.toggle('visible', hasOne);
+  comparison.classList.toggle('visible', hasOne);
+  statusBar.classList.toggle('visible', hasOne);
+  kbdHints.classList.toggle('visible', hasOne);
 }
 
 function showStatus(msg) {
@@ -1588,7 +2535,7 @@ function handleCursor(id) {
    Rendering
    ============================================================ */
 function render() {
-  if (!state.ref.extracted || !state.test.extracted) return;
+  if (!state.ref.extracted && !state.test.extracted) return;
 
   const container = comparison;
   const w = container.clientWidth || 800;
@@ -1602,6 +2549,8 @@ function render() {
   }
 
   cmpCtx.clearRect(0, 0, w, h);
+  cmpCtx.imageSmoothingEnabled = true;
+  cmpCtx.imageSmoothingQuality = 'high';
 
   // Background — pure white for clean stamp visibility
   cmpCtx.fillStyle = '#ffffff';
@@ -1705,36 +2654,47 @@ function drawStamp(ctx, canvas, cx, cy, size, scaleX, scaleY, rotate, alpha, tin
 function renderOverlay(cx, cy, stampSize, scale) {
   const refT = state.ref;
   const testT = state.test;
-  // 参考章（极浅蓝色调，最大程度保留细节）
-  drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
-    scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1,
-    'rgba(30,80,200,0.15)', refT.offsetX, refT.offsetY);
-  // 待验章（极浅红色调，最大程度保留细节）
-  drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
-    scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, state.opacity / 100,
-    'rgba(220,40,40,0.15)', testT.offsetX, testT.offsetY);
+  const both = !!(refT.extracted && testT.extracted);
+
+  // 单枚时按原色清晰显示提取结果；两枚齐全时叠加色调便于区分
+  if (refT.extracted) {
+    drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
+      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1,
+      both ? 'rgba(30,80,200,0.15)' : null, refT.offsetX, refT.offsetY);
+  }
+  if (testT.extracted) {
+    drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
+      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, both ? state.opacity / 100 : 1,
+      both ? 'rgba(220,40,40,0.15)' : null, testT.offsetX, testT.offsetY);
+  }
 
   // 高亮当前选中印章的轮廓
   const sel = state.target === 'ref' ? refT : testT;
-  const selW = stampSize * scale * (sel.scaleX / 100);
-  const selH = stampSize * scale * (sel.scaleY / 100);
-  cmpCtx.save();
-  cmpCtx.translate(cx, cy);
-  if (sel.rotate) cmpCtx.rotate(sel.rotate * Math.PI / 180);
-  cmpCtx.translate(sel.offsetX, sel.offsetY);
-  cmpCtx.strokeStyle = state.target === 'ref' ? 'rgba(44,62,80,0.6)' : 'rgba(192,57,43,0.6)';
-  cmpCtx.lineWidth = 1.5;
-  cmpCtx.setLineDash([6, 4]);
-  cmpCtx.strokeRect(-selW / 2, -selH / 2, selW, selH);
-  cmpCtx.setLineDash([]);
-  cmpCtx.restore();
+  if (sel.extracted) {
+    const selW = stampSize * scale * (sel.scaleX / 100);
+    const selH = stampSize * scale * (sel.scaleY / 100);
+    cmpCtx.save();
+    cmpCtx.translate(cx, cy);
+    if (sel.rotate) cmpCtx.rotate(sel.rotate * Math.PI / 180);
+    cmpCtx.translate(sel.offsetX, sel.offsetY);
+    cmpCtx.strokeStyle = state.target === 'ref' ? 'rgba(44,62,80,0.6)' : 'rgba(192,57,43,0.6)';
+    cmpCtx.lineWidth = 1.5;
+    cmpCtx.setLineDash([6, 4]);
+    cmpCtx.strokeRect(-selW / 2, -selH / 2, selW / 2 - (-selW / 2), selH / 2 - (-selH / 2));
+    cmpCtx.setLineDash([]);
+    cmpCtx.restore();
+  }
 
   // Labels
   cmpCtx.font = 'bold 11px -apple-system, sans-serif';
-  cmpCtx.fillStyle = 'rgba(0,0,80,0.7)';
-  cmpCtx.fillText('■ 参考章' + (state.target === 'ref' ? ' ✦' : ''), 12, 24);
-  cmpCtx.fillStyle = 'rgba(200,0,0,0.7)';
-  cmpCtx.fillText('■ 待验章' + (state.target === 'test' ? ' ✦' : '') + ' (透明度 ' + state.opacity + '%)', 12, 40);
+  if (refT.extracted) {
+    cmpCtx.fillStyle = 'rgba(0,0,80,0.7)';
+    cmpCtx.fillText('■ 参考章' + (state.target === 'ref' ? ' ✦' : ''), 12, 24);
+  }
+  if (testT.extracted) {
+    cmpCtx.fillStyle = 'rgba(200,0,0,0.7)';
+    cmpCtx.fillText('■ 待验章' + (state.target === 'test' ? ' ✦' : '') + (both ? ' (透明度 ' + state.opacity + '%)' : ''), 12, refT.extracted ? 40 : 24);
+  }
 
   sliderHandle.style.display = 'none';
 }
@@ -1743,27 +2703,36 @@ function renderSlider(cx, cy, stampSize, scale, w, h) {
   const sliderX = Math.round(w * state.sliderPos);
   const refT = state.ref, testT = state.test;
 
-  cmpCtx.save();
-  cmpCtx.beginPath();
-  cmpCtx.rect(0, 0, sliderX, h);
-  cmpCtx.clip();
-  drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
-    scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
-  cmpCtx.restore();
+  if (refT.extracted) {
+    cmpCtx.save();
+    cmpCtx.beginPath();
+    cmpCtx.rect(0, 0, sliderX, h);
+    cmpCtx.clip();
+    drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
+      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
+    cmpCtx.restore();
+  }
 
-  cmpCtx.save();
-  cmpCtx.beginPath();
-  cmpCtx.rect(sliderX, 0, w - sliderX, h);
-  cmpCtx.clip();
-  drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
-    scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
-  cmpCtx.restore();
+  if (testT.extracted) {
+    cmpCtx.save();
+    cmpCtx.beginPath();
+    cmpCtx.rect(sliderX, 0, w - sliderX, h);
+    cmpCtx.clip();
+    drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
+      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+    cmpCtx.restore();
+  }
 
-  cmpCtx.font = 'bold 12px -apple-system, sans-serif';
-  cmpCtx.fillStyle = 'rgba(44,62,80,0.8)';
-  cmpCtx.fillText('参考章', 16, 28);
-  cmpCtx.fillStyle = 'rgba(192,57,43,0.8)';
-  cmpCtx.fillText('待验章', w - 64, 28);
+  if (refT.extracted) {
+    cmpCtx.font = 'bold 12px -apple-system, sans-serif';
+    cmpCtx.fillStyle = 'rgba(44,62,80,0.8)';
+    cmpCtx.fillText('参考章', 16, 28);
+  }
+  if (testT.extracted) {
+    cmpCtx.font = 'bold 12px -apple-system, sans-serif';
+    cmpCtx.fillStyle = 'rgba(192,57,43,0.8)';
+    cmpCtx.fillText('待验章', w - 64, 28);
+  }
 
   sliderHandle.style.display = 'block';
   sliderHandle.style.left = sliderX + 'px';
@@ -1775,10 +2744,14 @@ function renderSideBySide(cx, cy, stampSize, scale, w, h) {
   const rightCx = w * 3 / 4;
   const refT = state.ref, testT = state.test;
 
-  drawStamp(cmpCtx, refT.extracted, leftCx, cy, eachSize,
-    scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
-  drawStamp(cmpCtx, testT.extracted, rightCx, cy, eachSize,
-    scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+  if (refT.extracted) {
+    drawStamp(cmpCtx, refT.extracted, leftCx, cy, eachSize,
+      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
+  }
+  if (testT.extracted) {
+    drawStamp(cmpCtx, testT.extracted, rightCx, cy, eachSize,
+      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+  }
 
   cmpCtx.strokeStyle = '#ddd';
   cmpCtx.lineWidth = 1;
@@ -1790,39 +2763,63 @@ function renderSideBySide(cx, cy, stampSize, scale, w, h) {
   cmpCtx.setLineDash([]);
 
   cmpCtx.font = 'bold 12px -apple-system, sans-serif';
-  cmpCtx.fillStyle = 'rgba(44,62,80,0.8)';
   cmpCtx.textAlign = 'center';
-  cmpCtx.fillText('参考章', leftCx, h - 16);
-  cmpCtx.fillStyle = 'rgba(192,57,43,0.8)';
-  cmpCtx.fillText('待验章', rightCx, h - 16);
+  if (refT.extracted) {
+    cmpCtx.fillStyle = 'rgba(44,62,80,0.8)';
+    cmpCtx.fillText('参考章', leftCx, h - 16);
+  }
+  if (testT.extracted) {
+    cmpCtx.fillStyle = 'rgba(192,57,43,0.8)';
+    cmpCtx.fillText('待验章', rightCx, h - 16);
+  }
   cmpCtx.textAlign = 'start';
 
   sliderHandle.style.display = 'none';
 }
 
-function renderDiffOverlay(cx, cy, stampSize, scale) {
-  const s = Math.round(stampSize * scale);
-  if (s < 10) return;
+/* ============================================================
+   差异分析 — 带缓存的像素级对比 + 相似度
+   ============================================================ */
 
-  // Helper: render a stamp canvas with its transforms applied
-  function renderStampToTmp(stampState) {
-    const tmp = document.createElement('canvas');
-    tmp.width = s; tmp.height = s;
-    const tctx = tmp.getContext('2d');
-    // 新变换顺序：平移到中心 → 旋转（围绕中心）→ 偏移 → 缩放
-    tctx.translate(s / 2, s / 2);
-    if (stampState.rotate) tctx.rotate(stampState.rotate * Math.PI / 180);
-    tctx.translate(stampState.offsetX, stampState.offsetY);
-    tctx.scale(stampState.scaleX / 100, stampState.scaleY / 100);
-    tctx.drawImage(stampState.extracted, -s / 2, -s / 2, s, s);
-    return tmp;
-  }
+// 当前渲染环境下的印章基准尺寸（与 render() 保持一致）
+function currentStampSize() {
+  const w = comparison.clientWidth || 800;
+  const h = Math.max(400, Math.round(w * 0.6));
+  return Math.min(w, h) * 0.6;
+}
 
-  const tmpRef = renderStampToTmp(state.ref);
-  const refData = tmpRef.getContext('2d').getImageData(0, 0, s, s);
+// 将印章按其变换参数渲染到 s×s 临时画布（offset 单位按 baseSize→s 换算）
+function renderStampToSize(stampState, s, baseSize) {
+  const tmp = document.createElement('canvas');
+  tmp.width = s; tmp.height = s;
+  const tctx = tmp.getContext('2d');
+  const unit = baseSize ? s / baseSize : 1;
+  // 变换顺序：平移到中心 → 旋转（围绕中心）→ 偏移 → 缩放
+  tctx.translate(s / 2, s / 2);
+  if (stampState.rotate) tctx.rotate(stampState.rotate * Math.PI / 180);
+  tctx.translate((stampState.offsetX || 0) * unit, (stampState.offsetY || 0) * unit);
+  tctx.scale(stampState.scaleX / 100, stampState.scaleY / 100);
+  tctx.drawImage(stampState.extracted, -s / 2, -s / 2, s, s);
+  return tmp;
+}
 
-  const tmpTest = renderStampToTmp(state.test);
-  const testData = tmpTest.getContext('2d').getImageData(0, 0, s, s);
+// 差异计算结果缓存：参数不变时跳过逐像素计算（差异高亮每帧渲染的主要开销）
+let _diffCache = { key: null, s: 0, matchPct: 0, canvas: null };
+
+function computeStampDiff() {
+  const stampSize = currentStampSize();
+  const s = Math.min(420, Math.round(stampSize)); // 计算分辨率上限，精度足够且显著提速
+  if (s < 10 || !state.ref.extracted || !state.test.extracted) return null;
+
+  const r = state.ref, t = state.test;
+  const key = [
+    s, r._sig || 0, r.rotate, r.scaleX, r.scaleY, r.offsetX, r.offsetY,
+    t._sig || 0, t.rotate, t.scaleX, t.scaleY, t.offsetX, t.offsetY,
+  ].join('|');
+  if (_diffCache.key === key) return _diffCache;
+
+  const refData = renderStampToSize(r, s, stampSize).getContext('2d').getImageData(0, 0, s, s);
+  const testData = renderStampToSize(t, s, stampSize).getContext('2d').getImageData(0, 0, s, s);
 
   const diffCanvas = document.createElement('canvas');
   diffCanvas.width = s; diffCanvas.height = s;
@@ -1865,18 +2862,211 @@ function renderDiffOverlay(cx, cy, stampSize, scale) {
   }
 
   dctx.putImageData(diffData, 0, 0);
+  const matchPct = totalPixels > 0 ? (100 - (diffPixels / totalPixels) * 100) : 0;
+
+  _diffCache = { key, s, matchPct, canvas: diffCanvas };
+  return _diffCache;
+}
+
+function renderDiffOverlay(cx, cy, stampSize, scale) {
+  const res = computeStampDiff();
+  if (!res) return;
+
   cmpCtx.save();
   cmpCtx.globalAlpha = 0.55;
-  cmpCtx.drawImage(diffCanvas, cx - s / 2, cy - s / 2, s, s);
+  // 差异图在 s 分辨率下计算，绘制时缩放回当前印章尺寸以精确套准
+  cmpCtx.drawImage(res.canvas, cx - stampSize / 2, cy - stampSize / 2, stampSize, stampSize);
   cmpCtx.restore();
 
-  const matchPct = totalPixels > 0 ? (100 - (diffPixels / totalPixels) * 100).toFixed(1) : '0.0';
+  const matchPct = res.matchPct.toFixed(1);
   cmpCtx.font = 'bold 14px -apple-system, sans-serif';
   cmpCtx.fillStyle = parseFloat(matchPct) > 85 ? '#27ae60' : '#c0392b';
   cmpCtx.textAlign = 'right';
   cmpCtx.fillText(`相似度: ${matchPct}%`, cmpCanvas.width - 16, 28);
   cmpCtx.textAlign = 'start';
 }
+
+/* ============================================================
+   自动对齐 — BI4IWN · 李劲松
+   算法：墨迹掩膜分析 → 质心平移 + RMS 半径缩放
+        → 角度直方图圆相关定旋转 → IoU 局部精调
+   ============================================================ */
+
+// 分析渲染掩膜：二值掩膜 + 质心 + RMS 半径 + 360 桶角度直方图
+function analyzeStampMask(canvasEl) {
+  const s = canvasEl.width;
+  const data = canvasEl.getContext('2d').getImageData(0, 0, s, s).data;
+  const mask = new Uint8Array(s * s);
+  let count = 0, sx = 0, sy = 0;
+
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      if (data[(y * s + x) * 4 + 3] > 30) {
+        mask[y * s + x] = 1;
+        count++;
+        sx += x;
+        sy += y;
+      }
+    }
+  }
+  if (count < 20) return null;
+
+  const cx = sx / count, cy = sy / count;
+  let sumR2 = 0;
+  const hist = new Float64Array(360);
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      if (!mask[y * s + x]) continue;
+      const dx = x - cx, dy = y - cy;
+      sumR2 += dx * dx + dy * dy;
+      let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+      if (ang < 0) ang += 360;
+      hist[ang | 0]++;
+    }
+  }
+  for (let i = 0; i < 360; i++) hist[i] /= count;
+
+  return { mask, count, cx, cy, rms: Math.sqrt(sumR2 / count), hist, s };
+}
+
+// 自动对齐主流程：调整待验章（旋转/缩放/偏移）使其与参考章当前姿态最佳匹配
+function autoAlignStamps() {
+  if (!state.ref.extracted || !state.test.extracted) {
+    showStatus('请先加载两枚印章再自动对齐');
+    return;
+  }
+
+  const stampSize = currentStampSize();
+  const S = 256; // 对齐计算分辨率
+
+  // 参考章：带当前变换渲染（用户手动调整过的参考姿态会被保留）
+  const refCanvas = renderStampToSize(state.ref, S, stampSize);
+  // 待验章：重置为基准姿态渲染
+  const testBase = { extracted: state.test.extracted, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 };
+  const testCanvas = renderStampToSize(testBase, S, S);
+
+  const refA = analyzeStampMask(refCanvas);
+  const testA = analyzeStampMask(testCanvas);
+  if (!refA || !testA) {
+    showStatus('印章墨迹过少，无法自动对齐');
+    return;
+  }
+
+  // --- 1) 缩放：RMS 半径比（限制在合理范围，避免不同印章间产生极端缩放）---
+  let k = refA.rms / testA.rms;
+  k = Math.max(0.55, Math.min(1.8, k));
+
+  // --- 2) 旋转：角度直方图圆相关 ---
+  // 若待验章等于参考章旋转 θ 后的图像，则相关峰在 d=θ，需施加 -θ 抵消
+  let bestD = 0;
+  let bestScore = -1;
+  for (let d = 0; d < 360; d++) {
+    let sc = 0;
+    for (let i = 0; i < 360; i++) sc += refA.hist[i] * testA.hist[(i + d) % 360];
+    if (sc > bestScore) { bestScore = sc; bestD = d; }
+  }
+  let theta = -bestD;
+  if (theta > 180) theta -= 360;
+  if (theta < -180) theta += 360;
+
+  // --- 3) 偏移：质心对齐（o 在旋转坐标系中，需反旋转参考质心）---
+  const refRel = { x: refA.cx - S / 2, y: refA.cy - S / 2 };
+  const testRel = { x: testA.cx - S / 2, y: testA.cy - S / 2 };
+  function centroidOffset(thDeg, kk) {
+    const rad = -thDeg * Math.PI / 180; // R(-θ)
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    return {
+      x: cos * refRel.x - sin * refRel.y - kk * testRel.x,
+      y: sin * refRel.x + cos * refRel.y - kk * testRel.y,
+    };
+  }
+
+  // --- 4) IoU 局部精调：点云直接坐标变换，避免反复渲染画布 ---
+  const pts = [];
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      if (testA.mask[y * S + x]) pts.push(x - S / 2, y - S / 2);
+    }
+  }
+  const refMask = refA.mask;
+  const refCount = refA.count;
+
+  function scoreIoU(thDeg, kk, ox, oy) {
+    const rad = thDeg * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    let match = 0, inBounds = 0;
+    for (let p = 0; p < pts.length; p += 2) {
+      const fx = ox + kk * pts[p];
+      const fy = oy + kk * pts[p + 1];
+      const X = (S / 2 + cos * fx - sin * fy) | 0;
+      const Y = (S / 2 + sin * fx + cos * fy) | 0;
+      if (X < 0 || Y < 0 || X >= S || Y >= S) continue;
+      inBounds++;
+      if (refMask[Y * S + X]) match++;
+    }
+    if (!inBounds) return 0;
+    const testTotal = pts.length / 2;
+    return match / (refCount + testTotal - match); // IoU
+  }
+
+  let best = { th: theta, k, ...centroidOffset(theta, k) };
+  let bestScoreIou = scoreIoU(best.th, best.k, best.x, best.y);
+
+  // 阶段 1：旋转精调（±4°，步长 0.5°）
+  for (let dth = -8; dth <= 8; dth += 0.5) {
+    if (dth === 0) continue;
+    const th = Math.max(-180, Math.min(180, theta + dth));
+    const o = centroidOffset(th, k);
+    const sc = scoreIoU(th, k, o.x, o.y);
+    if (sc > bestScoreIou) { bestScoreIou = sc; best = { th, k, ...o }; }
+  }
+  // 阶段 2：缩放精调（±5%，步长 0.5%）
+  for (let f = -10; f <= 10; f++) {
+    if (f === 0) continue;
+    const kk = Math.max(0.55, Math.min(1.8, best.k * (1 + f / 200)));
+    const o = centroidOffset(best.th, kk);
+    const sc = scoreIoU(best.th, kk, o.x, o.y);
+    if (sc > bestScoreIou) { bestScoreIou = sc; best = { th: best.th, k: kk, ...o }; }
+  }
+  // 阶段 3：平移精调（±2px，步长 1px，o 空间）
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -2; dy <= 2; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const sc = scoreIoU(best.th, best.k, best.x + dx, best.y + dy);
+      if (sc > bestScoreIou) { bestScoreIou = sc; best = { ...best, x: best.x + dx, y: best.y + dy }; }
+    }
+  }
+
+  // --- 应用到待验章（offset 从 S 空间换算回 stampSize 空间）---
+  const unit = stampSize / S;
+  const t = state.test;
+  t.rotate = Math.round(best.th * 10) / 10;
+  t.scaleX = Math.round(best.k * 1000) / 10;
+  t.scaleY = t.scaleX;
+  t.offsetX = Math.max(-100, Math.min(100, Math.round(best.x * unit)));
+  t.offsetY = Math.max(-100, Math.min(100, Math.round(best.y * unit)));
+
+  state.target = 'test';
+  document.querySelectorAll('#target-group .mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.target === 'test'));
+  syncSlidersToTarget();
+  scheduleRender();
+
+  // 计算对齐后的相似度并提示
+  const res = computeStampDiff();
+  const pct = res ? res.matchPct.toFixed(1) : '—';
+  let msg = `自动对齐完成：旋转 ${t.rotate}° · 缩放 ${t.scaleX}% · 偏移 (${t.offsetX}, ${t.offsetY})px · 相似度 ${pct}%`;
+  if (res && res.matchPct < 40) {
+    msg += ' — 两枚印章墨迹差异较大，对齐结果仅供参考';
+  }
+  showStatus(msg);
+}
+
+$('#btn-align').addEventListener('click', () => {
+  showStatus('正在自动对齐两枚印章...');
+  // 延迟一帧让状态条先渲染
+  setTimeout(autoAlignStamps, 30);
+});
 
 /* ============================================================
    Magnifier
@@ -1984,7 +3174,8 @@ pasteOverlay.addEventListener('click', (e) => {
 });
 
 // Mode buttons (comparison mode only, not target selector or axis selector)
-document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group) .mode-btn').forEach((btn) => {
+// 对比模式切换（排除 target/axis/color 组，墨色组为多选独立逻辑）
+document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group):not(#color-group) .mode-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     setMode(btn.dataset.mode);
   });
@@ -2096,6 +3287,112 @@ $('#btn-export').addEventListener('click', () => {
   showStatus('对比结果已导出');
 });
 
+/* ============================================================
+   对比报告导出 — 自包含 HTML（内嵌图片 + 相似度 + OCR + 参数）
+   ============================================================ */
+$('#btn-report').addEventListener('click', () => {
+  if (!state.ref.extracted || !state.test.extracted) {
+    showStatus('请先加载两枚印章再导出报告');
+    return;
+  }
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  const res = computeStampDiff();
+  const matchPct = res ? Number(res.matchPct.toFixed(1)) : null;
+  let verdict = '未计算';
+  let verdictColor = '#888';
+  if (matchPct !== null) {
+    if (matchPct >= 90) { verdict = '高度吻合'; verdictColor = '#27ae60'; }
+    else if (matchPct >= 75) { verdict = '部分吻合'; verdictColor = '#e67e22'; }
+    else { verdict = '差异较大'; verdictColor = '#c0392b'; }
+  }
+
+  const fmt = (v) => v === undefined || v === null || v === '' ? '—' : v;
+  const refOCR = state.ref.ocrResult || {};
+  const testOCR = state.test.ocrResult || {};
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const paramsRow = (t) =>
+    `旋转 ${fmtNum(t.rotate || 0)}° · 缩放 ${fmtNum(t.scaleX || 100)}%×${fmtNum(t.scaleY || 100)}% · 偏移 (${t.offsetX || 0}, ${t.offsetY || 0})px`;
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>印章对比报告 — ${timeStr}</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f4f2; margin: 0; padding: 32px 16px; color: #2c3e50; }
+  .report { max-width: 860px; margin: 0 auto; background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .meta { color: #8a95a0; font-size: 13px; margin-bottom: 28px; }
+  .imgs { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin: 20px 0; }
+  .imgs figure { margin: 0; text-align: center; }
+  .imgs img { width: 220px; height: 220px; object-fit: contain; border: 1px solid #e3e0dc; border-radius: 10px; background: repeating-conic-gradient(#f0eeeb 0% 25%, #fff 0% 50%) 50% / 12px 12px; }
+  .imgs figcaption { font-size: 12px; color: #8a95a0; margin-top: 8px; }
+  .shot { text-align: center; margin: 24px 0; }
+  .shot img { max-width: 100%; border: 1px solid #e3e0dc; border-radius: 10px; }
+  .sim { text-align: center; margin: 28px 0; padding: 22px; background: #faf9f7; border-radius: 10px; }
+  .sim .pct { font-size: 42px; font-weight: 700; }
+  .sim .vd { font-size: 16px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 12px 0 24px; }
+  th, td { border: 1px solid #e7e4e0; padding: 9px 14px; text-align: left; }
+  th { background: #f7f5f2; font-weight: 600; white-space: nowrap; }
+  .note { font-size: 12px; color: #95a0aa; line-height: 1.8; background: #faf9f7; border-radius: 8px; padding: 14px 18px; }
+  .footer { text-align: center; color: #b0b8c0; font-size: 12px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<div class="report">
+  <h1>印章对比报告</h1>
+  <div class="meta">生成时间：${timeStr} &nbsp;·&nbsp; 印章对比工具 v${APP_VERSION} &nbsp;·&nbsp; BI4IWN · 李劲松</div>
+
+  <div class="imgs">
+    <figure><img src="${state.ref.extracted.toDataURL('image/png')}" alt="参考章"><figcaption>参考章（提取归一化）<br>${esc(paramsRow(state.ref))}</figcaption></figure>
+    <figure><img src="${state.test.extracted.toDataURL('image/png')}" alt="待验章"><figcaption>待验章（提取归一化）<br>${esc(paramsRow(state.test))}</figcaption></figure>
+  </div>
+
+  <div class="shot">
+    <img src="${cmpCanvas.toDataURL('image/png')}" alt="对比画面">
+    <div style="font-size:12px;color:#8a95a0;margin-top:6px">对比模式：${{overlay: '叠加', slider: '滑块', sidebyside: '并排'}[state.mode]}${state.diffMode ? ' · 差异高亮开启' : ''}</div>
+  </div>
+
+  <div class="sim">
+    <div class="pct" style="color:${verdictColor}">${matchPct === null ? '—' : matchPct + '%'}</div>
+    <div class="vd" style="color:${verdictColor}">像素相似度评估：${verdict}</div>
+  </div>
+
+  <table>
+    <tr><th style="width:120px">项目</th><th>参考章</th><th>待验章</th></tr>
+    <tr><th>OCR 名称</th><td>${esc(fmt(refOCR.company))}</td><td>${esc(fmt(testOCR.company))}</td></tr>
+    <tr><th>OCR 编码</th><td>${esc(fmt(refOCR.code))}</td><td>${esc(fmt(testOCR.code))}</td></tr>
+    <tr><th>OCR 类型</th><td>${esc(fmt(refOCR.type))}</td><td>${esc(fmt(testOCR.type))}</td></tr>
+    <tr><th>印章形状</th><td>${state.ref.circular ? '圆形章' : '异形章'}</td><td>${state.test.circular ? '圆形章' : '异形章'}</td></tr>
+    <tr><th>调整参数</th><td>${esc(paramsRow(state.ref))}</td><td>${esc(paramsRow(state.test))}</td></tr>
+  </table>
+
+  <div class="note">
+    说明：本报告由本地工具自动生成，相似度为当前对齐姿态下两枚印章墨迹的像素级重合度，受拍摄角度、印章清晰度与人工对齐精度影响。
+    结果仅供辅助参考，不构成司法鉴定结论。印章真伪请以公安机关备案信息为准（工具内「印章核实」入口）。
+  </div>
+
+  <div class="footer">StampCompareToolkit v${APP_VERSION} · BI4IWN · 李劲松</div>
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const link = document.createElement('a');
+  link.download = `印章对比报告_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.html`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+  showStatus(`对比报告已导出${matchPct !== null ? `（相似度 ${matchPct}%）` : ''}`);
+});
+
 // Slider drag (comparison slider mode)
 sliderHandle.addEventListener('mousedown', () => { state.draggingSlider = true; });
 
@@ -2111,7 +3408,7 @@ function clientToCanvas(e, cachedRect) {
 cmpCanvas.addEventListener('mousedown', (e) => {
   if (state.mode === 'slider' && state.draggingSlider) return;
   if (state.magnifierActive) return;
-  if (!state.ref.extracted || !state.test.extracted) return;
+  if (!state.ref.extracted && !state.test.extracted) return;
 
   const pos = clientToCanvas(e);
   const handle = getHandleAtPoint(pos.x, pos.y);
@@ -2233,8 +3530,8 @@ document.addEventListener('mousemove', (e) => {
     // 保持 newSX / newSY 原样，仅调整受影响的轴
 
     // Clamp scale
-    newSX = Math.max(30, Math.min(200, newSX));
-    newSY = Math.max(30, Math.min(200, newSY));
+    newSX = Math.max(20, Math.min(400, newSX));
+    newSY = Math.max(20, Math.min(400, newSY));
 
     // --- Adjust offset so anchor stays fixed on screen ---
     // New transform: screenPos = center + R(rot) * (offset + localScaled)
@@ -2329,7 +3626,7 @@ const WHEEL_ZOOM_THRESH = 15;
 const WHEEL_ROT_THRESH = 10;
 
 document.addEventListener('wheel', (e) => {
-  if (!state.ref.extracted || !state.test.extracted) return;
+  if (!state.ref.extracted && !state.test.extracted) return;
   // 仅当鼠标在对比区域上方时生效
   const rect = comparison.getBoundingClientRect();
   if (e.clientX < rect.left || e.clientX > rect.right ||
@@ -2357,12 +3654,12 @@ document.addEventListener('wheel', (e) => {
       const dir = zoomAccum > 0 ? -1 : 1;
       const delta = dir * steps;
       if (state.scaleAxis === 'uniform') {
-        t.scaleX = Math.max(30, Math.min(200, t.scaleX + delta));
-        t.scaleY = Math.max(30, Math.min(200, t.scaleY + delta));
+        t.scaleX = Math.max(20, Math.min(400, t.scaleX + delta));
+        t.scaleY = Math.max(20, Math.min(400, t.scaleY + delta));
       } else if (state.scaleAxis === 'x') {
-        t.scaleX = Math.max(30, Math.min(200, t.scaleX + delta));
+        t.scaleX = Math.max(20, Math.min(400, t.scaleX + delta));
       } else {
-        t.scaleY = Math.max(30, Math.min(200, t.scaleY + delta));
+        t.scaleY = Math.max(20, Math.min(400, t.scaleY + delta));
       }
       zoomAccum %= WHEEL_ZOOM_THRESH;
       changed = true;
@@ -2390,12 +3687,12 @@ $('#sl-scale').addEventListener('wheel', (e) => {
   const t = state[state.target];
   const dir = e.deltaY > 0 ? -1 : 1;
   if (state.scaleAxis === 'uniform') {
-    t.scaleX = Math.max(30, Math.min(200, t.scaleX + dir));
-    t.scaleY = Math.max(30, Math.min(200, t.scaleY + dir));
+    t.scaleX = Math.max(20, Math.min(400, t.scaleX + dir));
+    t.scaleY = Math.max(20, Math.min(400, t.scaleY + dir));
   } else if (state.scaleAxis === 'x') {
-    t.scaleX = Math.max(30, Math.min(200, t.scaleX + dir));
+    t.scaleX = Math.max(20, Math.min(400, t.scaleX + dir));
   } else {
-    t.scaleY = Math.max(30, Math.min(200, t.scaleY + dir));
+    t.scaleY = Math.max(20, Math.min(400, t.scaleY + dir));
   }
   syncSlidersToTarget();
   scheduleRender();
@@ -2410,7 +3707,7 @@ document.addEventListener('keydown', (e) => {
     $('#btn-magnifier').classList.add('active');
   }
 
-  if (!state.ref.extracted || !state.test.extracted) return;
+  if (!state.ref.extracted && !state.test.extracted) return;
   if (e.target.tagName === 'INPUT') return;
 
   const t = state[state.target];
@@ -2418,6 +3715,7 @@ document.addEventListener('keydown', (e) => {
     case '1': setMode('overlay'); break;
     case '2': setMode('slider'); break;
     case '3': setMode('sidebyside'); break;
+    case 'a': case 'A': $('#btn-align').click(); break;
     case 'd': case 'D': $('#btn-diff').click(); break;
     case 'r': case 'R': $('#btn-reset').click(); break;
     case 'Tab':
@@ -2444,12 +3742,12 @@ document.addEventListener('keydown', (e) => {
     case 'ArrowUp':
       e.preventDefault();
       if (state.scaleAxis === 'uniform') {
-        t.scaleX = Math.min(200, t.scaleX + 0.5);
-        t.scaleY = Math.min(200, t.scaleY + 0.5);
+        t.scaleX = Math.min(400, t.scaleX + 0.5);
+        t.scaleY = Math.min(400, t.scaleY + 0.5);
       } else if (state.scaleAxis === 'x') {
-        t.scaleX = Math.min(200, t.scaleX + 0.5);
+        t.scaleX = Math.min(400, t.scaleX + 0.5);
       } else {
-        t.scaleY = Math.min(200, t.scaleY + 0.5);
+        t.scaleY = Math.min(400, t.scaleY + 0.5);
       }
       syncSlidersToTarget();
       render();
@@ -2457,12 +3755,12 @@ document.addEventListener('keydown', (e) => {
     case 'ArrowDown':
       e.preventDefault();
       if (state.scaleAxis === 'uniform') {
-        t.scaleX = Math.max(30, t.scaleX - 0.5);
-        t.scaleY = Math.max(30, t.scaleY - 0.5);
+        t.scaleX = Math.max(20, t.scaleX - 0.5);
+        t.scaleY = Math.max(20, t.scaleY - 0.5);
       } else if (state.scaleAxis === 'x') {
-        t.scaleX = Math.max(30, t.scaleX - 0.5);
+        t.scaleX = Math.max(20, t.scaleX - 0.5);
       } else {
-        t.scaleY = Math.max(30, t.scaleY - 0.5);
+        t.scaleY = Math.max(20, t.scaleY - 0.5);
       }
       syncSlidersToTarget();
       render();
@@ -2489,7 +3787,7 @@ window.addEventListener('blur', () => {
 
 function setMode(mode) {
   state.mode = mode;
-  document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group) .mode-btn').forEach(b => {
+  document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group):not(#color-group) .mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
   if (mode !== 'slider') sliderHandle.style.display = 'none';
@@ -2512,16 +3810,19 @@ $('#btn-verify').addEventListener('click', () => {
    使用相对路径，由统一启动文件 stamp_app.py 提供服务
    ============================================================ */
 
-const OCR_SERVER = '';
+// OCR 服务地址：file:// 直开时无法使用相对路径，回退到默认端口 8765
+const OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
 
 // 检查 OCR 服务是否可用
+// 返回 'ok'（可用）/ 'no-ocr'（服务在线但模型未加载）/ 'offline'（无服务）
 async function checkOCRSpecServer() {
   try {
     const resp = await fetch(OCR_SERVER + '/health');
     const data = await resp.json();
-    return data.status === 'ok';
+    if (data.status === 'ok' && data.ocr === false) return 'no-ocr';
+    return data.status === 'ok' ? 'ok' : 'offline';
   } catch (e) {
-    return false;
+    return 'offline';
   }
 }
 
@@ -2584,15 +3885,17 @@ async function runStampOCR(target) {
   statusEl.textContent = '检查 OCR 服务...';
 
   // 检查服务是否可用
-  const serverOk = await checkOCRSpecServer();
-  if (!serverOk) {
+  const serverState = await checkOCRSpecServer();
+  if (serverState !== 'ok') {
     fillEl.style.width = '100%';
-    statusEl.textContent = 'OCR 服务未启动';
+    statusEl.textContent = serverState === 'no-ocr' ? 'OCR 模型未加载（需安装 PaddleOCR 依赖）' : 'OCR 服务未启动';
     cancelBtn.classList.remove('visible');
-    $(`#ocr-${target}-company`).textContent = '需启动服务';
+    $(`#ocr-${target}-company`).textContent = serverState === 'no-ocr' ? '需装依赖' : '需启动服务';
     $(`#ocr-${target}-code`).textContent = '—';
     $(`#ocr-${target}-type`).textContent = '—';
-    showStatus('OCR 服务未连接，请运行: python3 stamp_app.py');
+    showStatus(serverState === 'no-ocr'
+      ? 'OCR 模型未加载 — 请安装依赖: pip install paddlepaddle paddleocr opencv-python'
+      : 'OCR 服务未连接，请运行: python3 stamp_app.py');
     state._ocrControllers[target] = null;
     return null;
   }
@@ -2606,11 +3909,19 @@ async function runStampOCR(target) {
   fillEl.style.width = '30%';
   statusEl.textContent = 'PaddleOCR 识别中...';
 
+  // 组装请求体：携带当前墨色选择（预设色 + 手工取色 hues）
+  const spec = stampState.inkSpec || activeInkSpec(target);
   try {
     const resp = await fetch(OCR_SERVER + '/ocr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: imgB64 }),
+      body: JSON.stringify({
+        image: imgB64,
+        color: spec.presets.join(','),
+        hues: spec.hues || [],
+        excludes: spec.excludes || [],
+        exclude_colors: (spec.excludeColors || []).map(c => ({ hue: c.hue, sat: c.sat, val: c.val })),
+      }),
       signal: controller.signal
     });
 
@@ -2624,11 +3935,12 @@ async function runStampOCR(target) {
     statusEl.textContent = '解析结果...';
 
     if (!data.success || !data.stamps || data.stamps.length === 0) {
-      $(`#ocr-${target}-company`).textContent = '未识别到印章';
+      const reason = data.error || (data.stamps && data.stamps.length === 0 ? '未检测到印章文字' : '识别失败');
+      $(`#ocr-${target}-company`).textContent = data.error ? '识别出错' : '未识别到印章';
       $(`#ocr-${target}-code`).textContent = '—';
       $(`#ocr-${target}-type`).textContent = '—';
       fillEl.style.width = '100%';
-      statusEl.textContent = '未检测到印章文字';
+      statusEl.textContent = reason;
       cancelBtn.classList.remove('visible');
       state._ocrControllers[target] = null;
       return null;
@@ -2649,6 +3961,9 @@ async function runStampOCR(target) {
     $(`#ocr-${target}-company`).textContent = company || '未识别';
     $(`#ocr-${target}-code`).textContent = code || '未检测到';
     $(`#ocr-${target}-type`).textContent = type || '未检测到';
+
+    // 保存识别结果供对比报告使用
+    state[target].ocrResult = { company, code, type };
 
     fillEl.style.width = '100%';
     statusEl.textContent = `完成 (${data.stamps.length} 个印章)`;
@@ -2743,12 +4058,20 @@ statusBar.classList.add('visible');
     e.preventDefault();
     var msg = '印章对比工具的 OCR 功能需要后端服务支持。\n\n';
     if (navigator.platform.indexOf('Mac') >= 0) {
-      msg += 'macOS: 双击同目录下的 launcher.sh\n';
+      msg += 'macOS 启动方式（任选其一）：\n';
+      msg += '① 双击「启动印章对比工具.command」（推荐，双击即运行）\n';
+      msg += '② 终端执行：\n';
+      msg += '   chmod +x launcher.sh && ./launcher.sh\n';
+      msg += '③ 右键 launcher.sh → 打开方式 → 终端.app\n';
+      msg += '（若双击 .sh 打开的是文本编辑器，请改用方式 ①）\n';
     } else {
       msg += 'Windows: 双击同目录下的 launcher.bat\n';
     }
     msg += '\n或命令行运行: python3 stamp_app.py\n\n';
-    msg += '注意: 即使没有 OCR 服务，印章对比、差异高亮、\n导出等其他功能仍可正常使用。';
+    msg += '注意: 现代 macOS/Linux 的 Python 受 PEP 668 限制，\n';
+    msg += '直接 pip install 会被拒绝；请优先使用启动器（会自动\n';
+    msg += '创建项目内 .venv 虚拟环境安装依赖，无此问题）。\n\n';
+    msg += '即使没有 OCR 服务，印章对比、差异高亮、\n导出等其他功能仍可正常使用。';
     alert(msg);
   });
 
@@ -2756,15 +4079,15 @@ statusBar.classList.add('visible');
     if (!dismissed) bar.classList.add('visible');
   }
 
-  function setOcrUnavailable() {
+  function setOcrUnavailable(msg) {
     window._ocrAvailable = false;
     dot.className = 'ocr-sdot fail';
-    txt.textContent = 'OCR 服务未连接 — 对比/导出等功能可正常使用，文字识别不可用';
-    launch.style.display = 'inline-block';
+    txt.textContent = msg || 'OCR 服务未连接 — 对比/导出等功能可正常使用，文字识别不可用';
+    launch.style.display = msg ? 'none' : 'inline-block';
     if (ocrBtn) {
       ocrBtn.disabled = true;
       ocrBtn.classList.add('btn-ocr-disabled');
-      ocrBtn.title = 'OCR 服务未连接，文字识别不可用';
+      ocrBtn.title = 'OCR 不可用';
     }
     showBar();
   }
@@ -2794,12 +4117,15 @@ statusBar.classList.add('visible');
     checkCount++;
     var baseUrl = location.protocol === 'file:'
       ? 'http://127.0.0.1:8765'
-      : '';
+      : OCR_SERVER;
     fetch(baseUrl + '/health', { mode: 'cors' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        if (d.status === 'ok') {
+        if (d.status === 'ok' && d.ocr !== false) {
           setOcrAvailable();
+        } else if (d.status === 'ok' && d.ocr === false) {
+          // 服务在线但 OCR 模型未加载（依赖未安装），无需重试
+          setOcrUnavailable('OCR 模型未加载 — 运行 pip install paddlepaddle paddleocr opencv-python 并重启服务');
         } else {
           if (checkCount < maxChecks) {
             setTimeout(checkServer, 1500);

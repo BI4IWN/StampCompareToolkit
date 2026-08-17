@@ -108,10 +108,15 @@ goto :die
 :python_ok
 for /f "tokens=*" %%v in ('%PYTHON% --version 2^>^&1') do echo [OK] %%v
 
-:: ---- Check Dependencies ----
+:: ---- Check Dependencies (paddle / paddleocr / cv2 任一缺失即安装) ----
+%PYTHON% -c "import paddle" >nul 2>&1
+if errorlevel 1 goto :need_deps
+%PYTHON% -c "import cv2" >nul 2>&1
+if errorlevel 1 goto :need_deps
 %PYTHON% -c "import paddleocr" >nul 2>&1
-if %errorlevel%==0 goto :deps_ok
+if errorlevel 0 goto :deps_ok
 
+:need_deps
 echo.
 echo Need to install Python dependencies:
 echo   - PaddlePaddle (~700MB)
