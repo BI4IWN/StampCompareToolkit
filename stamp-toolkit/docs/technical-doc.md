@@ -1,4 +1,4 @@
-# 印章对比工具 — 技术文档（v2.3.0）
+# 印章对比工具 — 技术文档（v2.9.0）
 
 ## 目录
 
@@ -10,7 +10,8 @@
 - [六、对比渲染引擎](#六对比渲染引擎)
 - [七、交互系统](#七交互系统)
 - [八、OCR 后端](#八ocr-后端)
-- [九、性能优化](#九性能优化)
+- [九、AI 文字提取后端](#九ai-文字提取后端v280)
+- [十、性能优化](#十性能优化)
 - [十、启动器实现](#十启动器实现)
 
 ---
@@ -468,7 +469,47 @@ OCR 返回的文字经过以下处理：
 
 ---
 
-## 九、性能优化
+## 九、AI 文字提取后端（v2.8.0）
+
+### 设计
+
+AI 提取通过本地后端**代理**调用 OpenAI 兼容接口（`/ai-ocr`、`/ai/test`），避免浏览器 CORS 限制，且 API Key 只存在于前端 localStorage（经代理转发，不落盘、不写日志）。
+
+服务商预设（`AI_PROVIDERS`，与前端 `AI_PRESETS` 同源）：
+
+| 预设 | Base URL | 默认模型 | 模式 |
+|------|----------|----------|------|
+| deepseek | `https://api.deepseek.com/v1` | `deepseek-chat` | parse（文本解析） |
+| zhipu | `https://open.bigmodel.cn/api/paas/v4` | `glm-4v-flash` | vision（视觉识别） |
+| custom | 用户填写 | 用户填写 | 用户选择 |
+
+### 两种提取模式
+
+**视觉模式（vision）**：前端将印章原图 base64 随请求发送，后端组装 OpenAI 多模态消息（`content: [{type:'text'}, {type:'image_url'}]`）直接调用 `chat/completions`。无需 PaddleOCR。提示词要求模型返回 JSON：`{company, code, type, raw}`。
+
+**文本解析模式（parse）**：后端先运行本地 PaddleOCR 管线（`stamp_ocr_pipeline`，含墨色选择），把识别出的文本片段拼入提示词，由纯文本模型（如 deepseek-chat）清洗、纠错、结构化。PaddleOCR 不可用时明确报错并提示改用视觉模式。
+
+### 实现要点
+
+- `call_ai_chat`：urllib 直连，HTTPError（含 401/429 及响应体细节）与 URLError 均转为带原因的中文错误，超时 90s（测试连接 30s）
+- `parse_ai_json`：从回复中稳健抽取 JSON（容忍 ```json 代码块标记与前后缀文字）；解析失败时整段回复降级为 `raw` 返回
+- `validate_ai_config`：校验地址格式、模型名、密钥非空
+- `/ai/test`：`max_tokens=8` 的极小请求验证连通性，返回模型应答片段
+- 墨色选择（color/hues/excludes）在 parse 模式中透传给本地 OCR 管线，视觉模式由模型自行看图
+
+### 前端集成（v2.9.0 拆分）
+
+- 配置存储于 `localStorage['stampAIConfig_v1']`（provider/base_url/model/api_key/mode）
+- **识别方式显式切换**：`state.recMode`（`'local'` 默认 | `'ai'`）由**页面左上角 header 内**的「识别」按钮组控制；点击 AI 且 `aiReady()`（配置齐全）失败时提示先配置，不切换
+- **每枚印章独立 AI 按钮**：`updateAIButtonVisibility()` 在 `recMode === 'ai'` 时显示 `#ai-ocr-ref` / `#ai-ocr-test` 按钮，点击调用 `runStampOCR(target)` 单章识别
+- **加载后自动识别**：`autoRecognitionReady()`——本地模式要求 `_ocrAvailable`（PaddleOCR 就绪），AI 模式（视觉）要求 AI 配置就绪；`processStamp` 依此在印章加载后自动触发对应识别通道
+- 「🤖 AI」按钮高亮表示配置就绪；模型名输入时按关键词（`4v`/`4o`/`vision`/`gemini` 等）自动推荐视觉/文本模式
+- `runStampOCR` 在 `state.recMode === 'ai' && aiReady()` 时请求 `/ai-ocr`，否则走 `/ocr`；AI 模式配置不完整时明确提示「AI 识别未配置」，不静默回退
+- PaddleOCR 缺失（`/health` 返回 `ocr:false`）时，仅当识别方式为 AI 且配置视觉模式时识别按钮保持可用，状态条提示「PaddleOCR 未加载 — AI 视觉提取可用」
+
+---
+
+## 十、性能优化
 
 ### 渲染优化
 
@@ -496,7 +537,7 @@ OCR 返回的文字经过以下处理：
 
 ---
 
-## 十、启动器实现
+## 十一、启动器实现
 
 ### macOS / Linux 启动器 (launcher.sh)
 

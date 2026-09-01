@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-印章对比工具 — 统一启动文件 (BI4IWN · 李劲松) v2.1.0
+印章对比工具 — 统一启动文件 (BI4IWN · 李劲松) v2.8.0
 双击或命令行运行即可自动启动服务并打开浏览器。
 
 用法:
@@ -12,6 +12,11 @@
 
 依赖:
   pip install paddleocr paddlepaddle opencv-python
+
+v2.8.0 更新:
+  - AI 文字提取：/ai-ocr 与 /ai/test 代理调用 OpenAI 兼容接口
+    （默认预设 DeepSeek / 智谱，支持自定义地址、模型、密钥）
+  - 视觉模式直接发图识别；文本解析模式 = 本地 PaddleOCR + AI 清洗结构化
 
 v2.5.0 更新:
   - 颜色排除：/ocr 新增 excludes 参数，排除色相优先从掩膜中剔除（贯通印章检测与通道提取）
@@ -33,6 +38,7 @@ import os
 import sys
 import json
 import base64
+import re
 import argparse
 import signal
 import tempfile
@@ -41,7 +47,7 @@ import threading
 import traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
-APP_VERSION = '2.7.0'
+APP_VERSION = '2.8.0'
 
 # ============================================================
 # 内嵌 HTML 前端 (stamp-compare.html)
@@ -485,6 +491,153 @@ def stamp_ocr_pipeline(img, color='red', hues=None, excludes=None, exclude_color
 
 
 # ============================================================
+# AI 文字提取 — OpenAI 兼容接口代理（DeepSeek / 智谱 / 自定义）
+# ============================================================
+
+import urllib.request
+import urllib.error
+
+# 服务商预设（前端设置面板同源）；mode: vision=多模态视觉识别, parse=本地OCR文本+AI清洗
+AI_PROVIDERS = {
+    'deepseek': {'name': 'DeepSeek', 'base_url': 'https://api.deepseek.com/v1', 'model': 'deepseek-chat', 'mode': 'parse'},
+    'zhipu':    {'name': '智谱 AI',  'base_url': 'https://open.bigmodel.cn/api/paas/v4', 'model': 'glm-4v-flash', 'mode': 'vision'},
+    'custom':   {'name': '自定义',   'base_url': '', 'model': '', 'mode': 'vision'},
+}
+
+AI_SYSTEM_PROMPT = (
+    '你是印章文字提取助手。根据给出的印章图片或 OCR 原始文本，提取印章信息。'
+    '严格只输出一个 JSON 对象，不要输出任何解释、注释或代码块标记。'
+)
+
+AI_VISION_PROMPT = (
+    '这是一枚印章（公章/财务章/合同章等）的图片。请提取其中的文字信息，返回 JSON：\n'
+    '{"company": "单位名称（环形文字，去除空格，无则空字符串", '
+    '"code": "印章下缘的编码（数字或字母串，无则空字符串", '
+    '"type": "印章类型（如 合同专用章/财务专用章/发票专用章，无则空字符串", '
+    '"raw": "图片中识别到的全部文字"}'
+)
+
+AI_PARSE_PROMPT = (
+    '以下是一枚印章图片经本地 OCR 识别的原始文本（弧形文字可能乱序、含错字或多行）：\n%s\n'
+    '请清洗并结构化，返回 JSON：\n'
+    '{"company": "单位名称（无则空字符串", "code": "印章编码（无则空字符串", '
+    '"type": "印章类型（无则空字符串", "raw": "整理后的全部文字"}'
+)
+
+
+def validate_ai_config(cfg):
+    """校验 AI 配置，返回 (规范化配置, 错误信息)。"""
+    if not isinstance(cfg, dict):
+        return None, '配置格式无效'
+    base = str(cfg.get('base_url') or '').strip().rstrip('/')
+    model = str(cfg.get('model') or '').strip()
+    api_key = str(cfg.get('api_key') or '').strip()
+    mode = cfg.get('mode') if cfg.get('mode') in ('vision', 'parse') else 'vision'
+    if not base:
+        return None, '未配置 API 地址（Base URL）'
+    if not base.startswith(('http://', 'https://')):
+        return None, 'API 地址必须以 http:// 或 https:// 开头'
+    if not model:
+        return None, '未配置模型名称'
+    if not api_key:
+        return None, '未配置 API Key'
+    return {'base_url': base, 'model': model, 'api_key': api_key, 'mode': mode}, None
+
+
+def call_ai_chat(cfg, messages, max_tokens=1500, timeout=90):
+    """调用 OpenAI 兼容的 chat/completions 接口，返回回复文本。"""
+    url = cfg['base_url'] + '/chat/completions'
+    payload = {
+        'model': cfg['model'],
+        'messages': messages,
+        'temperature': 0.1,
+        'max_tokens': max_tokens,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + cfg['api_key'],
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            resp = json.loads(r.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode('utf-8', 'ignore')[:300]
+        except Exception:
+            pass
+        raise RuntimeError(f'AI 服务返回 HTTP {e.code}: {detail or e.reason}') from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f'无法连接 AI 服务: {e.reason}') from e
+
+    try:
+        content = resp['choices'][0]['message']['content']
+    except (KeyError, IndexError, TypeError) as e:
+        raise RuntimeError(f'AI 响应格式异常: {json.dumps(resp, ensure_ascii=False)[:300]}') from e
+    if isinstance(content, list):  # 部分多模态接口返回分段 content
+        content = ''.join(seg.get('text', '') for seg in content if isinstance(seg, dict))
+    return content or ''
+
+
+def parse_ai_json(text):
+    """从 AI 回复中稳健提取 JSON 对象（容忍代码块标记/前后缀文本）。"""
+    if not text:
+        return None
+    cleaned = text.strip()
+    if cleaned.startswith('```'):
+        cleaned = re.sub(r'^```[a-zA-Z]*\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+    start = cleaned.find('{')
+    end = cleaned.rfind('}')
+    if start >= 0 and end > start:
+        try:
+            obj = json.loads(cleaned[start:end + 1])
+            return obj if isinstance(obj, dict) else None
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def ai_extract(cfg, image_b64=None, paddle_texts=None):
+    """执行 AI 文字提取。vision 模式发送图片，parse 模式发送本地 OCR 文本。"""
+    if cfg['mode'] == 'vision':
+        if not image_b64:
+            raise RuntimeError('视觉模式需要图像数据')
+        messages = [
+            {'role': 'system', 'content': AI_SYSTEM_PROMPT},
+            {'role': 'user', 'content': [
+                {'type': 'text', 'text': AI_VISION_PROMPT},
+                {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + image_b64}},
+            ]},
+        ]
+    else:
+        if paddle_texts is None:
+            raise RuntimeError('文本解析模式需要本地 PaddleOCR 先识别（请安装依赖或改用视觉模式）')
+        joined = '\n'.join(paddle_texts) if paddle_texts else '（未识别到任何文字）'
+        messages = [
+            {'role': 'system', 'content': AI_SYSTEM_PROMPT},
+            {'role': 'user', 'content': AI_PARSE_PROMPT % joined},
+        ]
+
+    reply = call_ai_chat(cfg, messages)
+    parsed = parse_ai_json(reply)
+    if parsed is None:
+        # 容错：整段回复作为 raw 返回
+        return {'company': '', 'code': '', 'type': '', 'raw': reply.strip()[:500]}
+    return {
+        'company': str(parsed.get('company') or ''),
+        'code': str(parsed.get('code') or ''),
+        'type': str(parsed.get('type') or ''),
+        'raw': str(parsed.get('raw') or ''),
+    }
+
+
+# ============================================================
 # HTTP 服务 — 同时提供 HTML 页面和 OCR API
 # ============================================================
 
@@ -538,6 +691,12 @@ class StampAppHandler(BaseHTTPRequestHandler):
             self.send_error(404, 'Not found')
 
     def do_POST(self):
+        if self.path == '/ai/test':
+            self._handle_ai_test()
+            return
+        if self.path == '/ai-ocr':
+            self._handle_ai_ocr()
+            return
         if self.path != '/ocr':
             self.send_error(404, 'Not found')
             return
@@ -590,6 +749,84 @@ class StampAppHandler(BaseHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             self._send_json({'success': False, 'error': f'识别失败: {e}'}, 500)
+
+    def _read_json_body(self):
+        """读取并解析 JSON 请求体；失败时直接回错并返回 None。"""
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length <= 0 or content_length > MAX_BODY_BYTES:
+            self._send_json({'success': False, 'error': '请求体大小无效'}, 400)
+            return None
+        try:
+            return json.loads(self.rfile.read(content_length))
+        except json.JSONDecodeError:
+            self._send_json({'success': False, 'error': '无效的 JSON 请求'}, 400)
+            return None
+
+    def _handle_ai_test(self):
+        """AI 连接测试：用极小的文本请求验证地址/密钥/模型可用性。"""
+        data = self._read_json_body()
+        if data is None:
+            return
+        cfg, err = validate_ai_config(data.get('config') or {})
+        if err:
+            self._send_json({'success': False, 'error': err}, 400)
+            return
+        try:
+            reply = call_ai_chat(
+                cfg,
+                [{'role': 'user', 'content': '回复"OK"两个字母即可，不要输出其他内容。'}],
+                max_tokens=8, timeout=30)
+            self._send_json({'success': True, 'model': cfg['model'], 'reply': (reply or '').strip()[:20]})
+        except Exception as e:
+            self._send_json({'success': False, 'error': str(e)}, 200)
+
+    def _handle_ai_ocr(self):
+        """AI 文字提取：vision 模式直接发图；parse 模式先本地 PaddleOCR 再交 AI 清洗。"""
+        data = self._read_json_body()
+        if data is None:
+            return
+        cfg, err = validate_ai_config(data.get('config') or {})
+        if err:
+            self._send_json({'success': False, 'error': err}, 400)
+            return
+
+        paddle_texts = None
+        if cfg['mode'] == 'parse':
+            if ocr is None:
+                self._send_json({
+                    'success': False,
+                    'error': '文本解析模式依赖本地 PaddleOCR — 请安装依赖后重启服务，或在 AI 设置中改用视觉模式',
+                })
+                return
+            try:
+                img_bytes = base64.b64decode(data.get('image', ''))
+                img = cv2.imdecode(np.frombuffer(img_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+                if img is None:
+                    self._send_json({'success': False, 'error': '无法解析图像数据'}, 400)
+                    return
+                color, hues, excludes, exclude_colors = parse_ink_colors(
+                    data.get('color', 'red'), data.get('hues'),
+                    data.get('excludes'), data.get('exclude_colors'))
+                results, _ = stamp_ocr_pipeline(img, color, hues, excludes, exclude_colors)
+                paddle_texts = []
+                for s in results:
+                    paddle_texts.extend(t['text'] for t in s.get('texts', []))
+            except Exception as e:
+                traceback.print_exc()
+                self._send_json({'success': False, 'error': f'本地 OCR 失败: {e}'}, 500)
+                return
+
+        try:
+            ai = ai_extract(cfg, image_b64=data.get('image', ''), paddle_texts=paddle_texts)
+            self._send_json({
+                'success': True,
+                'ai': ai,
+                'mode': cfg['mode'],
+                'model': cfg['model'],
+                'paddle_texts': paddle_texts or [],
+            })
+        except Exception as e:
+            self._send_json({'success': False, 'error': str(e)}, 200)
 
     def log_message(self, format, *args):
         """Suppress default logging for cleaner output."""

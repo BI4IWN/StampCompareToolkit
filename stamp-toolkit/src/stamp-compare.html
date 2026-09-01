@@ -282,6 +282,105 @@
     color: var(--text);
   }
 
+  /* ---- AI 设置面板 ---- */
+  .ai-dialog {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.18);
+    padding: 26px 28px 22px;
+    width: min(440px, calc(100vw - 40px));
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+  }
+
+  .ai-dialog h3 { margin: 0 0 4px; font-size: 16px; }
+
+  .ai-dialog .sub { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+
+  .ai-field { margin-bottom: 12px; }
+
+  .ai-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+  }
+
+  .ai-field input, .ai-field select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong, #d8d4cf);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+  }
+
+  .ai-field input:focus, .ai-field select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(196,65,51,0.1);
+  }
+
+  .ai-providers { display: flex; gap: 6px; }
+
+  .ai-providers button {
+    flex: 1;
+    padding: 8px 0;
+    border: 1px solid var(--border-strong, #d8d4cf);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+
+  .ai-providers button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .ai-row { display: flex; gap: 10px; align-items: center; }
+
+  .ai-row .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+  .ai-actions { display: flex; gap: 8px; margin-top: 18px; }
+
+  .ai-actions button {
+    flex: 1;
+    padding: 9px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong, #d8d4cf);
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .ai-actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ai-actions button:hover { filter: brightness(0.97); }
+
+  .ai-note {
+    margin-top: 14px;
+    font-size: 11px;
+    color: #95a0aa;
+    line-height: 1.7;
+    background: #faf9f7;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  #ai-test-result { font-size: 12px; margin-top: 6px; min-height: 16px; }
+  #ai-test-result.ok { color: #27ae60; }
+  #ai-test-result.fail { color: #c0392b; }
+
   /* ---- Extracted preview ---- */
   .extracted-strip {
     display: none;
@@ -861,6 +960,70 @@
     opacity: 1;
     transform: rotate(8deg) scale(1.08);
   }
+
+  /* 页面左上角：识别方式切换（本地 / AI） */
+  .header-rec-mode {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-left: 18px;
+    border: 1px solid var(--border-strong, #d8d4cf);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.75);
+  }
+
+  .header-rec-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary, #666);
+    padding: 5px 8px 5px 10px;
+    letter-spacing: 0.5px;
+    background: rgba(0,0,0,0.03);
+    border-right: 1px solid var(--border, #e5e2de);
+  }
+
+  .header-rec-mode .mode-btn {
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #666);
+    cursor: pointer;
+    border-right: 1px solid var(--border, #e5e2de);
+    transition: all 0.15s;
+  }
+
+  .header-rec-mode .mode-btn:last-child { border-right: none; }
+
+  .header-rec-mode .mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .header-rec-mode .mode-btn.active[data-rec="ai"] {
+    background: #3d5468;
+  }
+
+  /* 每枚印章的 AI 识别按钮（仅识别方式为 AI 时显示） */
+  .ai-ocr-row { justify-content: center; margin-bottom: 4px; }
+
+  .ai-ocr-btn {
+    padding: 5px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border-strong, #d8d4cf);
+    border-radius: 999px;
+    background: rgba(61,84,104,0.08);
+    color: #3d5468;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .ai-ocr-btn:hover { background: #3d5468; color: #fff; }
+
   .dev-footer {
     text-align: center;
     padding: 20px 0 6px;
@@ -1057,8 +1220,13 @@
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <h1>印章对比工具</h1>
+      <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
+        <span class="header-rec-label">识别</span>
+        <button class="mode-btn active" data-rec="local">本地</button>
+        <button class="mode-btn" data-rec="ai">AI</button>
+      </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.7.0</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.0</span></p>
   </header>
 
   <div class="paste-row">
@@ -1094,6 +1262,62 @@
     </div>
   </div>
 
+  <!-- AI 文字提取设置面板（DeepSeek / 智谱 / 自定义） -->
+  <div class="paste-dialog-overlay" id="ai-dialog-overlay">
+    <div class="ai-dialog">
+      <h3>🤖 AI 文字提取</h3>
+      <div class="sub">配置 OpenAI 兼容的视觉/语言模型，用 AI 提取印章名称、编码与类型</div>
+
+      <div class="ai-field">
+        <label>服务商预设</label>
+        <div class="ai-providers" id="ai-providers">
+          <button type="button" data-provider="deepseek">DeepSeek</button>
+          <button type="button" data-provider="zhipu">智谱 AI</button>
+          <button type="button" data-provider="custom">自定义</button>
+        </div>
+      </div>
+
+      <div class="ai-field">
+        <label>API 地址（Base URL）</label>
+        <input type="text" id="ai-base-url" placeholder="https://api.deepseek.com/v1" spellcheck="false">
+      </div>
+
+      <div class="ai-field">
+        <label>模型名称</label>
+        <input type="text" id="ai-model" placeholder="deepseek-chat / glm-4v-flash / ..." spellcheck="false">
+      </div>
+
+      <div class="ai-field">
+        <label>API Key</label>
+        <input type="password" id="ai-key" placeholder="sk-..." spellcheck="false" autocomplete="off">
+      </div>
+
+      <div class="ai-field">
+        <label>提取方式</label>
+        <select id="ai-mode">
+          <option value="vision">视觉识别 — 图片直接发给多模态模型（如 glm-4v / gpt-4o）</option>
+          <option value="parse">文本解析 — 本地 PaddleOCR 粗识别 + AI 清洗结构化（如 deepseek-chat）</option>
+        </select>
+      </div>
+
+      <div class="ai-note" style="margin-top:4px">
+        保存配置后，在工具栏「识别」中选择 <b>AI</b> 即可使用 AI 提取；选择「本地」则始终使用 PaddleOCR（默认）。
+      </div>
+      <div id="ai-test-result"></div>
+
+      <div class="ai-actions">
+        <button type="button" id="ai-test-btn">测试连接</button>
+        <button type="button" class="primary" id="ai-save-btn">保存</button>
+        <button type="button" id="ai-close-btn">关闭</button>
+      </div>
+
+      <div class="ai-note">
+        说明：AI 提取经本地后端代理调用所配置的服务；启用后印章图片会发送至该 AI 服务，密钥仅保存在本机浏览器中。
+        文本解析模式需要本地 PaddleOCR 可用；视觉模式无需 PaddleOCR。DeepSeek 当前为纯文本模型，请选择「文本解析」。
+      </div>
+    </div>
+  </div>
+
   <div class="extracted-strip" id="extracted-strip">
     <div class="extracted-item">
       <div class="stamp-color-panel" id="color-panel-ref">
@@ -1121,6 +1345,9 @@
       <div class="ext-label">参考章提取</div>
       <div class="stamp-candidates" id="cand-ref"></div>
       <div class="ocr-inline" id="ocr-ref">
+        <div class="ocr-inline-row ai-ocr-row" id="ai-ocr-row-ref" style="display:none">
+          <button class="ai-ocr-btn" id="ai-ocr-ref" title="用 AI 识别本枚印章文字">🤖 AI 识别</button>
+        </div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-ref-company">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-ref-code">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">类型</span><span class="ocr-inline-val" id="ocr-ref-type">—</span></div>
@@ -1157,6 +1384,9 @@
       <div class="ext-label">待验章提取</div>
       <div class="stamp-candidates" id="cand-test"></div>
       <div class="ocr-inline" id="ocr-test">
+        <div class="ocr-inline-row ai-ocr-row" id="ai-ocr-row-test" style="display:none">
+          <button class="ai-ocr-btn" id="ai-ocr-test" title="用 AI 识别本枚印章文字">🤖 AI 识别</button>
+        </div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-test-company">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-test-code">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">类型</span><span class="ocr-inline-val" id="ocr-test-type">—</span></div>
@@ -1191,6 +1421,7 @@
       <button class="btn" id="btn-report" title="导出含图片、相似度、OCR 的对比报告">报告</button>
       <button class="btn" id="btn-verify" title="打开全国印章查询平台">印章核实</button>
       <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码">全部识别</button>
+      <button class="btn" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）">🤖 AI</button>
     </div>
     <div class="toolbar-row">
       <label>透明度</label>
@@ -1277,7 +1508,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.9.0';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
@@ -1880,11 +2111,11 @@ function processStamp(img, target) {
   const extra = detection.regions.length > 1 ? `，检出 ${detection.regions.length} 个印章可选` : '';
   showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extracted.circular ? '圆形章' : '异形章'}) — 已自动提取${extra}${state[other].extracted ? '' : '，加载另一枚印章后可开始对比'}`);
 
-  // 自动触发 OCR 文字识别（检查服务是否可用）
-  if (window._ocrAvailable) {
+  // 自动触发文字识别：本地模式需 PaddleOCR 就绪；AI 模式（视觉）配置就绪即自动调 AI
+  if (autoRecognitionReady()) {
     runStampOCR(target);
   } else {
-    // OCR 服务不可用，在 inline 区域显示提示
+    // 服务不可用，在 inline 区域显示提示
     var inlineEl = document.getElementById('ocr-' + target);
     var statusEl = document.getElementById('ocr-' + target + '-status');
     if (inlineEl) {
@@ -3175,7 +3406,7 @@ pasteOverlay.addEventListener('click', (e) => {
 
 // Mode buttons (comparison mode only, not target selector or axis selector)
 // 对比模式切换（排除 target/axis/color 组，墨色组为多选独立逻辑）
-document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group):not(#color-group) .mode-btn').forEach((btn) => {
+document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group):not(#color-group):not(#rec-mode-group) .mode-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     setMode(btn.dataset.mode);
   });
@@ -3787,7 +4018,7 @@ window.addEventListener('blur', () => {
 
 function setMode(mode) {
   state.mode = mode;
-  document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group):not(#color-group) .mode-btn').forEach(b => {
+  document.querySelectorAll('.mode-group:not(#target-group):not(#axis-group):not(#color-group):not(#rec-mode-group) .mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === mode);
   });
   if (mode !== 'slider') sliderHandle.style.display = 'none';
@@ -3805,8 +4036,224 @@ $('#btn-verify').addEventListener('click', () => {
 
 
 /* ============================================================
+   🤖 AI 文字提取 — 配置面板（DeepSeek / 智谱 / 自定义）
+   配置保存于 localStorage，经本地后端代理调用 OpenAI 兼容接口
+   ============================================================ */
+
+// 服务商预设（与后端 AI_PROVIDERS 同源）
+const AI_PRESETS = {
+  deepseek: { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', mode: 'parse', keyHint: 'https://platform.deepseek.com 获取' },
+  zhipu:    { name: '智谱 AI',  base_url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4v-flash', mode: 'vision', keyHint: 'https://open.bigmodel.cn 获取' },
+  custom:   { name: '自定义',   base_url: '', model: '', mode: 'vision', keyHint: '任意 OpenAI 兼容接口' },
+};
+
+const AI_STORAGE_KEY = 'stampAIConfig_v1';
+window._aiConfig = null;
+
+// 识别方式（state.recMode）：'local' 本地 PaddleOCR（默认） | 'ai' AI 模型
+state.recMode = 'local';
+
+// AI 配置是否完整可用（地址/模型/密钥齐全）
+function aiReady() {
+  const c = window._aiConfig;
+  return !!(c && c.base_url && c.model && c.api_key);
+}
+
+// 视觉模型关键词：模型名命中时自动推荐视觉模式
+const AI_VISION_HINTS = ['4v', '-vl', 'vl-', 'vision', '4o', 'omni', 'gemini', 'claude', 'qwen-vl', 'glm-4v'];
+
+function aiSuggestMode(model) {
+  const m = (model || '').toLowerCase();
+  return AI_VISION_HINTS.some(k => m.includes(k)) ? 'vision' : 'parse';
+}
+
+function aiLoadConfig() {
+  try {
+    const raw = localStorage.getItem(AI_STORAGE_KEY);
+    if (!raw) return null;
+    const cfg = JSON.parse(raw);
+    if (cfg && cfg.base_url && cfg.model) return cfg;
+  } catch (e) { /* 忽略损坏的配置 */ }
+  return null;
+}
+
+function aiSaveConfig(cfg) {
+  try { localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(cfg)); } catch (e) { /* 隐私模式等 */ }
+}
+
+function aiOpenDialog() {
+  const cfg = window._aiConfig || aiLoadConfig() || { provider: 'zhipu', ...AI_PRESETS.zhipu, api_key: '' };
+  $('#ai-base-url').value = cfg.base_url || '';
+  $('#ai-model').value = cfg.model || '';
+  $('#ai-key').value = cfg.api_key || '';
+  $('#ai-mode').value = cfg.mode || aiSuggestMode(cfg.model);
+  const provider = cfg.provider || 'custom';
+  document.querySelectorAll('#ai-providers button').forEach(b =>
+    b.classList.toggle('active', b.dataset.provider === provider));
+  $('#ai-test-result').textContent = '';
+  $('#ai-test-result').className = '';
+  $('#ai-dialog-overlay').classList.add('visible');
+}
+
+function aiCollectConfig() {
+  const activeBtn = document.querySelector('#ai-providers button.active');
+  return {
+    provider: activeBtn ? activeBtn.dataset.provider : 'custom',
+    base_url: $('#ai-base-url').value.trim(),
+    model: $('#ai-model').value.trim(),
+    api_key: $('#ai-key').value.trim(),
+    mode: $('#ai-mode').value,
+  };
+}
+
+function aiUpdateButton() {
+  const btn = $('#btn-ai-cfg');
+  const cfg = window._aiConfig;
+  if (cfg && aiReady()) {
+    btn.classList.add('active');
+    const label = (AI_PRESETS[cfg.provider] || {}).name || '自定义';
+    btn.title = `AI 已配置：${label} · ${cfg.model}（${cfg.mode === 'vision' ? '视觉识别' : '文本解析'}）— 工具栏「识别」可切换使用`;
+  } else {
+    btn.classList.remove('active');
+    btn.title = '配置 AI 文字提取（DeepSeek / 智谱 / 自定义）';
+  }
+  // 识别方式按钮状态联动
+  const aiBtn = document.querySelector('#rec-mode-group [data-rec="ai"]');
+  const localBtn = document.querySelector('#rec-mode-group [data-rec="local"]');
+  if (aiBtn) aiBtn.classList.toggle('active', state.recMode === 'ai');
+  if (localBtn) localBtn.classList.toggle('active', state.recMode === 'local');
+  updateAIButtonVisibility();
+}
+
+// 加载印章后是否自动触发识别：
+// 本地模式 → PaddleOCR 服务就绪；AI 模式（视觉）→ AI 配置就绪即可
+function autoRecognitionReady() {
+  if (state.recMode === 'ai') {
+    const c = window._aiConfig;
+    return !!(c && c.mode === 'vision' && c.base_url && c.model && c.api_key);
+  }
+  return !!window._ocrAvailable;
+}
+
+// AI 识别按钮显隐：仅识别方式为 AI 时，每枚印章显示独立的「AI 识别」按钮
+function updateAIButtonVisibility() {
+  const show = state.recMode === 'ai';
+  const rows = document.querySelectorAll('.ai-ocr-row');
+  for (const r of rows) r.style.display = show ? '' : 'none';
+}
+
+// 识别方式切换：本地 PaddleOCR（默认） / AI 模型（需先配置）
+document.querySelectorAll('#rec-mode-group .mode-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    const rec = b.dataset.rec;
+    if (rec === 'ai' && !aiReady()) {
+      showStatus('AI 识别未配置 — 请先点击「🤖 AI」填写地址、模型与 API Key 并保存');
+      return;
+    }
+    state.recMode = rec;
+    document.querySelectorAll('#rec-mode-group .mode-btn').forEach(x =>
+      x.classList.toggle('active', x === b));
+    updateAIButtonVisibility();
+    showStatus(rec === 'ai'
+      ? `识别方式：AI（${(window._aiConfig.model || '')}）— 印章加载后自动识别，或点击每枚印章的「🤖 AI 识别」`
+      : '识别方式：本地 PaddleOCR');
+    // 识别方式变化后重检服务状态（PaddleOCR 缺失时 AI 视觉模式可恢复按钮可用）
+    if (window._retryOCRConnection) window._retryOCRConnection();
+  });
+});
+
+// 每枚印章独立的 AI 识别按钮
+$('#ai-ocr-ref').addEventListener('click', () => runStampOCR('ref'));
+$('#ai-ocr-test').addEventListener('click', () => runStampOCR('test'));
+
+$('#btn-ai-cfg').addEventListener('click', aiOpenDialog);
+$('#ai-close-btn').addEventListener('click', () => $('#ai-dialog-overlay').classList.remove('visible'));
+$('#ai-dialog-overlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) $('#ai-dialog-overlay').classList.remove('visible');
+});
+
+// 服务商预设：填充地址/模型/推荐模式（保留已填 Key）
+document.querySelectorAll('#ai-providers button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#ai-providers button').forEach(x => x.classList.toggle('active', x === b));
+    const p = AI_PRESETS[b.dataset.provider];
+    if (!p) return;
+    $('#ai-base-url').value = p.base_url;
+    $('#ai-model').value = p.model;
+    $('#ai-mode').value = p.mode;
+    $('#ai-test-result').textContent = p.keyHint ? `API Key 获取：${p.keyHint}` : '';
+    $('#ai-test-result').className = '';
+  });
+});
+
+// 模型名变化时自动推荐提取方式（用户手动改过后不再覆盖本次会话）
+let _aiModeTouched = false;
+$('#ai-mode').addEventListener('change', () => { _aiModeTouched = true; });
+$('#ai-model').addEventListener('input', () => {
+  if (!_aiModeTouched) $('#ai-mode').value = aiSuggestMode($('#ai-model').value);
+});
+
+// 测试连接（经后端代理，避免浏览器 CORS）
+$('#ai-test-btn').addEventListener('click', async () => {
+  const el = $('#ai-test-result');
+  const cfg = aiCollectConfig();
+  if (!cfg.base_url || !cfg.model || !cfg.api_key) {
+    el.textContent = '请先填写地址、模型与 API Key';
+    el.className = 'fail';
+    return;
+  }
+  el.textContent = '正在测试连接...';
+  el.className = '';
+  try {
+    const resp = await fetch(OCR_SERVER + '/ai/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: cfg }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      el.textContent = `✓ 连接成功（${data.model}）：${data.reply || 'OK'}`;
+      el.className = 'ok';
+    } else {
+      el.textContent = `✗ ${data.error || '连接失败'}`;
+      el.className = 'fail';
+    }
+  } catch (err) {
+    el.textContent = `✗ 无法连接本地后端（${err.message}）— 请先启动 stamp_app.py 服务`;
+    el.className = 'fail';
+  }
+});
+
+// 保存配置（仅保存配置本身，识别方式由工具栏「识别」显式切换）
+$('#ai-save-btn').addEventListener('click', () => {
+  const cfg = aiCollectConfig();
+  if (!cfg.base_url || !cfg.model || !cfg.api_key) {
+    const el = $('#ai-test-result');
+    el.textContent = '请完整填写地址、模型与 API Key 后保存';
+    el.className = 'fail';
+    return;
+  }
+  window._aiConfig = cfg;
+  aiSaveConfig(cfg);
+  aiUpdateButton();
+  $('#ai-dialog-overlay').classList.remove('visible');
+  showStatus(`AI 配置已保存：${(AI_PRESETS[cfg.provider] || {}).name || '自定义'} · ${cfg.model} — 在工具栏「识别」中选择 AI 即可使用`);
+  // AI 状态变化后重检服务（PaddleOCR 缺失时视觉模式可恢复识别按钮可用）
+  if (window._retryOCRConnection) window._retryOCRConnection();
+});
+
+// 初始化：载入已保存的配置
+(function initAIConfig() {
+  const cfg = aiLoadConfig();
+  if (cfg) window._aiConfig = cfg;
+  aiUpdateButton();
+  updateAIButtonVisibility();
+})();
+
+/* ============================================================
    OCR — 印章文字及编码提取 (BI4IWN)
    管线：发送原图 → Python PaddleOCR 后端 → 返回识别结果
+   （启用 AI 时改为 /ai-ocr：视觉模式直接发图，文本解析模式为 PaddleOCR + AI 清洗）
    使用相对路径，由统一启动文件 stamp_app.py 提供服务
    ============================================================ */
 
@@ -3884,19 +4331,36 @@ async function runStampOCR(target) {
   fillEl.style.width = '10%';
   statusEl.textContent = '检查 OCR 服务...';
 
-  // 检查服务是否可用
+  // 检查服务是否可用（识别方式为 AI 视觉时仅要求后端在线，无需 PaddleOCR）
+  const _aiEarly = window._aiConfig;
+  const _aiReady = state.recMode === 'ai' && !!(_aiEarly && _aiEarly.mode === 'vision' && _aiEarly.base_url && _aiEarly.model && _aiEarly.api_key);
   const serverState = await checkOCRSpecServer();
-  if (serverState !== 'ok') {
+  if (serverState !== 'ok' && !(serverState === 'no-ocr' && _aiReady)) {
     fillEl.style.width = '100%';
-    statusEl.textContent = serverState === 'no-ocr' ? 'OCR 模型未加载（需安装 PaddleOCR 依赖）' : 'OCR 服务未启动';
     cancelBtn.classList.remove('visible');
-    $(`#ocr-${target}-company`).textContent = serverState === 'no-ocr' ? '需装依赖' : '需启动服务';
+    state._ocrControllers[target] = null;
+    if (state.recMode === 'ai' && !aiReady()) {
+      // 识别方式为 AI 但配置缺失或不完整
+      $(`#ocr-${target}-company`).textContent = '未配置 AI';
+      $(`#ocr-${target}-code`).textContent = '—';
+      $(`#ocr-${target}-type`).textContent = '—';
+      statusEl.textContent = 'AI 识别未配置 — 请先点击「🤖 AI」完善配置';
+      showStatus('AI 识别未配置 — 请先点击「🤖 AI」完善配置');
+      return null;
+    }
+    if (serverState === 'no-ocr') {
+      statusEl.textContent = 'OCR 模型未加载（需安装 PaddleOCR 依赖）';
+      $(`#ocr-${target}-company`).textContent = '需装依赖';
+      $(`#ocr-${target}-code`).textContent = '—';
+      $(`#ocr-${target}-type`).textContent = '—';
+      showStatus('OCR 模型未加载 — 请安装依赖: pip install paddlepaddle paddleocr opencv-python');
+      return null;
+    }
+    statusEl.textContent = 'OCR 服务未启动';
+    $(`#ocr-${target}-company`).textContent = '需启动服务';
     $(`#ocr-${target}-code`).textContent = '—';
     $(`#ocr-${target}-type`).textContent = '—';
-    showStatus(serverState === 'no-ocr'
-      ? 'OCR 模型未加载 — 请安装依赖: pip install paddlepaddle paddleocr opencv-python'
-      : 'OCR 服务未连接，请运行: python3 stamp_app.py');
-    state._ocrControllers[target] = null;
+    showStatus('OCR 服务未连接，请运行: python3 stamp_app.py');
     return null;
   }
 
@@ -3906,13 +4370,26 @@ async function runStampOCR(target) {
   // 将原始画布转为 base64 发送
   const imgB64 = canvasToBase64(stampState.original);
 
-  fillEl.style.width = '30%';
-  statusEl.textContent = 'PaddleOCR 识别中...';
+  // AI 识别分支：识别方式为 AI 且配置完整时走 /ai-ocr
+  const aiCfg = window._aiConfig;
+  const useAI = state.recMode === 'ai' && !!(aiCfg && aiCfg.base_url && aiCfg.model && aiCfg.api_key);
+  if (useAI) {
+    fillEl.style.width = '30%';
+    statusEl.textContent = `AI 提取中（${aiCfg.model}，${aiCfg.mode === 'vision' ? '视觉识别' : '本地OCR+AI解析'}）...`;
+  } else {
+    if (state.recMode === 'ai') {
+      // 选择了 AI 但配置不完整：提示并回退本地
+      statusEl.textContent = 'AI 未配置完整，已回退本地 OCR...';
+      showStatus('AI 识别未配置完整 — 请点击「🤖 AI」完成配置，本次回退使用本地 PaddleOCR');
+    }
+    fillEl.style.width = '30%';
+    statusEl.textContent = 'PaddleOCR 识别中...';
+  }
 
   // 组装请求体：携带当前墨色选择（预设色 + 手工取色 hues）
   const spec = stampState.inkSpec || activeInkSpec(target);
   try {
-    const resp = await fetch(OCR_SERVER + '/ocr', {
+    const resp = await fetch(OCR_SERVER + (useAI ? '/ai-ocr' : '/ocr'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3921,6 +4398,7 @@ async function runStampOCR(target) {
         hues: spec.hues || [],
         excludes: spec.excludes || [],
         exclude_colors: (spec.excludeColors || []).map(c => ({ hue: c.hue, sat: c.sat, val: c.val })),
+        config: useAI ? aiCfg : undefined,
       }),
       signal: controller.signal
     });
@@ -3933,6 +4411,40 @@ async function runStampOCR(target) {
 
     fillEl.style.width = '80%';
     statusEl.textContent = '解析结果...';
+
+    // AI 提取结果：{ai: {company, code, type, raw}, mode, model}
+    if (useAI) {
+      if (!data.success || !data.ai) {
+        const reason = data.error || 'AI 提取失败';
+        $(`#ocr-${target}-company`).textContent = 'AI 提取失败';
+        $(`#ocr-${target}-code`).textContent = '—';
+        $(`#ocr-${target}-type`).textContent = '—';
+        fillEl.style.width = '100%';
+        statusEl.textContent = reason;
+        statusEl.title = reason;
+        cancelBtn.classList.remove('visible');
+        state._ocrControllers[target] = null;
+        showStatus('AI 提取失败: ' + reason);
+        return null;
+      }
+      const ai = data.ai;
+      const company = (ai.company || '').trim();
+      const code = (ai.code || '').trim();
+      const type = (ai.type || '').trim();
+      $(`#ocr-${target}-company`).textContent = company || '未识别';
+      $(`#ocr-${target}-company`).title = ai.raw || '';
+      $(`#ocr-${target}-code`).textContent = code || '未检测到';
+      $(`#ocr-${target}-type`).textContent = type || '未检测到';
+
+      state[target].ocrResult = { company, code, type };
+
+      fillEl.style.width = '100%';
+      const modeLabel = data.mode === 'vision' ? 'AI 视觉' : 'AI 解析';
+      statusEl.textContent = `完成 · ${modeLabel}（${data.model || aiCfg.model}）`;
+      cancelBtn.classList.remove('visible');
+      state._ocrControllers[target] = null;
+      return { company, code, type };
+    }
 
     if (!data.success || !data.stamps || data.stamps.length === 0) {
       const reason = data.error || (data.stamps && data.stamps.length === 0 ? '未检测到印章文字' : '识别失败');
@@ -4124,8 +4636,15 @@ statusBar.classList.add('visible');
         if (d.status === 'ok' && d.ocr !== false) {
           setOcrAvailable();
         } else if (d.status === 'ok' && d.ocr === false) {
-          // 服务在线但 OCR 模型未加载（依赖未安装），无需重试
-          setOcrUnavailable('OCR 模型未加载 — 运行 pip install paddlepaddle paddleocr opencv-python 并重启服务');
+          // 服务在线但 PaddleOCR 未加载：识别方式为 AI 且配置视觉模式时仍可用
+          var ai = window._aiConfig;
+          var aiVisionReady = !!(ai && ai.api_key && ai.mode === 'vision' && state.recMode === 'ai');
+          if (aiVisionReady) {
+            setOcrAvailable();
+            txt.textContent = 'PaddleOCR 未加载 — AI 视觉提取可用（识别: AI）';
+          } else {
+            setOcrUnavailable('PaddleOCR 未加载 — 可在工具栏「识别」切到 AI（视觉模式无需 PaddleOCR）');
+          }
         } else {
           if (checkCount < maxChecks) {
             setTimeout(checkServer, 1500);
