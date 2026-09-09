@@ -1226,7 +1226,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.0</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.2</span></p>
   </header>
 
   <div class="paste-row">
@@ -1508,11 +1508,11 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.9.2';
 
 const state = {
-  ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
-  test: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 },
+  ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
+  test: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
   target: 'test',          // 当前操作目标: 'ref' | 'test'
   scaleAxis: 'uniform',   // 缩放轴: 'uniform' | 'x' | 'y'
   // 每枚印章独立的墨色设置（预设多选 + 手工取色），参考章与待验章互不影响
@@ -2089,6 +2089,7 @@ function processStamp(img, target) {
     candidates: detection.regions,
     candidateIndex: 0,
     inkSpec,
+    corners: null,
     _sig: (state[target]._sig || 0) + 1,
     ocrResult: null,
   };
@@ -2206,7 +2207,7 @@ function switchCandidate(target, i) {
   if (!st.original || !st.candidates || !st.candidates[i] || i === st.candidateIndex) return;
   st.candidateIndex = i;
   // 候选切换后重置该印章的变换参数
-  st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0;
+  st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0; st.corners = null;
 
   const extracted = extractStamp(st.original, st.candidates[i], st.inkSpec || activeInkSpec(target));
   st.extracted = extracted.canvas;
@@ -2427,7 +2428,7 @@ function applyInkSelection(target, reasonMsg) {
     st.inkSpec = spec;
     st._sig = (st._sig || 0) + 1;
     st.ocrResult = null;
-    st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0;
+    st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0; st.corners = null;
     drawExtractedPreview(target, extracted.canvas);
     renderCandidates(target);
     if (window._ocrAvailable) runStampOCR(target);
@@ -2626,7 +2627,7 @@ function removeStamp(target) {
   cancelStampOCR(target);
 
   state[target] = { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
-                    candidates: null, candidateIndex: 0, inkSpec: null, _sig: (state[target]._sig || 0) + 1, ocrResult: null };
+                    candidates: null, candidateIndex: 0, inkSpec: null, corners: null, _sig: (state[target]._sig || 0) + 1, ocrResult: null };
   const zone = target === 'ref' ? zoneRef : zoneTest;
   zone.classList.remove('has-image');
   const ph = zone.querySelector('.placeholder');
@@ -2712,19 +2713,34 @@ function getHandleGeom() {
   // 印章屏幕中心 = (cx, cy) + R(rot) * (offsetX, offsetY)
   const centerX = cx + t.offsetX * cosR - t.offsetY * sinR;
   const centerY = cy + t.offsetX * sinR + t.offsetY * cosR;
-  const handles = raw.map(r => ({
-    id: r.id,
-    x: centerX + r.lx * cosR - r.ly * sinR,
-    y: centerY + r.lx * sinR + r.ly * cosR,
-  }));
+  const corners = t.corners;
+  const handles = raw.map(r => {
+    let x = centerX + r.lx * cosR - r.ly * sinR;
+    let y = centerY + r.lx * sinR + r.ly * cosR;
+    // 角点变形偏移（局部坐标 → 屏幕方向旋转）
+    const c = corners && corners[r.id];
+    if (c && (c[0] || c[1])) {
+      x += c[0] * cosR - c[1] * sinR;
+      y += c[0] * sinR + c[1] * cosR;
+    }
+    return { id: r.id, x, y };
+  });
 
   return { centerX, centerY, halfW, halfH, rad, handles };
 }
 
 function getHandleAtPoint(canvasX, canvasY) {
   const geom = getHandleGeom();
-  const t = state[state.target];
   const hs = 10; // hit area half-size (generous for easy clicking)
+
+  // 角手柄优先：按屏幕距离判定（支持变形后的角位置）
+  for (const hpt of geom.handles) {
+    if (hpt.id.length === 2) {
+      if (Math.hypot(canvasX - hpt.x, canvasY - hpt.y) <= hs + 2) return hpt.id;
+    }
+  }
+
+  const t = state[state.target];
   // Transform mouse into stamp's local (unrotated) coordinate space
   const dx = canvasX - geom.centerX;
   const dy = canvasY - geom.centerY;
@@ -2733,10 +2749,6 @@ function getHandleAtPoint(canvasX, canvasY) {
   const localMY = dx * sinR + dy * cosR;
 
   const rawCorners = [
-    { id: 'nw', lx: -geom.halfW, ly: -geom.halfH },
-    { id: 'ne', lx:  geom.halfW, ly: -geom.halfH },
-    { id: 'sw', lx: -geom.halfW, ly:  geom.halfH },
-    { id: 'se', lx:  geom.halfW, ly:  geom.halfH },
     { id: 'n',  lx: 0,           ly: -geom.halfH },
     { id: 's',  lx: 0,           ly:  geom.halfH },
     { id: 'w',  lx: -geom.halfW, ly: 0           },
@@ -2847,7 +2859,23 @@ function render() {
   cmpCtx.strokeStyle = 'rgba(52,152,219,0.6)';
   cmpCtx.lineWidth = 1;
   cmpCtx.setLineDash([4, 3]);
-  cmpCtx.strokeRect(-bhw, -bhh, bhw * 2, bhh * 2);
+  const selC2 = selT.corners;
+  if (selC2 && ['nw','ne','sw','se'].some(k => (selC2[k][0] || selC2[k][1]))) {
+    // 角点变形后：虚线框画为实际四边形
+    const q = [
+      [-bhw + selC2.nw[0], -bhh + selC2.nw[1]],
+      [ bhw + selC2.ne[0], -bhh + selC2.ne[1]],
+      [ bhw + selC2.se[0],  bhh + selC2.se[1]],
+      [-bhw + selC2.sw[0],  bhh + selC2.sw[1]],
+    ];
+    cmpCtx.beginPath();
+    cmpCtx.moveTo(q[0][0], q[0][1]);
+    for (let i = 1; i < 4; i++) cmpCtx.lineTo(q[i][0], q[i][1]);
+    cmpCtx.closePath();
+    cmpCtx.stroke();
+  } else {
+    cmpCtx.strokeRect(-bhw, -bhh, bhw * 2, bhh * 2);
+  }
   cmpCtx.setLineDash([]);
   cmpCtx.restore();
 
@@ -2861,23 +2889,91 @@ function render() {
   }
 }
 
-function drawStamp(ctx, canvas, cx, cy, size, scaleX, scaleY, rotate, alpha, tint, ox, oy) {
+/* ============================================================
+   四边形透视绘制 — 拖角变形时把矩形印章映射到任意四边形
+   （垂直条带仿射近似，48 条带视觉平滑）
+   quad: [{x,y}×4] 目标四角，顺序 nw, ne, se, sw（屏幕坐标）
+   ============================================================ */
+function drawImageQuad(ctx, img, quad) {
+  const N = 48;
+  const iw = img.width, ih = img.height;
+  for (let i = 0; i < N; i++) {
+    const x0 = i / N, x1 = (i + 1) / N;
+    // 上边 nw→ne 与下边 sw→se 的插值端点
+    const ax = quad[0].x + (quad[1].x - quad[0].x) * x0, ay = quad[0].y + (quad[1].y - quad[0].y) * x0;
+    const bx = quad[0].x + (quad[1].x - quad[0].x) * x1, by = quad[0].y + (quad[1].y - quad[0].y) * x1;
+    const cx = quad[3].x + (quad[2].x - quad[3].x) * x0, cy = quad[3].y + (quad[2].y - quad[3].y) * x0;
+    // 条带源区域宽度（源图单位）
+    const sw = (x1 - x0) * iw;
+    // 仿射：源条带 (0,0)-(sw,0)-(sw,ih)-(0,ih) → (ax,ay)-(bx,by)-(?,?)-(cx,cy)
+    ctx.save();
+    ctx.transform((bx - ax) / sw, (by - ay) / sw, (cx - ax) / ih, (cy - ay) / ih, ax, ay);
+    ctx.drawImage(img, x0 * iw, 0, sw, ih, 0, 0, sw, ih);
+    ctx.restore();
+  }
+}
+
+// tint 染色缓存（source-atop 只染不透明像素；拖角变形时不能再用 fillRect 路径）
+function getTintedCanvas(canvas, tint) {
+  let cache = canvas._tintCache;
+  if (cache && cache.tint === tint) return cache.result;
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const tctx = tmp.getContext('2d');
+  tctx.drawImage(canvas, 0, 0);
+  tctx.globalCompositeOperation = 'source-atop';
+  tctx.fillStyle = tint;
+  tctx.fillRect(0, 0, tmp.width, tmp.height);
+  canvas._tintCache = { tint, result: tmp };
+  return tmp;
+}
+
+// 计算印章在画布上的基础四角（仅仿射：中心+旋转+偏移+缩放）与变形四角（含角点偏移）
+// quadHalfW/H 为旋转前局部半宽高；返回 { base: [4点], warped: [4点] }，顺序 nw,ne,se,sw
+function stampQuadPoints(centerX, centerY, halfW, halfH, rad, corners) {
+  const cosR = Math.cos(rad), sinR = Math.sin(rad);
+  const local = [
+    [-halfW, -halfH], [halfW, -halfH], [halfW, halfH], [-halfW, halfH], // nw, ne, se, sw
+  ];
+  const ids = ['nw', 'ne', 'se', 'sw'];
+  const base = [], warped = [];
+  for (let i = 0; i < 4; i++) {
+    const lx = local[i][0], ly = local[i][1];
+    const bx = centerX + lx * cosR - ly * sinR;
+    const by = centerY + lx * sinR + ly * cosR;
+    base.push({ x: bx, y: by });
+    const c = corners && corners[ids[i]];
+    warped.push(c ? { x: bx + c[0], y: by + c[1] } : { x: bx, y: by });
+  }
+  return { base, warped };
+}
+
+function drawStamp(ctx, canvas, cx, cy, size, scaleX, scaleY, rotate, alpha, tint, ox, oy, corners) {
   ctx.save();
   ctx.globalAlpha = alpha;
   // 变换顺序：平移到画布中心 → 旋转（围绕画布中心）→ 偏移 → 缩放
   ctx.translate(cx, cy);
   if (rotate) ctx.rotate(rotate * Math.PI / 180);
   ctx.translate(ox || 0, oy || 0);
-  ctx.scale(scaleX, scaleY);
 
   const s = size;
-  ctx.drawImage(canvas, -s / 2, -s / 2, s, s);
+  const hasCorners = corners && ['nw','ne','sw','se'].some(k => (corners[k][0] || corners[k][1]));
 
-  if (tint) {
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = tint;
-    ctx.fillRect(-s / 2, -s / 2, s, s);
-    ctx.globalCompositeOperation = 'source-over';
+  if (hasCorners) {
+    // 拖角变形：在(旋转+偏移)后的坐标系中构建基础四角与目标四角，条带透视绘制
+    const halfW = s * scaleX / 2, halfH = s * scaleY / 2;
+    const { warped } = stampQuadPoints(0, 0, halfW, halfH, 0, corners);
+    const img = tint ? getTintedCanvas(canvas, tint) : canvas;
+    drawImageQuad(ctx, img, warped);
+  } else {
+    ctx.scale(scaleX, scaleY);
+    ctx.drawImage(canvas, -s / 2, -s / 2, s, s);
+    if (tint) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = tint;
+      ctx.fillRect(-s / 2, -s / 2, s, s);
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
   ctx.restore();
 }
@@ -2891,12 +2987,12 @@ function renderOverlay(cx, cy, stampSize, scale) {
   if (refT.extracted) {
     drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
       scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1,
-      both ? 'rgba(30,80,200,0.15)' : null, refT.offsetX, refT.offsetY);
+      both ? 'rgba(30,80,200,0.15)' : null, refT.offsetX, refT.offsetY, refT.corners);
   }
   if (testT.extracted) {
     drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
       scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, both ? state.opacity / 100 : 1,
-      both ? 'rgba(220,40,40,0.15)' : null, testT.offsetX, testT.offsetY);
+      both ? 'rgba(220,40,40,0.15)' : null, testT.offsetX, testT.offsetY, testT.corners);
   }
 
   // 高亮当前选中印章的轮廓
@@ -2911,7 +3007,23 @@ function renderOverlay(cx, cy, stampSize, scale) {
     cmpCtx.strokeStyle = state.target === 'ref' ? 'rgba(44,62,80,0.6)' : 'rgba(192,57,43,0.6)';
     cmpCtx.lineWidth = 1.5;
     cmpCtx.setLineDash([6, 4]);
-    cmpCtx.strokeRect(-selW / 2, -selH / 2, selW / 2 - (-selW / 2), selH / 2 - (-selH / 2));
+    const selC = sel.corners;
+    if (selC && ['nw','ne','sw','se'].some(k => (selC[k][0] || selC[k][1]))) {
+      // 角点变形后：轮廓画为实际四边形
+      const pts = [
+        [-selW / 2 + selC.nw[0], -selH / 2 + selC.nw[1]],
+        [ selW / 2 + selC.ne[0], -selH / 2 + selC.ne[1]],
+        [ selW / 2 + selC.se[0],  selH / 2 + selC.se[1]],
+        [-selW / 2 + selC.sw[0],  selH / 2 + selC.sw[1]],
+      ];
+      cmpCtx.beginPath();
+      cmpCtx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < 4; i++) cmpCtx.lineTo(pts[i][0], pts[i][1]);
+      cmpCtx.closePath();
+      cmpCtx.stroke();
+    } else {
+      cmpCtx.strokeRect(-selW / 2, -selH / 2, selW / 2 - (-selW / 2), selH / 2 - (-selH / 2));
+    }
     cmpCtx.setLineDash([]);
     cmpCtx.restore();
   }
@@ -2940,7 +3052,7 @@ function renderSlider(cx, cy, stampSize, scale, w, h) {
     cmpCtx.rect(0, 0, sliderX, h);
     cmpCtx.clip();
     drawStamp(cmpCtx, refT.extracted, cx, cy, stampSize,
-      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
+      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY, refT.corners);
     cmpCtx.restore();
   }
 
@@ -2950,7 +3062,7 @@ function renderSlider(cx, cy, stampSize, scale, w, h) {
     cmpCtx.rect(sliderX, 0, w - sliderX, h);
     cmpCtx.clip();
     drawStamp(cmpCtx, testT.extracted, cx, cy, stampSize,
-      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY, testT.corners);
     cmpCtx.restore();
   }
 
@@ -2977,11 +3089,11 @@ function renderSideBySide(cx, cy, stampSize, scale, w, h) {
 
   if (refT.extracted) {
     drawStamp(cmpCtx, refT.extracted, leftCx, cy, eachSize,
-      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY);
+      scale * (refT.scaleX / 100), scale * (refT.scaleY / 100), refT.rotate, 1, null, refT.offsetX, refT.offsetY, refT.corners);
   }
   if (testT.extracted) {
     drawStamp(cmpCtx, testT.extracted, rightCx, cy, eachSize,
-      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY);
+      scale * (testT.scaleX / 100), scale * (testT.scaleY / 100), testT.rotate, 1, null, testT.offsetX, testT.offsetY, testT.corners);
   }
 
   cmpCtx.strokeStyle = '#ddd';
@@ -3025,12 +3137,24 @@ function renderStampToSize(stampState, s, baseSize) {
   tmp.width = s; tmp.height = s;
   const tctx = tmp.getContext('2d');
   const unit = baseSize ? s / baseSize : 1;
-  // 变换顺序：平移到中心 → 旋转（围绕中心）→ 偏移 → 缩放
+  // 变换顺序：平移到中心 → 旋转（围绕中心）→ 偏移 → 缩放（角点变形时以四边形透视替代缩放）
   tctx.translate(s / 2, s / 2);
   if (stampState.rotate) tctx.rotate(stampState.rotate * Math.PI / 180);
   tctx.translate((stampState.offsetX || 0) * unit, (stampState.offsetY || 0) * unit);
-  tctx.scale(stampState.scaleX / 100, stampState.scaleY / 100);
-  tctx.drawImage(stampState.extracted, -s / 2, -s / 2, s, s);
+
+  const corners = stampState.corners;
+  const hasCorners = corners && ['nw','ne','sw','se'].some(k => (corners[k][0] || corners[k][1]));
+  if (hasCorners) {
+    const scaled = {};
+    for (const k of ['nw','ne','sw','se']) scaled[k] = [corners[k][0] * unit, corners[k][1] * unit];
+    const halfW = s * (stampState.scaleX / 100) / 2;
+    const halfH = s * (stampState.scaleY / 100) / 2;
+    const { warped } = stampQuadPoints(0, 0, halfW, halfH, 0, scaled);
+    drawImageQuad(tctx, stampState.extracted, warped);
+  } else {
+    tctx.scale(stampState.scaleX / 100, stampState.scaleY / 100);
+    tctx.drawImage(stampState.extracted, -s / 2, -s / 2, s, s);
+  }
   return tmp;
 }
 
@@ -3043,9 +3167,10 @@ function computeStampDiff() {
   if (s < 10 || !state.ref.extracted || !state.test.extracted) return null;
 
   const r = state.ref, t = state.test;
+  const cornerKey = (c) => c ? ['nw','ne','sw','se'].map(k => c[k][0].toFixed(1) + ',' + c[k][1].toFixed(1)).join(';') : '0';
   const key = [
-    s, r._sig || 0, r.rotate, r.scaleX, r.scaleY, r.offsetX, r.offsetY,
-    t._sig || 0, t.rotate, t.scaleX, t.scaleY, t.offsetX, t.offsetY,
+    s, r._sig || 0, r.rotate, r.scaleX, r.scaleY, r.offsetX, r.offsetY, cornerKey(r.corners),
+    t._sig || 0, t.rotate, t.scaleX, t.scaleY, t.offsetX, t.offsetY, cornerKey(t.corners),
   ].join('|');
   if (_diffCache.key === key) return _diffCache;
 
@@ -3271,6 +3396,7 @@ function autoAlignStamps() {
   // --- 应用到待验章（offset 从 S 空间换算回 stampSize 空间）---
   const unit = stampSize / S;
   const t = state.test;
+  t.corners = null; // 自动对齐假设仿射变换，清除角点变形
   t.rotate = Math.round(best.th * 10) / 10;
   t.scaleX = Math.round(best.k * 1000) / 10;
   t.scaleY = t.scaleX;
@@ -3504,7 +3630,7 @@ $('#btn-magnifier').addEventListener('click', () => {
 
 $('#btn-reset').addEventListener('click', () => {
   const t = state[state.target];
-  t.rotate = 0; t.scaleX = 100; t.scaleY = 100; t.offsetX = 0; t.offsetY = 0;
+  t.rotate = 0; t.scaleX = 100; t.scaleY = 100; t.offsetX = 0; t.offsetY = 0; t.corners = null;
   syncSlidersToTarget();
   render();
   showStatus(`已重置${state.target === 'ref' ? '参考章' : '待验章'}的调整`);
@@ -3638,8 +3764,12 @@ function clientToCanvas(e, cachedRect) {
 // Canvas mousedown — resize handle or move stamp
 cmpCanvas.addEventListener('mousedown', (e) => {
   if (state.mode === 'slider' && state.draggingSlider) return;
-  if (state.magnifierActive) return;
   if (!state.ref.extracted && !state.test.extracted) return;
+  if (state.magnifierActive) {
+    // Shift 按住（放大镜模式）时命中手柄则优先拖拽（Shift+拖角等比），否则保持放大镜行为
+    const probe = clientToCanvas(e);
+    if (!getHandleAtPoint(probe.x, probe.y)) return;
+  }
 
   const pos = clientToCanvas(e);
   const handle = getHandleAtPoint(pos.x, pos.y);
@@ -3653,6 +3783,16 @@ cmpCanvas.addEventListener('mousedown', (e) => {
     state.resizeStartScaleX = t.scaleX;
     state.resizeStartScaleY = t.scaleY;
     const geom = getHandleGeom();
+    // 角柄拖角变形：缓存被拖角的"基础局部坐标"（不含角点偏移；偏移 = 鼠标局部坐标 - 该值）
+    // Shift+拖角 = 等比缩放（走原锚点逻辑），模式在 mousedown 时确定
+    if (handle.length === 2 && !e.shiftKey) {
+      state.resizeBaseLocal = {
+        x: handle.includes('w') ? -geom.halfW : geom.halfW,
+        y: handle.includes('n') ? -geom.halfH : geom.halfH,
+      };
+    } else {
+      state.resizeBaseLocal = null;
+    }
     // Anchor = handle on opposite side (find by checking which handle is opposite)
     const opposites = { e: 'w', w: 'e', n: 's', s: 'n', ne: 'sw', sw: 'ne', nw: 'se', se: 'nw' };
     const oppId = opposites[handle];
@@ -3715,6 +3855,28 @@ document.addEventListener('mousemove', (e) => {
     // Stamp's rotation angle and local axis unit vectors
     const rad = (t.rotate || 0) * Math.PI / 180;
     const cosR = Math.cos(rad), sinR = Math.sin(rad);
+
+    // ---- 角点变形模式：其余 3 角保持固定（基础仿射不动），仅更新被拖角偏移 ----
+    if (state.resizeBaseLocal) {
+      if (!t.corners) t.corners = { nw: [0, 0], ne: [0, 0], sw: [0, 0], se: [0, 0] };
+      // 鼠标画布坐标 → 印章局部坐标（反旋转，相对画布中心）
+      const dx = pos.x - w / 2;
+      const dy = pos.y - cH / 2;
+      const lx = dx * cosR + dy * sinR;
+      const ly = -dx * sinR + dy * cosR;
+      // 局部坐标中需先扣除 offset（角位置 = offset + ±half; mousedown 时的基础角已含当时 offset，
+      // 拖拽中 offset 不变，二者直接相减即可）
+      let nx = lx - state.resizeBaseLocal.x - (t.offsetX || 0);
+      let ny = ly - state.resizeBaseLocal.y - (t.offsetY || 0);
+      // 偏移上限：防止拉出离谱形状
+      const lim = stampSz;
+      nx = Math.max(-lim, Math.min(lim, nx));
+      ny = Math.max(-lim, Math.min(lim, ny));
+      t.corners[h] = [nx, ny];
+      state._pendingSliderSync = true;
+      scheduleRender();
+      return;
+    }
 
     // Mouse position relative to ANCHOR (not center!) — this is the key fix
     const amx = pos.x - state.resizeAnchorX;
@@ -3830,9 +3992,17 @@ document.addEventListener('mouseup', () => {
     t.scaleY = Math.round(t.scaleY * 10) / 10;
     t.offsetX = Math.round(t.offsetX);
     t.offsetY = Math.round(t.offsetY);
+    // 角点偏移取整到 0.5px 精度
+    if (t.corners) {
+      for (const k of ['nw', 'ne', 'sw', 'se']) {
+        t.corners[k][0] = Math.round(t.corners[k][0] * 2) / 2;
+        t.corners[k][1] = Math.round(t.corners[k][1] * 2) / 2;
+      }
+    }
     state.resizing = false;
     state.resizeHandle = null;
     state.resizeRect = null;
+    state.resizeBaseLocal = null;
     cmpCanvas.style.cursor = 'crosshair';
   }
   // 交互结束：清除标记，立即重绘以恢复差异高亮等完整渲染
