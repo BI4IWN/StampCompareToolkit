@@ -1226,7 +1226,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.3</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.4</span></p>
   </header>
 
   <div class="paste-row">
@@ -1508,7 +1508,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.9.3';
+const APP_VERSION = '2.9.4';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2073,26 +2073,32 @@ function processStamp(img, target) {
   preview.src = img.src;
   showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 — 正在提取印章...`);
 
-  // === 阶段 2：提取印章（同步，快速）===
-  const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-  const inkSpec = activeInkSpec(target);
-  const detection = detectStampCandidates(imageData, inkSpec);
-  const region = detection.regions[0];
-  const extracted = extractStamp(canvas, region, inkSpec);
+  // === 阶段 2：自动提取（预设色管线为"基础"；手工颜色在其上增量叠加/剔除）===
+  // 新图重置墨色选择（自动提取默认红章，手工颜色清空）
+  state.ink[target] = { presets: ['red'], customs: [] };
+  renderInkPanel(target);
 
   state[target] = {
     ...state[target],
     original: canvas,
-    extracted: extracted.canvas,
-    circular: extracted.circular,
-    bbox: extracted.bbox,
-    candidates: detection.regions,
+    extracted: null,
+    baseExtracted: null,
+    _baseKey: null,
+    _baseOriginal: null,
+    _origData: null,
+    circular: false,
+    bbox: null,
+    candidates: [],
     candidateIndex: 0,
-    inkSpec,
+    inkSpec: null,
     corners: null,
     _sig: (state[target]._sig || 0) + 1,
     ocrResult: null,
   };
+  recomputeExtracted(target);
+  const extractedCanvas = state[target].extracted;
+  const extractedCircular = state[target].circular;
+  const detection = state[target].candidates;
 
   // 只加载了一枚时，操作目标自动指向已加载的印章（画布/手柄立即可用）
   const other = target === 'ref' ? 'test' : 'ref';
@@ -2103,14 +2109,14 @@ function processStamp(img, target) {
   }
 
   // 绘制提取结果到小画布
-  drawExtractedPreview(target, extracted.canvas);
+  drawExtractedPreview(target, extractedCanvas);
 
   renderCandidates(target);
   renderInkPanel(target);
   updateVisibility();
   render();
-  const extra = detection.regions.length > 1 ? `，检出 ${detection.regions.length} 个印章可选` : '';
-  showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extracted.circular ? '圆形章' : '异形章'}) — 已自动提取${extra}${state[other].extracted ? '' : '，加载另一枚印章后可开始对比'}`);
+  const extra = detection.length > 1 ? `，检出 ${detection.length} 个印章可选` : '';
+  showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extractedCircular ? '圆形章' : '异形章'}) — 已自动提取${extra}${state[other].extracted ? '' : '，加载另一枚印章后可开始对比'}`);
 
   // 自动触发文字识别：本地模式需 PaddleOCR 就绪；AI 模式（视觉）配置就绪即自动调 AI
   if (autoRecognitionReady()) {
@@ -2213,19 +2219,17 @@ function switchCandidate(target, i) {
   // 候选切换后重置该印章的变换参数
   st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0; st.corners = null;
 
-  const extracted = extractStamp(st.original, st.candidates[i], st.inkSpec || activeInkSpec(target));
-  st.extracted = extracted.canvas;
-  st.circular = extracted.circular;
-  st.bbox = extracted.bbox;
+  st._baseKey = null; // 强制按新候选重新提取基础
+  recomputeExtracted(target);
   st._sig = (st._sig || 0) + 1;
   st.ocrResult = null;
 
-  drawExtractedPreview(target, extracted.canvas);
+  drawExtractedPreview(target, st.extracted);
   renderCandidates(target);
   syncSlidersToTarget();
   updateVisibility();
   render();
-  showStatus(`已切换到${target === 'ref' ? '参考章' : '待验章'}候选 ${i + 1} (${extracted.circular ? '圆形章' : '异形章'})`);
+  showStatus(`已切换到${target === 'ref' ? '参考章' : '待验章'}候选 ${i + 1} (${st.circular ? '圆形章' : '异形章'})`);
 
   // 候选变化后重新识别文字
   if (window._ocrAvailable) runStampOCR(target);
@@ -2359,55 +2363,157 @@ function renderCustomInkChips(target) {
   renderGroup(excContainer, customs.filter(c => c.exclude));
 }
 
-// 手工添加墨色（来自取色器）：exclude=true 表示加入排除列表
+// 手工添加墨色（来自取色器）：直接记录颜色，在自动提取结果上叠加（提取）或剔除（排除）
 function addCustomInk(target, r, g, b, exclude) {
   const { h, s, v } = rgbToHsv(r, g, b);
-  if (exclude) {
-    // 排除色允许黑色/深色；仅拒绝"接近白色的背景纸"（低饱和 + 高亮度）
-    if (s < 0.12 && v > 0.85) {
-      showStatus('取色失败：该处接近白色（背景纸），请点选需要排除的颜色');
-      return false;
-    }
-  } else {
-    // 提取色：拒绝过浅或过暗的像素（非墨迹）
-    if (s < 0.12 || v < 0.08) {
-      showStatus(`取色失败：该处颜色饱和度或亮度太低（S=${(s * 100).toFixed(0)}%），请点选印章墨迹处`);
-      return false;
-    }
-  }
   const ink = state.ink[target];
   // 颜色数量上限：超过 MAX_INK_COLORS 给与提示
   if (ink.customs.length >= MAX_INK_COLORS) {
     showStatus(`已达颜色上限：最多支持 ${MAX_INK_COLORS} 种颜色，请先剔除不需要的颜色`);
     return false;
   }
-  // 相近颜色（色相、饱和度、亮度均接近）视为同一颜色；重复选取以「最后操作」为准（提取↔排除切换）
-  const dup = ink.customs.find(c =>
-    hueCircleDist(c.hue, h) <= 3
-    && Math.abs((c.sat != null ? c.sat : 1) - s) < 0.25
-    && Math.abs((c.val != null ? c.val : 1) - v) < 0.25);
-  if (dup) {
-    const modeChanged = dup.exclude !== !!exclude;
-    dup.exclude = !!exclude;
-    dup.on = true;
-    renderCustomInkChips(target);
-    applyInkSelection(target, modeChanged
-      ? `${stampLabel(target)}颜色 ${dup.hex} 已改为「${exclude ? '排除' : '提取'}」（以最后操作为准）`
-      : `已重新启用相近的${exclude ? '排除' : '提取'}色 ${dup.hex}`);
-    return true;
-  }
-  // 首次使用手工取色时，自动取消默认预设色（如默认红章），仅按手工选择的颜色提取
-  if (!ink.customs.length) {
-    ink.presets = [];
-  }
   const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
   ink.customs.push({ hue: h, sat: s, val: v, hex, on: true, exclude: !!exclude });
   renderInkPanel(target);
-  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（色相 ${Math.round(h)}°），可继续点选下一种`);
+  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（色相 ${Math.round(h)}°）`);
   return true;
 }
 
-// 按当前墨色选择重新提取指定印章（参考章 / 待验章各自独立）
+// ============================================================
+// 增量提取模型：自动提取（预设色管线）为"基础"，手工提取/排除色
+// 直接在基础结果上叠加/剔除像素，不再做整体颜色筛选计算
+// ============================================================
+
+// 基础自动提取：仅按预设色（红/蓝/紫）提取；键 = 预设组合 + 候选序号 + 原图，
+// 变化时才重跑完整提取管线
+function ensureBaseExtraction(target) {
+  const st = state[target];
+  if (!st.original) return null;
+  const ink = state.ink[target];
+  const presetsKey = ink.presets.join(',');
+  if (st.baseExtracted && st._baseKey === (presetsKey + '|' + st.candidateIndex) && st._baseOriginal === st.original) {
+    return st.baseExtracted;
+  }
+  if (!presetsKey) {
+    // 预设全清（仅手工色）：保持现有基础不动，手工色在其上叠加/剔除
+    if (st.baseExtracted) {
+      st._baseKey = '|' + st.candidateIndex;
+      st._baseOriginal = st.original;
+      return st.baseExtracted;
+    }
+    return null;
+  }
+  const spec = { presets: ink.presets, hues: [], excludes: [], excludeColors: [] };
+  const imageData = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
+  const detection = detectStampCandidates(imageData, spec);
+  const idx = Math.min(st.candidateIndex || 0, detection.regions.length - 1);
+  const extracted = extractStamp(st.original, detection.regions[idx], spec);
+  st.baseExtracted = extracted.canvas;
+  st.circular = extracted.circular;
+  st.bbox = extracted.bbox;
+  st.candidates = detection.regions;
+  st.candidateIndex = idx;
+  st._baseKey = presetsKey + '|' + st.candidateIndex;
+  st._baseOriginal = st.original;
+  return st.baseExtracted;
+}
+
+// 原图全量像素缓存（叠加提取色时读取原图颜色）
+function getOrigData(st) {
+  if (!st._origData || st._origData._w !== st.original.width || st._origData._h !== st.original.height) {
+    const d = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
+    d._w = st.original.width;
+    d._h = st.original.height;
+    st._origData = d;
+  }
+  return st._origData;
+}
+
+// 提取画布(1200) ↔ 原图坐标映射（与 extractStamp 的裁剪/缩放一致）
+function cropMapFor(st) {
+  const b = st.bbox;
+  const OUT = 1200;
+  const ratio = OUT / b.fitSize;
+  return {
+    ratio,
+    dx: (OUT - b.w * ratio) / 2,
+    dy: (OUT - b.h * ratio) / 2,
+    sx: b.x,
+    sy: b.y,
+  };
+}
+
+// 在基础自动提取上增量应用手工颜色：
+//   提取色 → 原图中匹配色相的像素叠加进来（已有墨迹处不动）
+//   排除色 → 当前结果中匹配的像素 alpha 置 0
+// 返回 { added, removed } 像素计数
+function recomputeExtracted(target) {
+  const st = state[target];
+  const base = ensureBaseExtraction(target);
+  if (!base) return { added: 0, removed: 0 };
+  const OUT = base.width;
+  const cur = document.createElement('canvas');
+  cur.width = OUT; cur.height = OUT;
+  const curCtx = cur.getContext('2d');
+  curCtx.drawImage(base, 0, 0);
+  const img = curCtx.getImageData(0, 0, OUT, OUT);
+  const ink = state.ink[target];
+  const customs = ink.customs.filter(c => c.on);
+
+  let added = 0, removed = 0;
+
+  if (customs.length) {
+    const map = cropMapFor(st);
+    const orig = getOrigData(st);
+    const ow = orig._w, oh = orig._h;
+    const EXTRACT_TOL = 18, EXCLUDE_TOL = 8;
+
+    // 1) 提取色：叠加原图匹配像素
+    for (const c of customs.filter(c => !c.exclude)) {
+      for (let y = 0; y < OUT; y++) {
+        const oy = Math.min(oh - 1, Math.max(0, Math.round(map.sy + (y - map.dy) / map.ratio)));
+        const rowO = oy * ow;
+        const rowI = y * OUT;
+        for (let x = 0; x < OUT; x++) {
+          const i = (rowI + x) * 4;
+          if (img.data[i + 3] >= 30) continue;
+          const ox = Math.min(ow - 1, Math.max(0, Math.round(map.sx + (x - map.dx) / map.ratio)));
+          const oi = (rowO + ox) * 4;
+          const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
+          const { h, s, v } = rgbToHsv(r, g, b);
+          if (v >= 0.08 && s >= 0.05 && hueCircleDist(h, c.hue) <= EXTRACT_TOL) {
+            img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+            img.data[i + 3] = 255;
+            added++;
+          }
+        }
+      }
+    }
+    // 2) 排除色：剔除当前结果中匹配的像素
+    for (const c of customs.filter(c => c.exclude)) {
+      for (let i = 0; i < img.data.length; i += 4) {
+        if (img.data[i + 3] < 30) continue;
+        const { h, s, v } = rgbToHsv(img.data[i], img.data[i + 1], img.data[i + 2]);
+        if (hueCircleDist(h, c.hue) <= EXCLUDE_TOL
+            && Math.abs((c.sat != null ? c.sat : 1) - s) < 0.3
+            && Math.abs((c.val != null ? c.val : 1) - v) < 0.3) {
+          img.data[i + 3] = 0;
+          removed++;
+        }
+      }
+    }
+  }
+
+  curCtx.putImageData(img, 0, 0);
+  st.extracted = cur;
+  st.inkSpec = activeInkSpec(target);
+  st._sig = (st._sig || 0) + 1;
+  st._lastDelta = { added, removed };
+  return st._lastDelta;
+}
+
+// 按当前墨色选择更新提取结果（参考章 / 待验章各自独立）
+// 预设变化 → 刷新基础自动提取；手工颜色 → 在基础上直接叠加/剔除
 const _inkTimers = {};
 function applyInkSelection(target, reasonMsg) {
   const st = state[target];
@@ -2415,32 +2521,18 @@ function applyInkSelection(target, reasonMsg) {
     showStatus(`${reasonMsg}（未加载图片，加载后自动生效）`);
     return;
   }
-  const spec = activeInkSpec(target);
-  st.inkSpec = spec;
-  showStatus(`${stampLabel(target)} ${reasonMsg} — 正在按「${inkSpecLabel(spec)}」重新提取...`);
-  // 防抖：连续取色/切换时合并为一次重提取，避免反复同步重提取导致卡顿"没反应"
+  st.inkSpec = activeInkSpec(target);
+  showStatus(`${stampLabel(target)} ${reasonMsg} — 正在更新提取结果...`);
+  // 防抖：连续取色/切换时合并为一次更新，避免反复计算卡顿
   clearTimeout(_inkTimers[target]);
   _inkTimers[target] = setTimeout(() => {
-    const imageData = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
-    const detection = detectStampCandidates(imageData, spec);
-    const extracted = extractStamp(st.original, detection.regions[0], spec);
-    st.extracted = extracted.canvas;
-    st.circular = extracted.circular;
-    st.bbox = extracted.bbox;
-    st.candidates = detection.regions;
-    st.candidateIndex = 0;
-    st.inkSpec = spec;
-    st._sig = (st._sig || 0) + 1;
-    st.ocrResult = null;
-    st.rotate = 0; st.scaleX = 100; st.scaleY = 100; st.offsetX = 0; st.offsetY = 0; st.corners = null;
-    drawExtractedPreview(target, extracted.canvas);
+    const delta = recomputeExtracted(target);
+    drawExtractedPreview(target, st.extracted);
     renderCandidates(target);
     if (window._ocrAvailable) runStampOCR(target);
-    syncSlidersToTarget();
-    updateVisibility();
     render();
-    showStatus(`${stampLabel(target)}已按「${inkSpecLabel(spec)}」重新提取`);
-  }, 350);
+    showStatus(`${stampLabel(target)}提取结果已更新（新增 ${delta.added} 像素 · 剔除 ${delta.removed} 像素）`);
+  }, 250);
 }
 
 // 绑定两枚印章各自的墨色面板
@@ -2688,8 +2780,10 @@ function removeStamp(target) {
   // 取消进行中的 OCR
   cancelStampOCR(target);
 
-  state[target] = { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
-                    candidates: null, candidateIndex: 0, inkSpec: null, corners: null, _sig: (state[target]._sig || 0) + 1, ocrResult: null };
+  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null,
+                    circular: false, bbox: null, candidates: null, candidateIndex: 0, inkSpec: null, corners: null,
+                    rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
+                    _sig: (state[target]._sig || 0) + 1, ocrResult: null };
   const zone = target === 'ref' ? zoneRef : zoneTest;
   zone.classList.remove('has-image');
   const ph = zone.querySelector('.placeholder');
