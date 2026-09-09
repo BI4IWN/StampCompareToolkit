@@ -1226,7 +1226,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.2</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.3</span></p>
   </header>
 
   <div class="paste-row">
@@ -1508,7 +1508,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.9.2';
+const APP_VERSION = '2.9.3';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2170,10 +2170,14 @@ const PREVIEW_ZOOM_LEVELS = [1, 2, 3, 4];
     if (state.pickingTarget === target) pickLoupe.style.display = 'none';
   });
   canvasEl.addEventListener('click', (e) => {
-    // 取色模式下：在提取结果上点选颜色（透明区域忽略）
+    // 取色模式下：在提取结果上点选颜色（邻域采样，透明区域给出提示）
     if (state.pickingTarget === target) {
       const rgb = sampleCanvasColor(canvasEl, e);
-      if (rgb) addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
+      if (rgb) {
+        addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
+      } else {
+        showStatus('此处附近未检测到墨迹（透明区域）— 请点选有颜色的笔画，或改在上方原图预览上取色');
+      }
       return;
     }
     if (!state[target].extracted) return;
@@ -2507,33 +2511,79 @@ document.addEventListener('keydown', (e) => {
 });
 
 // 光标在预览图上的自然坐标（供取色采样与放大镜共用）
+// 注意：预览图 object-fit:contain，元素框与图像内容区之间存在留白，需按实际内容区换算
+function previewContentRect(img) {
+  const rect = img.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return null;
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  if (!iw || !ih) return null;
+  const scale = Math.min(rect.width / iw, rect.height / ih);
+  const dw = iw * scale, dh = ih * scale;
+  return {
+    left: rect.left + (rect.width - dw) / 2,
+    top: rect.top + (rect.height - dh) / 2,
+    width: dw,
+    height: dh,
+  };
+}
+
 function previewCursorPos(zone, e) {
   const img = zone.querySelector('.preview-img');
   if (!img) return null;
-  const rect = img.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) return null;
-  const px = (e.clientX - rect.left) / rect.width * img.naturalWidth;
-  const py = (e.clientY - rect.top) / rect.height * img.naturalHeight;
+  const cr = previewContentRect(img);
+  if (!cr) return null;
+  const px = (e.clientX - cr.left) / cr.width * img.naturalWidth;
+  const py = (e.clientY - cr.top) / cr.height * img.naturalHeight;
   const nx = Math.floor(px), ny = Math.floor(py);
   if (nx < 0 || ny < 0 || nx >= img.naturalWidth || ny >= img.naturalHeight) return null;
   return { img, nx, ny };
 }
 
-// 采样原图预览上光标处的颜色（3×3 均值抗锯齿），供放大镜与点击取色共用
+// 采样原图预览上光标处的颜色，供放大镜与点击取色共用
+// 提取色：在 7×7 邻域内取"最像墨迹"的像素（饱和度最高，排除白底/黑字），
+//         避免点击笔画间隙或抗锯齿边缘取到过浅的颜色导致"像没反应"
+// 排除色：取点击处 3×3 平均，保证取到用户指向的精确颜色
 function samplePreviewColor(zone, e) {
   const pos = previewCursorPos(zone, e);
   if (!pos) return null;
   const { img, nx, ny } = pos;
-  // 采样源矩形夹紧到图片内，避免边缘越界取到黑色
-  const sx = Math.max(0, Math.min(img.naturalWidth - 3, nx - 1));
-  const sy = Math.max(0, Math.min(img.naturalHeight - 3, ny - 1));
-  _pickCanvas.width = 3; _pickCanvas.height = 3;
-  _pickCtx.drawImage(img, sx, sy, 3, 3, 0, 0, 3, 3);
-  const d = _pickCtx.getImageData(0, 0, 3, 3).data;
-  let r = 0, g = 0, b = 0;
-  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
-  r = Math.round(r / 9); g = Math.round(g / 9); b = Math.round(b / 9);
-  return [r, g, b];
+
+  if (state.pickExclude) {
+    const s3x = Math.max(0, Math.min(img.naturalWidth - 3, nx - 1));
+    const s3y = Math.max(0, Math.min(img.naturalHeight - 3, ny - 1));
+    _pickCanvas.width = 3; _pickCanvas.height = 3;
+    _pickCtx.drawImage(img, s3x, s3y, 3, 3, 0, 0, 3, 3);
+    const d3 = _pickCtx.getImageData(0, 0, 3, 3).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < d3.length; i += 4) { r += d3[i]; g += d3[i + 1]; b += d3[i + 2]; }
+    return [Math.round(r / 9), Math.round(g / 9), Math.round(b / 9)];
+  }
+
+  const R = 3; // 7×7 邻域
+  const sx = Math.max(0, nx - R), sy = Math.max(0, ny - R);
+  const ex = Math.min(img.naturalWidth - 1, nx + R), ey = Math.min(img.naturalHeight - 1, ny + R);
+  const w = ex - sx + 1, h = ey - sy + 1;
+  _pickCanvas.width = w; _pickCanvas.height = h;
+  _pickCtx.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+  const d = _pickCtx.getImageData(0, 0, w, h).data;
+  let best = null, bestScore = -1;
+  for (let i = 0; i < d.length; i += 4) {
+    const { s: ss, v: vv } = rgbToHsv(d[i], d[i + 1], d[i + 2]);
+    if (vv < 0.08 || vv > 0.97 || ss < 0.05) continue; // 跳过黑字与白底
+    if (ss > bestScore) { bestScore = ss; best = [d[i], d[i + 1], d[i + 2]]; }
+  }
+  if (!best) {
+    // 邻域内无有效颜色：退回 3×3 平均（保留旧行为兜底）
+    const s3x = Math.max(0, Math.min(img.naturalWidth - 3, nx - 1));
+    const s3y = Math.max(0, Math.min(img.naturalHeight - 3, ny - 1));
+    _pickCanvas.width = 3; _pickCanvas.height = 3;
+    _pickCtx.drawImage(img, s3x, s3y, 3, 3, 0, 0, 3, 3);
+    const d3 = _pickCtx.getImageData(0, 0, 3, 3).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < d3.length; i += 4) { r += d3[i]; g += d3[i + 1]; b += d3[i + 2]; }
+    return [Math.round(r / 9), Math.round(g / 9), Math.round(b / 9)];
+  }
+  return best;
 }
 
 // 取色放大镜：显示光标处 4× 放大的图像区域 + 十字准线
@@ -2558,16 +2608,25 @@ function renderPickZoom(zone, e) {
   pickZoomCtx.stroke();
 }
 
-// 在已提取印章画布上采样颜色（透明区域忽略）
+// 在已提取印章画布上采样颜色：取邻域内 alpha 最高的像素（透明区域忽略）
+// 邻域半径随缩放倍数放大（显示尺度恒定 ±3px），解决"点在笔画间隙就取不到色"的问题
 function sampleCanvasColor(canvas, e) {
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return null;
   const x = Math.floor((e.clientX - rect.left) / rect.width * canvas.width);
   const y = Math.floor((e.clientY - rect.top) / rect.height * canvas.height);
   if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return null;
-  const d = canvas.getContext('2d').getImageData(x, y, 1, 1).data;
-  if (d[3] < 30) return null;
-  return [d[0], d[1], d[2]];
+  const ctx = canvas.getContext('2d');
+  const R = Math.max(2, Math.round(canvas.width / 160 * 3)); // 160px 显示时 ±3 画布像素
+  const sx = Math.max(0, x - R), sy = Math.max(0, y - R);
+  const ex = Math.min(canvas.width - 1, x + R), ey = Math.min(canvas.height - 1, y + R);
+  const d = ctx.getImageData(sx, sy, ex - sx + 1, ey - sy + 1).data;
+  let best = null, bestA = 0;
+  for (let i = 3; i < d.length; i += 4) {
+    if (d[i] > bestA) { bestA = d[i]; best = [d[i - 3], d[i - 2], d[i - 1]]; }
+  }
+  if (bestA < 30) return null;
+  return best;
 }
 
 // 提取结果画布放大镜
@@ -2617,7 +2676,10 @@ function renderCanvasZoom(canvas, e) {
   zone.addEventListener('click', (e) => {
     if (state.pickingTarget !== target) return;
     const rgb = samplePreviewColor(zone, e);
-    if (!rgb) return;
+    if (!rgb) {
+      showStatus('未取到颜色：请点选图片内印章墨迹处（图片边缘留白区域无法取色）');
+      return;
+    }
     addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
   });
 });
