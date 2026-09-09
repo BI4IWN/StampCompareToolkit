@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-印章对比工具 — 统一启动文件 (BI4IWN · 李劲松) v2.8.0
+印章对比工具 — 统一启动文件 (BI4IWN · 李劲松) v2.10.0
 双击或命令行运行即可自动启动服务并打开浏览器。
 
 用法:
@@ -47,7 +47,7 @@ import threading
 import traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
-APP_VERSION = '2.8.0'
+APP_VERSION = '2.10.0'
 
 # ============================================================
 # 内嵌 HTML 前端 (stamp-compare.html)
@@ -524,6 +524,17 @@ AI_PARSE_PROMPT = (
     '"type": "印章类型（无则空字符串", "raw": "整理后的全部文字"}'
 )
 
+AI_STAMP_PROMPT = (
+    '这是一张图片，可能包含一枚或多枚印章（圆形公章、椭圆章、方章、财务章等）。'
+    '请找出图中最显著、最完整的一枚印章，返回其外接圆位置。'
+    '严格只输出一个 JSON 对象，不要输出任何解释或代码块标记：\n'
+    '{"found": true 或 false, '
+    '"cx": 圆心横坐标占图片宽度的比例(0-1), '
+    '"cy": 圆心纵坐标占图片高度的比例(0-1), '
+    '"r": 半径占图片短边一半的比例(0-1，例如印章刚好接触上下边缘则为1)}'
+    '若图中没有印章则 found=false，其余字段填 0。'
+)
+
 
 def validate_ai_config(cfg):
     """校验 AI 配置，返回 (规范化配置, 错误信息)。"""
@@ -697,6 +708,9 @@ class StampAppHandler(BaseHTTPRequestHandler):
         if self.path == '/ai-ocr':
             self._handle_ai_ocr()
             return
+        if self.path == '/ai/stamp':
+            self._handle_ai_stamp()
+            return
         if self.path != '/ocr':
             self.send_error(404, 'Not found')
             return
@@ -824,6 +838,54 @@ class StampAppHandler(BaseHTTPRequestHandler):
                 'mode': cfg['mode'],
                 'model': cfg['model'],
                 'paddle_texts': paddle_texts or [],
+            })
+        except Exception as e:
+            self._send_json({'success': False, 'error': str(e)}, 200)
+
+    def _handle_ai_stamp(self):
+        """AI 印章定位：视觉模型返回印章外接圆位置，前端据此几何裁剪提取。"""
+        data = self._read_json_body()
+        if data is None:
+            return
+        cfg, err = validate_ai_config(data.get('config') or {})
+        if err:
+            self._send_json({'success': False, 'error': err}, 400)
+            return
+        if cfg['mode'] != 'vision':
+            self._send_json({
+                'success': False,
+                'error': 'AI 提取印章需要视觉模型 — 请在「🤖 AI」设置中切换为视觉识别模式',
+            })
+            return
+        image_b64 = data.get('image', '')
+        if not image_b64:
+            self._send_json({'success': False, 'error': '缺少图像数据'}, 400)
+            return
+        try:
+            reply = call_ai_chat(cfg, [
+                {'role': 'system', 'content': AI_SYSTEM_PROMPT},
+                {'role': 'user', 'content': [
+                    {'type': 'text', 'text': AI_STAMP_PROMPT},
+                    {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + image_b64}},
+                ]},
+            ], timeout=90)
+            parsed = parse_ai_json(reply)
+            if parsed is None:
+                self._send_json({'success': False, 'error': f'AI 返回内容无法解析: {reply[:120]}'})
+                return
+            if not bool(parsed.get('found', True)):
+                self._send_json({'success': False, 'error': 'AI 未在图片中找到印章'})
+                return
+            cx = float(parsed.get('cx', 0.5))
+            cy = float(parsed.get('cy', 0.5))
+            r = float(parsed.get('r', 0.3))
+            if not (0 <= cx <= 1 and 0 <= cy <= 1 and 0 < r <= 1):
+                self._send_json({'success': False, 'error': f'AI 返回的坐标非法: {parsed}'})
+                return
+            self._send_json({
+                'success': True,
+                'stamp': {'cx': cx, 'cy': cy, 'r': r},
+                'model': cfg['model'],
             })
         except Exception as e:
             self._send_json({'success': False, 'error': str(e)}, 200)

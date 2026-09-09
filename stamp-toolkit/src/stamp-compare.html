@@ -554,6 +554,10 @@
 
   .scp-pick.scp-pick-exclude.active { background: #c0392b; color: #fff; }
 
+  .scp-pick.scp-ai { color: #3d5468; }
+
+  .scp-pick.scp-ai.running { opacity: 0.55; pointer-events: none; }
+
   .stamp-color-panel .ink-custom .ink-mode {
     font-size: 10px;
     cursor: pointer;
@@ -1226,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.9.4</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.10.0</span></p>
   </header>
 
   <div class="paste-row">
@@ -1338,6 +1342,7 @@
         <div class="scp-row">
           <button class="btn btn-icon scp-pick" id="pick-ref" data-target="ref" data-exclude="0" title="提取取色：点击后在参考章原图预览上点选要保留的印章墨水颜色">💧 提取</button>
           <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-ref" data-target="ref" data-exclude="1" title="排除取色：点击后在参考章原图预览上点选要从印章中排除的颜色">⊘ 排除</button>
+          <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-ref" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）">🤖 AI 提取</button>
         </div>
         <div class="scp-hint">💧 提取＝保留所选颜色作印章墨迹　·　⊘ 排除＝从结果中去除所选颜色</div>
       </div>
@@ -1377,6 +1382,7 @@
         <div class="scp-row">
           <button class="btn btn-icon scp-pick" id="pick-test" data-target="test" data-exclude="0" title="提取取色：点击后在待验章原图预览上点选要保留的印章墨水颜色">💧 提取</button>
           <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-test" data-target="test" data-exclude="1" title="排除取色：点击后在待验章原图预览上点选要从印章中排除的颜色">⊘ 排除</button>
+          <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-test" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）">🤖 AI 提取</button>
         </div>
         <div class="scp-hint">💧 提取＝保留所选颜色作印章墨迹　·　⊘ 排除＝从结果中去除所选颜色</div>
       </div>
@@ -1508,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.9.4';
+const APP_VERSION = '2.10.0';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -1521,6 +1527,7 @@ const state = {
     test: { presets: ['red'], customs: [] },
   },
   pickingTarget: null,    // 取色模式目标: 'ref' | 'test' | null
+  _aiStampSeq: 0,         // AI 提取请求序号（丢弃过期响应）
   pickExclude: false,     // 取色类型: false=提取色, true=排除色
   previewZoom: { ref: 1, test: 1 },  // 提取缩略图缩放倍数（1× / 2×）
   mode: 'overlay',
@@ -2086,6 +2093,7 @@ function processStamp(img, target) {
     _baseKey: null,
     _baseOriginal: null,
     _origData: null,
+    _aiBase: false,
     circular: false,
     bbox: null,
     candidates: [],
@@ -2391,6 +2399,10 @@ function ensureBaseExtraction(target) {
   if (!st.original) return null;
   const ink = state.ink[target];
   const presetsKey = ink.presets.join(',');
+  // AI 提取的基础：预设变化前保持（预设芯片点击时显式清除 _aiBase）
+  if (st.baseExtracted && st._baseOriginal === st.original && st._aiBase) {
+    return st.baseExtracted;
+  }
   if (st.baseExtracted && st._baseKey === (presetsKey + '|' + st.candidateIndex) && st._baseOriginal === st.original) {
     return st.baseExtracted;
   }
@@ -2543,6 +2555,7 @@ function applyInkSelection(target, reasonMsg) {
     b.addEventListener('click', () => {
       const ink = state.ink[target];
       const color = b.dataset.color;
+      state[target]._aiBase = false; // 预设变化 → 回到颜色管线基础
       const turningOff = ink.presets.includes(color);
       if (turningOff) {
         const activeCustom = ink.customs.filter(c => c.on).length;
@@ -2569,7 +2582,119 @@ function applyInkSelection(target, reasonMsg) {
     const active = state.pickingTarget === target && state.pickExclude;
     setPickMode(active ? null : target, true);
   });
+  // 🤖 AI 提取按钮：视觉模型定位印章 → 几何裁剪 → 直接进入叠加对比
+  $('#ai-pick-' + target).addEventListener('click', () => runAIStampExtract(target));
 });
+
+/* ============================================================
+   🤖 AI 提取印章 — 视觉模型定位印章位置，几何裁剪为基础提取结果
+   （不做颜色筛选，白纸/浅背景按亮度映射为透明），直接用于堆叠对比
+   ============================================================ */
+
+// 将 AI 定位的印章几何裁剪为基础提取结果（亮度 → 透明度映射）
+function applyAIExtraction(target, loc) {
+  const st = state[target];
+  const W = st.original.width, H = st.original.height;
+  const cx = Math.max(0, Math.min(1, loc.cx)) * W;
+  const cy = Math.max(0, Math.min(1, loc.cy)) * H;
+  const rRaw = Math.max(0.05, Math.min(0.6, loc.r || 0.3)) * Math.min(W, H) / 2;
+  const R = rRaw * 1.08; // 略外扩，包含印章边缘与防抖动
+  let x0 = Math.round(cx - R), y0 = Math.round(cy - R);
+  const side = Math.round(R * 2);
+  // 越界时平移裁剪框（保持尺寸）
+  x0 = Math.max(0, Math.min(W - side, x0));
+  y0 = Math.max(0, Math.min(H - side, y0));
+
+  const crop = document.createElement('canvas');
+  crop.width = side; crop.height = side;
+  crop.getContext('2d').drawImage(st.original, x0, y0, side, side, 0, 0, side, side);
+
+  const OUT = 1200;
+  const out = document.createElement('canvas');
+  out.width = OUT; out.height = OUT;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(crop, 0, 0, side, side, 0, 0, OUT, OUT);
+
+  // 亮度 → 透明度：白纸/浅背景透明，墨迹保留（任何墨色均可，不做颜色筛选）
+  const d = octx.getImageData(0, 0, OUT, OUT);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const L = (0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2]) / 255;
+    let a = (0.92 - L) / 0.30;
+    a = Math.max(0, Math.min(1, a));
+    d.data[i + 3] = Math.round(a * 255);
+  }
+  octx.putImageData(d, 0, 0);
+
+  // AI 结果作为新的"基础提取"：替换颜色管线基础；手工取色仍可在其上增量叠加/剔除
+  st.baseExtracted = out;
+  st._aiBase = true;
+  st._baseKey = 'ai';
+  st._baseOriginal = st.original;
+  st.bbox = { x: x0, y: y0, w: side, h: side, fitSize: side };
+  st.circular = true;
+  st.candidates = [{ x: x0, y: y0, w: side, h: side, circular: true, cx, cy, radius: R, area: side * side }];
+  st.candidateIndex = 0;
+  st._origData = null; // 手工叠加时重新缓存原图
+  recomputeExtracted(target);
+  drawExtractedPreview(target, st.extracted);
+  renderCandidates(target);
+  updateVisibility();
+  render();
+}
+
+// AI 提取印章主流程
+async function runAIStampExtract(target) {
+  const st = state[target];
+  if (!st || !st.original) {
+    showStatus('请先加载图片再使用 AI 提取');
+    return;
+  }
+  const cfg = window._aiConfig;
+  if (!aiReady()) {
+    showStatus('AI 未配置 — 请先点击「🤖 AI」完成配置（提取印章需要视觉模型）');
+    return;
+  }
+  if (cfg.mode !== 'vision') {
+    showStatus('AI 提取印章需要视觉模型（当前为文本解析模式）— 请在「🤖 AI」设置中切换为视觉识别模式');
+    return;
+  }
+
+  const btn = $('#ai-pick-' + target);
+  const originalText = btn.textContent;
+  btn.classList.add('running');
+  btn.textContent = '🤖 定位中...';
+  showStatus(`${stampLabel(target)}正在由 AI 定位印章...`);
+  const token = ++state._aiStampSeq;
+
+  try {
+    const resp = await fetch(OCR_SERVER + '/ai/stamp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: canvasToBase64(st.original),
+        config: cfg,
+      }),
+    });
+    const data = await resp.json();
+    if (token !== state._aiStampSeq) return; // 过期响应丢弃
+    if (!data.success || !data.stamp) {
+      showStatus('AI 提取失败：' + (data.error || '未知错误'));
+      return;
+    }
+    const loc = data.stamp;
+    applyAIExtraction(target, loc);
+    showStatus(`${stampLabel(target)}已由 AI 提取印章（中心 ${(loc.cx * 100).toFixed(0)}%,${(loc.cy * 100).toFixed(0)}% · 半径 ${(loc.r * 100).toFixed(0)}%）— 可直接叠加对比`);
+  } catch (err) {
+    if (token === state._aiStampSeq) {
+      showStatus('AI 提取失败：' + err.message);
+    }
+  } finally {
+    btn.classList.remove('running');
+    btn.textContent = originalText;
+  }
+}
 
 /* ============================================================
    💧 手工取色 — 在原图预览上点选墨水颜色（提取/排除，每枚印章独立）
@@ -2780,7 +2905,7 @@ function removeStamp(target) {
   // 取消进行中的 OCR
   cancelStampOCR(target);
 
-  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null,
+  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null, _aiBase: false,
                     circular: false, bbox: null, candidates: null, candidateIndex: 0, inkSpec: null, corners: null,
                     rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
                     _sig: (state[target]._sig || 0) + 1, ocrResult: null };
