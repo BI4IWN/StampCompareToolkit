@@ -1468,7 +1468,7 @@
     <canvas id="cmp-canvas"></canvas>
     <div class="slider-handle" id="slider-handle" style="display:none;"></div>
     <!-- 鼠标捕获区域提示角标 -->
-    <div class="capture-hint" id="capture-hint">滚轮缩放 · 拖拽移动</div>
+    <div class="capture-hint" id="capture-hint">滚轮缩放 · 拖拽移动 · 拖四角变形（Shift 等比）</div>
   </div>
 
   <!-- OCR results are now inline under each stamp -->
@@ -3746,8 +3746,8 @@ document.addEventListener('mousemove', (e) => {
 
     // Axis constraint
     if (affectsX && affectsY) {
-      // Corner handle — 遵循 scaleAxis 设置
-      if (state.scaleAxis === 'uniform') {
+      // 角柄：默认自由变形（水平/垂直独立拉伸，角完全跟手）；按住 Shift 拖拽为等比缩放
+      if (e.shiftKey) {
         const rX = state.resizeStartScaleX > 0 ? newSX / state.resizeStartScaleX : 1;
         const rY = state.resizeStartScaleY > 0 ? newSY / state.resizeStartScaleY : 1;
         // 放大取大值，缩小取小值，保证视觉一致
@@ -3755,7 +3755,6 @@ document.addEventListener('mousemove', (e) => {
         newSX = state.resizeStartScaleX * r;
         newSY = state.resizeStartScaleY * r;
       }
-      // scaleAxis === 'x' or 'y': keep both computed values as-is (non-uniform)
     }
     // Edge handle (affects only one axis): always non-uniform — 不强制等比
     // 保持 newSX / newSY 原样，仅调整受影响的轴
