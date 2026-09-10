@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.10.0</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.10.1</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.10.1';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2481,7 +2481,11 @@ function recomputeExtracted(target) {
     const EXTRACT_TOL = 18, EXCLUDE_TOL = 8;
 
     // 1) 提取色：叠加原图匹配像素
+    //    彩色 → 色相匹配；无彩色（灰/黑，如 #757575）→ 亮度接近匹配（色相无意义）
     for (const c of customs.filter(c => !c.exclude)) {
+      const cSat = c.sat != null ? c.sat : 1;
+      const cVal = c.val != null ? c.val : 1;
+      const cIsAchromatic = cSat < 0.12; // 所选颜色本身接近灰/黑
       for (let y = 0; y < OUT; y++) {
         const oy = Math.min(oh - 1, Math.max(0, Math.round(map.sy + (y - map.dy) / map.ratio)));
         const rowO = oy * ow;
@@ -2493,7 +2497,10 @@ function recomputeExtracted(target) {
           const oi = (rowO + ox) * 4;
           const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
           const { h, s, v } = rgbToHsv(r, g, b);
-          if (v >= 0.08 && s >= 0.05 && hueCircleDist(h, c.hue) <= EXTRACT_TOL) {
+          const hit = cIsAchromatic
+            ? (v >= 0.05 && s < 0.15 && Math.abs(v - cVal) <= 0.15)                       // 灰色：亮度接近且低饱和
+            : (v >= 0.08 && s >= 0.05 && hueCircleDist(h, c.hue) <= EXTRACT_TOL);          // 彩色：色相匹配
+          if (hit) {
             img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
             img.data[i + 3] = 255;
             added++;
