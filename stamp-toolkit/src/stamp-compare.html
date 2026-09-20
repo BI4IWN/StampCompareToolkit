@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.1</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.2</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.1';
+const APP_VERSION = '2.11.2';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -4415,7 +4415,7 @@ document.addEventListener('wheel', (e) => {
   e.preventDefault();
 
   if (rotateIntent) {
-    // 旋转（精细 0.5°/步）：横向滚动用 deltaX（右滑=顺时针），Shift+纵向用 deltaY
+    // 旋转（精细 0.1°/步）：横向滚动用 deltaX（右滑=顺时针），Shift+纵向用 deltaY
     const d = horizontal ? e.deltaX : e.deltaY;
     if (Math.abs(d) < WHEEL_NOISE_DEADZONE) return;
     rotAccum += d;
@@ -4423,7 +4423,7 @@ document.addEventListener('wheel', (e) => {
     if (Math.abs(rotAccum) >= WHEEL_ROT_THRESH) {
       const steps = Math.floor(Math.abs(rotAccum) / WHEEL_ROT_THRESH);
       const dir = rotAccum > 0 ? 1 : -1;
-      t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * steps * 0.5));
+      t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * steps * 0.1));
       rotAccum %= WHEEL_ROT_THRESH;
       changed = true;
     }
@@ -4455,13 +4455,20 @@ document.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 // 滑块区域滚轮支持：鼠标悬停在旋转/缩放滑块上时，滚轮直接调节对应参数
+// 旋转滑块步进 0.1°，与主滚轮旋转一致（累积小增量，鼠标一格≈0.8°，触控板更精细）
+let _slRotAccum = 0;
 $('#sl-rotate').addEventListener('wheel', (e) => {
   e.preventDefault();
   const t = state[state.target];
-  const dir = e.deltaY > 0 ? -1 : 1;
-  t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * 0.5));
-  syncSlidersToTarget();
-  scheduleRender();
+  _slRotAccum += e.deltaY;
+  const steps = Math.floor(Math.abs(_slRotAccum) / WHEEL_ROT_THRESH);
+  if (steps > 0) {
+    const dir = _slRotAccum > 0 ? 1 : -1;
+    t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * steps * 0.1));
+    _slRotAccum %= WHEEL_ROT_THRESH;
+    syncSlidersToTarget();
+    scheduleRender();
+  }
 }, { passive: false });
 
 $('#sl-scale').addEventListener('wheel', (e) => {
