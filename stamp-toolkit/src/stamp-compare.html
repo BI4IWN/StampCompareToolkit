@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.10.3</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.0</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.10.3';
+const APP_VERSION = '2.11.0';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -1661,11 +1661,26 @@ function isExcludedBy(hue, sat, val, excludeColors) {
 function isStampPixel(r, g, b, spec) {
   const presets = Array.isArray(spec) ? spec : (spec && spec.presets) || [];
   const hues = (spec && spec.hues) || [];
+  const hueEntries = (spec && spec.hueEntries) || [];
   const excludeColors = (spec && spec.excludeColors) || [];
   const { h: hue, s: sat, v } = rgbToHsv(r, g, b);
-  if (v < 0.06 || sat < 0.08) return false;
   // 排除色优先：命中任一排除色 → 非墨迹（色相+饱和度+亮度综合，区分黑与红）
   if (isExcludedBy(hue, sat, v, excludeColors)) return false;
+  // 手工提取色完整信息匹配（与增量提取规则一致，支持黑/灰等深色）：
+  // 双彩色 → 色相±40 + 亮度±0.38 + 饱和度±0.38；含无彩 → 亮度±0.20 + 饱和度±0.38
+  if (hueEntries.length) {
+    for (const e of hueEntries) {
+      const cSat = e.sat != null ? e.sat : 1;
+      const cVal = e.val != null ? e.val : 1;
+      const dV = Math.abs(v - cVal), dS = Math.abs(sat - cSat);
+      const hit = (cSat >= 0.12 && sat >= 0.12)
+        ? (hueCircleDist(hue, e.hue) <= 40 && dV <= 0.38 && dS <= 0.38)
+        : (v >= 0.05 && dV <= 0.20 && dS <= 0.38);
+      if (hit) return true;
+    }
+    if (hues.length === 0) return false; // 已用完整信息匹配，不重复旧 hues 路径
+  }
+  if (v < 0.06 || sat < 0.08) return false;
   for (const c of presets) {
     const band = INK_BANDS[c];
     if (band && hueDistToBand(hue, band) >= 0) return true;
@@ -2094,6 +2109,7 @@ function processStamp(img, target) {
     _baseOriginal: null,
     _origData: null,
     _aiBase: false,
+    _regionLocked: false,
     circular: false,
     bbox: null,
     candidates: [],
@@ -2254,15 +2270,17 @@ function switchCandidate(target, i) {
 function activeInkSpec(target) {
   const ink = state.ink[target];
   const presets = ink.presets;
-  const hues = ink.customs.filter(c => c.on && !c.exclude).map(c => c.hue);
+  const extractList = ink.customs.filter(c => c.on && !c.exclude);
+  const hues = extractList.map(c => c.hue);
+  const hueEntries = extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val }));
   const excludeList = ink.customs.filter(c => c.on && c.exclude);
   const excludes = excludeList.map(c => c.hue);
   const excludeColors = excludeList.map(c => ({ hue: c.hue, sat: c.sat != null ? c.sat : 1, val: c.val != null ? c.val : 1 }));
   // 无任何选择时兜底红章（用于初始自动提取）；一旦有手工颜色则完全按手工选择，不叠加默认色
   if (presets.length === 0 && hues.length === 0 && excludes.length === 0) {
-    return { presets: ['red'], hues: [], excludes: [], excludeColors: [] };
+    return { presets: ['red'], hues: [], hueEntries: [], excludes: [], excludeColors: [] };
   }
-  return { presets, hues, excludes, excludeColors };
+  return { presets, hues, hueEntries, excludes, excludeColors };
 }
 
 // 墨色规格的可读名称（状态提示用）
@@ -2399,33 +2417,41 @@ function ensureBaseExtraction(target) {
   if (!st.original) return null;
   const ink = state.ink[target];
   const presetsKey = ink.presets.join(',');
+  const lockedKey = presetsKey + '|' + st.candidateIndex + (st._regionLocked ? '|L' : '');
   // AI 提取的基础：预设变化前保持（预设芯片点击时显式清除 _aiBase）
   if (st.baseExtracted && st._baseOriginal === st.original && st._aiBase) {
     return st.baseExtracted;
   }
-  if (st.baseExtracted && st._baseKey === (presetsKey + '|' + st.candidateIndex) && st._baseOriginal === st.original) {
+  if (st.baseExtracted && st._baseKey === lockedKey && st._baseOriginal === st.original) {
     return st.baseExtracted;
   }
   if (!presetsKey) {
     // 预设全清（仅手工色）：保持现有基础不动，手工色在其上叠加/剔除
     if (st.baseExtracted) {
-      st._baseKey = '|' + st.candidateIndex;
+      st._baseKey = '|' + st.candidateIndex + (st._regionLocked ? '|L' : '');
       st._baseOriginal = st.original;
       return st.baseExtracted;
     }
     return null;
   }
-  const spec = { presets: ink.presets, hues: [], excludes: [], excludeColors: [] };
-  const imageData = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
-  const detection = detectStampCandidates(imageData, spec);
-  const idx = Math.min(st.candidateIndex || 0, detection.regions.length - 1);
-  const extracted = extractStamp(st.original, detection.regions[idx], spec);
+  const spec = { presets: ink.presets, hues: [], hueEntries: [], excludes: [], excludeColors: [] };
+  let region;
+  if (st._regionLocked && st.bbox) {
+    // 区域锁定（手工色已重新定位）：预设色仅在锁定的 bbox 内提取，不再重新定位
+    region = { x: st.bbox.x, y: st.bbox.y, w: st.bbox.w, h: st.bbox.h };
+  } else {
+    const imageData = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
+    const detection = detectStampCandidates(imageData, spec);
+    const idx = Math.min(st.candidateIndex || 0, detection.regions.length - 1);
+    region = detection.regions[idx];
+    st.candidates = detection.regions;
+    st.candidateIndex = idx;
+  }
+  const extracted = extractStamp(st.original, region, spec);
   st.baseExtracted = extracted.canvas;
   st.circular = extracted.circular;
   st.bbox = extracted.bbox;
-  st.candidates = detection.regions;
-  st.candidateIndex = idx;
-  st._baseKey = presetsKey + '|' + st.candidateIndex;
+  st._baseKey = lockedKey;
   st._baseOriginal = st.original;
   return st.baseExtracted;
 }
@@ -2453,6 +2479,42 @@ function cropMapFor(st) {
     sx: b.x,
     sy: b.y,
   };
+}
+
+// 手工提取色定位校正：黑白/灰等非预设色印章在默认红预设下定位失败
+// （bbox 落到纸面噪点或角落）时，按手工提取色重新检测印章区域并迁移 bbox，
+// 使增量叠加覆盖完整印章而非一个角
+function maybeRefineRegion(target) {
+  const st = state[target];
+  if (!st.original) return;
+  const extractList = state.ink[target].customs.filter(c => c.on && !c.exclude);
+  if (!extractList.length) return;
+  const spec = { presets: [], hues: [], hueEntries: extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val })), excludes: [], excludeColors: [] };
+  const imageData = getOrigData(st);
+  const detection = detectStampCandidates(imageData, spec);
+  if (!detection.regions.length) return;
+  const r0 = detection.regions[0];
+  if (!r0.area || r0.area <= 0) return; // fallback 整图（该色也定位失败）→ 不动
+
+  const W = st.original.width, H = st.original.height;
+  const bcx = st.bbox ? st.bbox.x + st.bbox.w / 2 : W / 2;
+  const bcy = st.bbox ? st.bbox.y + st.bbox.h / 2 : H / 2;
+  const dist = Math.hypot(r0.cx - bcx, r0.cy - bcy);
+  const refW = st.bbox ? st.bbox.w : W;
+  // 中心偏离明显（>25% 边长）→ 当前定位与手工色所在区域不符，迁移
+  if (dist <= refW * 0.25) return;
+
+  const cropHalf = Math.ceil(r0.radius) + 2;
+  const cx = Math.max(cropHalf, Math.min(W - cropHalf, Math.round(r0.cx)));
+  const cy = Math.max(cropHalf, Math.min(H - cropHalf, Math.round(r0.cy)));
+  st.bbox = { x: cx - cropHalf, y: cy - cropHalf, w: cropHalf * 2, h: cropHalf * 2, fitSize: cropHalf * 2 };
+  st.candidates = detection.regions;
+  st.candidateIndex = 0;
+  st.circular = r0.circular;
+  st._baseKey = null;          // 基础按新 bbox 重算
+  st._aiBase = false;
+  st._regionLocked = true;     // 锁定新区域：预设色不再重新定位，仅在锁定框内提取
+  st._origData = imageData; // 同一原图，缓存可复用
 }
 
 // 在基础自动提取上增量应用手工颜色：
@@ -2550,6 +2612,7 @@ function applyInkSelection(target, reasonMsg) {
   // 防抖：连续取色/切换时合并为一次更新，避免反复计算卡顿
   clearTimeout(_inkTimers[target]);
   _inkTimers[target] = setTimeout(() => {
+    maybeRefineRegion(target);
     const delta = recomputeExtracted(target);
     drawExtractedPreview(target, st.extracted);
     renderCandidates(target);
@@ -2567,7 +2630,8 @@ function applyInkSelection(target, reasonMsg) {
     b.addEventListener('click', () => {
       const ink = state.ink[target];
       const color = b.dataset.color;
-      state[target]._aiBase = false; // 预设变化 → 回到颜色管线基础
+      state[target]._aiBase = false;       // 预设变化 → 回到颜色管线基础
+      state[target]._regionLocked = false; // 并恢复自动定位
       const turningOff = ink.presets.includes(color);
       if (turningOff) {
         const activeCustom = ink.customs.filter(c => c.on).length;
@@ -2917,7 +2981,7 @@ function removeStamp(target) {
   // 取消进行中的 OCR
   cancelStampOCR(target);
 
-  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null, _aiBase: false,
+  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null, _aiBase: false, _regionLocked: false,
                     circular: false, bbox: null, candidates: null, candidateIndex: 0, inkSpec: null, corners: null,
                     rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
                     _sig: (state[target]._sig || 0) + 1, ocrResult: null };
@@ -4328,10 +4392,11 @@ const WHEEL_ROT_GUARD_MS = 200;      // 旋转→缩放保护窗
 
 document.addEventListener('wheel', (e) => {
   if (!state.ref.extracted && !state.test.extracted) return;
-  // 仅当鼠标在对比区域上方时生效
+  // 鼠标在对比区域及其周边（±120px，覆盖工具栏/旋转条/页边空隙）时生效
+  const WHEEL_ZONE_PAD = 120;
   const rect = comparison.getBoundingClientRect();
-  if (e.clientX < rect.left || e.clientX > rect.right ||
-      e.clientY < rect.top  || e.clientY > rect.bottom) return;
+  if (e.clientX < rect.left - WHEEL_ZONE_PAD || e.clientX > rect.right + WHEEL_ZONE_PAD ||
+      e.clientY < rect.top - WHEEL_ZONE_PAD || e.clientY > rect.bottom + WHEEL_ZONE_PAD) return;
   e.preventDefault();
 
   const t = state[state.target];
