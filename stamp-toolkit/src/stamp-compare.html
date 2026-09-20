@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.10.2</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.10.3</span></p>
   </header>
 
   <div class="paste-row">
@@ -1474,7 +1474,7 @@
     <canvas id="cmp-canvas"></canvas>
     <div class="slider-handle" id="slider-handle" style="display:none;"></div>
     <!-- 鼠标捕获区域提示角标 -->
-    <div class="capture-hint" id="capture-hint">滚轮缩放 · 拖拽移动 · 拖四角变形（Shift 等比）</div>
+    <div class="capture-hint" id="capture-hint">滚轮缩放 · Shift/横向滚轮旋转 · 拖拽移动 · 拖四角变形（Shift 等比）</div>
   </div>
 
   <!-- OCR results are now inline under each stamp -->
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.10.2';
+const APP_VERSION = '2.10.3';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -4312,11 +4312,19 @@ comparison.addEventListener('mouseleave', () => { magnifier.style.display = 'non
 
 // Mouse wheel — scale or rotate selected stamp
 // 使用 document 级别监听 + capture 阶段，确保优先于浏览器默认行为
-// 使用 state.shiftHeld 而非 e.shiftKey（macOS 滚轮事件中 e.shiftKey 可能不可靠）
+// 旋转意图判定（三通道，防止旋转操作误触缩放）：
+//   ① 横向滚动（|deltaX|>|deltaY|）：触控板双指横滑，以及 macOS 上 Shift+滚轮
+//      被系统转换为横向滚动的事件——不依赖 shiftKey 时序，最稳定
+//   ② Shift 按住（state.shiftHeld，macOS 上 e.shiftKey 不可靠）
+//   ③ 旋转保护窗：最近一次旋转滚轮后 200ms 内的普通滚动仍按旋转处理
+//      （用户松开 Shift 稍早于停止滚动时，尾部事件不会误触缩放）
+// 其余 → 缩放
 let zoomAccum = 0;
 let rotAccum = 0;
 const WHEEL_ZOOM_THRESH = 15;
-const WHEEL_ROT_THRESH = 10;
+const WHEEL_ROT_THRESH = 12;
+const WHEEL_NOISE_DEADZONE = 3;      // 触控板微滚噪声死区
+const WHEEL_ROT_GUARD_MS = 200;      // 旋转→缩放保护窗
 
 document.addEventListener('wheel', (e) => {
   if (!state.ref.extracted && !state.test.extracted) return;
@@ -4328,10 +4336,18 @@ document.addEventListener('wheel', (e) => {
 
   const t = state[state.target];
   let changed = false;
+  const now = performance.now();
 
-  if (state.shiftHeld) {
-    // Shift + 滚轮 → 旋转（精细 0.5°/步）
-    rotAccum += e.deltaY;
+  const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > WHEEL_NOISE_DEADZONE;
+  const inRotateGuard = state._lastRotateWheelAt != null && (now - state._lastRotateWheelAt) < WHEEL_ROT_GUARD_MS;
+  const rotateIntent = horizontal || state.shiftHeld || inRotateGuard;
+
+  if (rotateIntent) {
+    // 旋转（精细 0.5°/步）：横向滚动用 deltaX（右滑=顺时针），Shift+纵向用 deltaY
+    const d = horizontal ? e.deltaX : e.deltaY;
+    if (Math.abs(d) < WHEEL_NOISE_DEADZONE) return;
+    rotAccum += d;
+    state._lastRotateWheelAt = now;
     if (Math.abs(rotAccum) >= WHEEL_ROT_THRESH) {
       const steps = Math.floor(Math.abs(rotAccum) / WHEEL_ROT_THRESH);
       const dir = rotAccum > 0 ? 1 : -1;
@@ -4341,6 +4357,7 @@ document.addEventListener('wheel', (e) => {
     }
   } else {
     // 普通滚轮 → 缩放
+    if (Math.abs(e.deltaY) < WHEEL_NOISE_DEADZONE) return;
     zoomAccum += e.deltaY;
     if (Math.abs(zoomAccum) >= WHEEL_ZOOM_THRESH) {
       const steps = Math.floor(Math.abs(zoomAccum) / WHEEL_ZOOM_THRESH);
