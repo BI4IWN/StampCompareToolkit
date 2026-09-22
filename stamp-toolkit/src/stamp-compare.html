@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.2</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.3</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.2';
+const APP_VERSION = '2.11.3';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -1667,14 +1667,16 @@ function isStampPixel(r, g, b, spec) {
   // 排除色优先：命中任一排除色 → 非墨迹（色相+饱和度+亮度综合，区分黑与红）
   if (isExcludedBy(hue, sat, v, excludeColors)) return false;
   // 手工提取色完整信息匹配（与增量提取规则一致，支持黑/灰等深色）：
-  // 双彩色 → 色相±40 + 亮度±0.38 + 饱和度±0.38；含无彩 → 亮度±0.20 + 饱和度±0.38
+  // 双彩色 → 色相±40 + 亮度±0.38 + 饱和度±0.38；无彩点选 → 亮度±0.20 + 饱和度±0.38
+  // 彩色点选要求像素具备基本饱和度（sat≥0.10）：灰纸/白纸等无彩背景与淡彩墨在
+  // 亮度/饱和度窗口内无法区分，无彩兜底会把整张底纸误判为墨迹（全图染墨）
   if (hueEntries.length) {
     for (const e of hueEntries) {
       const cSat = e.sat != null ? e.sat : 1;
       const cVal = e.val != null ? e.val : 1;
       const dV = Math.abs(v - cVal), dS = Math.abs(sat - cSat);
-      const hit = (cSat >= 0.12 && sat >= 0.12)
-        ? (hueCircleDist(hue, e.hue) <= 40 && dV <= 0.38 && dS <= 0.38)
+      const hit = cSat >= 0.12
+        ? (sat >= 0.10 && hueCircleDist(hue, e.hue) <= 40 && dV <= 0.38 && dS <= 0.38)
         : (v >= 0.05 && dV <= 0.20 && dS <= 0.38);
       if (hit) return true;
     }
@@ -1793,13 +1795,91 @@ function detectStampCandidates(imageData, spec) {
     };
   }
 
-  // Pass 4: 过滤小连通域（面积 ≥ 最大域的 12% 且 ≥ 500px），按面积取前 3 个候选
+  // Pass 4: 过滤小连通域（面积 ≥ 最大域的 12% 且 ≥ 500px），按面积排序
   const largest = Math.max(...components.map(c => c.area));
   const minArea = Math.max(500, largest * 0.12);
+  // 先取前 6 个进入碎片合并池（合并后仍按面积截取前 3 个候选）：
+  // 断裂印章的碎片往往不止 3 块，过早截断会让远端碎片缺席环形合并
   const selected = components
     .filter(c => c.area >= minArea)
     .sort((a, b) => b.area - a.area)
-    .slice(0, 3);
+    .slice(0, 6);
+
+  // Pass 4.5: 断裂印章碎片合并 — 淡印/断笔会把同一枚章的圆环切成多个连通域
+  // （如仅左下弧最浓，其余弧段过淡未相连），直接取最大域会把定位框缩到一个角。
+  // 两轮合并：
+  //   a) 贴近合并：候选包围盒相交或贴近（中心距 ≤ 两框半径和 × 1.05），迭代传递
+  //   b) 环形合并：合并后仍 ≥3 组时，检验各组中心是否围绕同一圆心呈环形分布
+  //      （各点距圆心 0.5R~1.15R，且圆周角度最大空缺 < 140°）——断裂圆章的碎片
+  //      散布圆周各处，独立多枚印章的碎片聚成簇（角度空缺大），以此区分
+  if (selected.length > 1) {
+    const bboxCenter = comps => {
+      const b = comps.reduce((acc, c) => ({
+        minX: Math.min(acc.minX, c.minX), minY: Math.min(acc.minY, c.minY),
+        maxX: Math.max(acc.maxX, c.maxX), maxY: Math.max(acc.maxY, c.maxY),
+      }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+      return { cx: (b.minX + b.maxX) / 2, cy: (b.minY + b.maxY) / 2, r: Math.max(b.maxX - b.minX, b.maxY - b.minY) / 2 };
+    };
+    const groups = selected.map(c => ({ comps: [c] }));
+    // a) 贴近合并（迭代传递）
+    let merged = true;
+    while (merged) {
+      merged = false;
+      outer:
+      for (let i = 0; i < groups.length; i++) {
+        for (let j = i + 1; j < groups.length; j++) {
+          const a = bboxCenter(groups[i].comps), b = bboxCenter(groups[j].comps);
+          if (Math.hypot(a.cx - b.cx, a.cy - b.cy) <= (a.r + b.r) * 1.05) {
+            groups[i].comps = groups[i].comps.concat(groups[j].comps);
+            groups.splice(j, 1);
+            merged = true;
+            break outer;
+          }
+        }
+      }
+    }
+    // b) 环形合并
+    if (groups.length >= 3) {
+      const centers = groups.map(g => bboxCenter(g.comps));
+      let farI = 0, farJ = 1, farD = 0;
+      for (let i = 0; i < centers.length; i++) {
+        for (let j = i + 1; j < centers.length; j++) {
+          const d = Math.hypot(centers[i].cx - centers[j].cx, centers[i].cy - centers[j].cy);
+          if (d > farD) { farD = d; farI = i; farJ = j; }
+        }
+      }
+      const R = farD / 2;
+      const ccx = (centers[farI].cx + centers[farJ].cx) / 2;
+      const ccy = (centers[farI].cy + centers[farJ].cy) / 2;
+      const distOK = centers.every(c => {
+        const d = Math.hypot(c.cx - ccx, c.cy - ccy);
+        return d >= R * 0.5 && d <= R * 1.15;
+      });
+      let angleOK = false;
+      if (distOK && R > 40) {
+        const angs = centers.map(c => Math.atan2(c.cy - ccy, c.cx - ccx)).sort((a, b) => a - b);
+        let maxGap = angs[0] + 2 * Math.PI - angs[angs.length - 1];
+        for (let i = 1; i < angs.length; i++) maxGap = Math.max(maxGap, angs[i] - angs[i - 1]);
+        angleOK = maxGap < Math.PI * 140 / 180;
+      }
+      if (distOK && angleOK) {
+        const all = [].concat(...groups.map(g => g.comps));
+        groups.length = 0;
+        groups.push({ comps: all });
+      }
+    }
+    const mergedComps = groups
+      .map(g => g.comps.reduce((acc, c) => ({
+        area: acc.area + c.area,
+        minX: Math.min(acc.minX, c.minX), minY: Math.min(acc.minY, c.minY),
+        maxX: Math.max(acc.maxX, c.maxX), maxY: Math.max(acc.maxY, c.maxY),
+      }), { area: 0, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }))
+      .sort((a, b) => b.area - a.area);
+    if (mergedComps.length) {
+      mergedComps.slice(0, 3).forEach((mc, idx) => { Object.assign(selected[idx], mc); });
+      selected.length = Math.min(mergedComps.length, 3);
+    }
+  }
 
   // Pass 5: 对每个候选计算质心、半径、圆形度（在原始墨色掩膜上，限候选框内）
   const regions = selected.map(comp => {
@@ -2543,8 +2623,10 @@ function recomputeExtracted(target) {
     const EXTRACT_TOL = 18, EXCLUDE_TOL = 8;
 
     // 1) 提取色：叠加原图匹配像素 —— 「点选必出」宽匹配
-    //    双方均为彩色：色相 ±26° + 亮度 ±0.38 + 饱和度 ±0.38（亮度/饱和度为主，暗色像素色相抖动大不苛求）
-    //    任一方为无彩色（灰/黑）：色相不可靠 → 亮度 ±0.20 + 饱和度 ±0.38
+    //    双方均为彩色：色相 ±40° + 亮度 ±0.38 + 饱和度 ±0.38（亮度/饱和度为主，暗色像素色相抖动大不苛求）
+    //    无彩点选（灰/黑）：色相不可靠 → 亮度 ±0.20 + 饱和度 ±0.38
+    //    彩色点选要求像素具备基本饱和度（s≥0.10）：无彩底纸与淡彩墨在亮度/饱和度窗口内
+    //    无法区分，无彩兜底会把整张底纸染成墨迹（与 isStampPixel 规则同步）
     for (const c of customs.filter(c => !c.exclude)) {
       const cSat = c.sat != null ? c.sat : 1;
       const cVal = c.val != null ? c.val : 1;
@@ -2560,9 +2642,9 @@ function recomputeExtracted(target) {
           const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
           const { h, s, v } = rgbToHsv(r, g, b);
           const dV = Math.abs(v - cVal), dS = Math.abs(s - cSat);
-          const hit = (cSat >= 0.12 && s >= 0.12)
-            ? (hueCircleDist(h, c.hue) <= 40 && dV <= 0.38 && dS <= 0.38)   // 双彩色（±40° 覆盖深色墨迹色相抖动，饱和度/亮度守门防误伤）
-            : (dV <= 0.20 && dS <= 0.38);                                    // 含无彩（灰/黑/暗色）
+          const hit = cSat >= 0.12
+            ? (s >= 0.10 && hueCircleDist(h, c.hue) <= 40 && dV <= 0.38 && dS <= 0.38)   // 彩色点选：像素须有基本饱和度 + 色相匹配
+            : (dV <= 0.20 && dS <= 0.38);                                               // 无彩点选（灰/黑/暗色）：亮度/饱和度贴近
           if (hit) {
             img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
             img.data[i + 3] = 255;
