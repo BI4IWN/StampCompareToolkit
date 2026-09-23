@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.3</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.4</span></p>
   </header>
 
   <div class="paste-row">
@@ -1437,7 +1437,7 @@
       </div>
       <label style="margin-left:12px">缩放</label>
       <div class="slider-group">
-        <input type="range" id="sl-scale" min="20" max="400" value="100" step="0.5">
+        <input type="range" id="sl-scale" min="20" max="400" value="100" step="0.1">
         <span class="val" id="val-scale">100%</span>
       </div>
       <div class="mode-group" id="axis-group" style="margin-left:6px">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.3';
+const APP_VERSION = '2.11.4';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -4510,20 +4510,20 @@ document.addEventListener('wheel', (e) => {
       changed = true;
     }
   } else {
-    // 普通滚轮 → 缩放
+    // 普通滚轮 → 缩放（精细 0.2%/步，与旋转 0.1° 粒度对齐；滑块/键盘更细至 0.1%）
     if (Math.abs(e.deltaY) < WHEEL_NOISE_DEADZONE) return;
     zoomAccum += e.deltaY;
     if (Math.abs(zoomAccum) >= WHEEL_ZOOM_THRESH) {
       const steps = Math.floor(Math.abs(zoomAccum) / WHEEL_ZOOM_THRESH);
       const dir = zoomAccum > 0 ? -1 : 1;
-      const delta = dir * steps;
+      const delta = Math.round(dir * steps * 0.2 * 10) / 10;
       if (state.scaleAxis === 'uniform') {
-        t.scaleX = Math.max(20, Math.min(400, t.scaleX + delta));
-        t.scaleY = Math.max(20, Math.min(400, t.scaleY + delta));
+        t.scaleX = Math.max(20, Math.min(400, Math.round((t.scaleX + delta) * 10) / 10));
+        t.scaleY = Math.max(20, Math.min(400, Math.round((t.scaleY + delta) * 10) / 10));
       } else if (state.scaleAxis === 'x') {
-        t.scaleX = Math.max(20, Math.min(400, t.scaleX + delta));
+        t.scaleX = Math.max(20, Math.min(400, Math.round((t.scaleX + delta) * 10) / 10));
       } else {
-        t.scaleY = Math.max(20, Math.min(400, t.scaleY + delta));
+        t.scaleY = Math.max(20, Math.min(400, Math.round((t.scaleY + delta) * 10) / 10));
       }
       zoomAccum %= WHEEL_ZOOM_THRESH;
       changed = true;
@@ -4553,20 +4553,27 @@ $('#sl-rotate').addEventListener('wheel', (e) => {
   }
 }, { passive: false });
 
+let _slScaleAccum = 0;
 $('#sl-scale').addEventListener('wheel', (e) => {
   e.preventDefault();
   const t = state[state.target];
-  const dir = e.deltaY > 0 ? -1 : 1;
-  if (state.scaleAxis === 'uniform') {
-    t.scaleX = Math.max(20, Math.min(400, t.scaleX + dir));
-    t.scaleY = Math.max(20, Math.min(400, t.scaleY + dir));
-  } else if (state.scaleAxis === 'x') {
-    t.scaleX = Math.max(20, Math.min(400, t.scaleX + dir));
-  } else {
-    t.scaleY = Math.max(20, Math.min(400, t.scaleY + dir));
+  _slScaleAccum += e.deltaY;
+  const steps = Math.floor(Math.abs(_slScaleAccum) / WHEEL_ZOOM_THRESH);
+  if (steps > 0) {
+    const dir = _slScaleAccum > 0 ? -1 : 1;
+    const delta = Math.round(dir * steps * 0.2 * 10) / 10;
+    if (state.scaleAxis === 'uniform') {
+      t.scaleX = Math.max(20, Math.min(400, Math.round((t.scaleX + delta) * 10) / 10));
+      t.scaleY = Math.max(20, Math.min(400, Math.round((t.scaleY + delta) * 10) / 10));
+    } else if (state.scaleAxis === 'x') {
+      t.scaleX = Math.max(20, Math.min(400, Math.round((t.scaleX + delta) * 10) / 10));
+    } else {
+      t.scaleY = Math.max(20, Math.min(400, Math.round((t.scaleY + delta) * 10) / 10));
+    }
+    _slScaleAccum %= WHEEL_ZOOM_THRESH;
+    syncSlidersToTarget();
+    scheduleRender();
   }
-  syncSlidersToTarget();
-  scheduleRender();
 }, { passive: false });
 
 // Keyboard shortcuts
@@ -4613,12 +4620,12 @@ document.addEventListener('keydown', (e) => {
     case 'ArrowUp':
       e.preventDefault();
       if (state.scaleAxis === 'uniform') {
-        t.scaleX = Math.min(400, t.scaleX + 0.5);
-        t.scaleY = Math.min(400, t.scaleY + 0.5);
+        t.scaleX = Math.min(400, Math.round((t.scaleX + 0.1) * 10) / 10);
+        t.scaleY = Math.min(400, Math.round((t.scaleY + 0.1) * 10) / 10);
       } else if (state.scaleAxis === 'x') {
-        t.scaleX = Math.min(400, t.scaleX + 0.5);
+        t.scaleX = Math.min(400, Math.round((t.scaleX + 0.1) * 10) / 10);
       } else {
-        t.scaleY = Math.min(400, t.scaleY + 0.5);
+        t.scaleY = Math.min(400, Math.round((t.scaleY + 0.1) * 10) / 10);
       }
       syncSlidersToTarget();
       render();
@@ -4626,12 +4633,12 @@ document.addEventListener('keydown', (e) => {
     case 'ArrowDown':
       e.preventDefault();
       if (state.scaleAxis === 'uniform') {
-        t.scaleX = Math.max(20, t.scaleX - 0.5);
-        t.scaleY = Math.max(20, t.scaleY - 0.5);
+        t.scaleX = Math.max(20, Math.round((t.scaleX - 0.1) * 10) / 10);
+        t.scaleY = Math.max(20, Math.round((t.scaleY - 0.1) * 10) / 10);
       } else if (state.scaleAxis === 'x') {
-        t.scaleX = Math.max(20, t.scaleX - 0.5);
+        t.scaleX = Math.max(20, Math.round((t.scaleX - 0.1) * 10) / 10);
       } else {
-        t.scaleY = Math.max(20, t.scaleY - 0.5);
+        t.scaleY = Math.max(20, Math.round((t.scaleY - 0.1) * 10) / 10);
       }
       syncSlidersToTarget();
       render();
