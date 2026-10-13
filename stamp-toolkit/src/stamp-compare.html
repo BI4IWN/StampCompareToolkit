@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.4</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.5</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.4';
+const APP_VERSION = '2.11.5';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -1640,9 +1640,14 @@ function hueCircleDist(a, b) {
   return d > 180 ? 360 - d : d;
 }
 
-// 排除色匹配：色相 + 饱和度 + 亮度综合判断，区分无彩色（黑/白/灰，hue 恒为 0）与彩色（如红 hue 0）
-function isExcludedBy(hue, sat, val, excludeColors) {
+// 排除色匹配：优先精确颜色集合（v2.11.5，点选什么就删什么）；
+// 无 set 时回退 HSV 贴近匹配（色相 + 饱和度 + 亮度，区分无彩色与彩色）
+function isExcludedBy(r, g, b, hue, sat, val, excludeColors) {
   for (const ex of excludeColors || []) {
+    if (ex.set && ex.set.length) {
+      if (matchesPickedColors(r, g, b, ex.set)) return true;
+      continue;
+    }
     const es = (ex.sat != null ? ex.sat : 1);
     const ev = (ex.val != null ? ex.val : 1);
     if (es < 0.15) {
@@ -1664,21 +1669,29 @@ function isStampPixel(r, g, b, spec) {
   const hueEntries = (spec && spec.hueEntries) || [];
   const excludeColors = (spec && spec.excludeColors) || [];
   const { h: hue, s: sat, v } = rgbToHsv(r, g, b);
-  // 排除色优先：命中任一排除色 → 非墨迹（色相+饱和度+亮度综合，区分黑与红）
-  if (isExcludedBy(hue, sat, v, excludeColors)) return false;
-  // 手工提取色完整信息匹配（与增量提取规则一致，支持黑/灰等深色）：
-  // 双彩色 → 色相±40 + 亮度±0.38 + 饱和度±0.38；无彩点选 → 亮度±0.20 + 饱和度±0.38
-  // 彩色点选要求像素具备基本饱和度（sat≥0.10）：灰纸/白纸等无彩背景与淡彩墨在
-  // 亮度/饱和度窗口内无法区分，无彩兜底会把整张底纸误判为墨迹（全图染墨）
+  // 排除色优先：命中任一排除色 → 非墨迹（精确集合优先，无 set 回退 HSV）
+  if (isExcludedBy(r, g, b, hue, sat, v, excludeColors)) return false;
+  // 手工提取色精确匹配（v2.11.5）：不做色相/饱和度/亮度窗口推断，
+  // 与点选位置采集的颜色簇中任一色 RGB 距离 ≤ PICK_COLOR_TOL 即命中；
+  // 兼容无 set 的旧数据（回退 HSV 窗口规则）
   if (hueEntries.length) {
+    let hasSet = false;
     for (const e of hueEntries) {
-      const cSat = e.sat != null ? e.sat : 1;
-      const cVal = e.val != null ? e.val : 1;
-      const dV = Math.abs(v - cVal), dS = Math.abs(sat - cSat);
-      const hit = cSat >= 0.12
-        ? (sat >= 0.10 && hueCircleDist(hue, e.hue) <= 40 && dV <= 0.38 && dS <= 0.38)
-        : (v >= 0.05 && dV <= 0.20 && dS <= 0.38);
-      if (hit) return true;
+      if (e.set && e.set.length) {
+        hasSet = true;
+        if (matchesPickedColors(r, g, b, e.set)) return true;
+      }
+    }
+    if (!hasSet) {
+      for (const e of hueEntries) {
+        const cSat = e.sat != null ? e.sat : 1;
+        const cVal = e.val != null ? e.val : 1;
+        const dV = Math.abs(v - cVal), dS = Math.abs(sat - cSat);
+        const hit = cSat >= 0.12
+          ? (sat >= 0.10 && hueCircleDist(hue, e.hue) <= 40 && dV <= 0.38 && dS <= 0.38)
+          : (v >= 0.05 && dV <= 0.20 && dS <= 0.38);
+        if (hit) return true;
+      }
     }
     if (hues.length === 0) return false; // 已用完整信息匹配，不重复旧 hues 路径
   }
@@ -2037,8 +2050,8 @@ function extractStamp(canvas, region, inkSpec) {
         else hue = 60 * ((rn - gn) / delta + 4);
         if (hue < 0) hue += 360;
 
-        // 排除色优先：命中任一排除色 → 该像素强制透明（不参与提取）
-        if (isExcludedBy(hue, sat, max, excludeColors)) {
+        // 排除色优先：命中任一排除色 → 该像素强制透明（不参与提取；精确集合优先）
+        if (isExcludedBy(r, g, b, hue, sat, max, excludeColors)) {
           td.data[idx + 3] = 0;
           alphaMap[y * OUT + x] = 0;
           continue;
@@ -2268,7 +2281,7 @@ const PREVIEW_ZOOM_LEVELS = [1, 2, 3, 4];
     const { h, s } = rgbToHsv(r, g, b);
     const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
     pickSwatch.style.background = hex;
-    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 色相 ${Math.round(h)}°${s < 0.12 ? ' · 偏灰' : ''}`;
+    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 精确匹配该颜色`;
     renderCanvasZoom(canvasEl, e);
     pickLoupe.style.display = 'block';
     const lx = Math.min(window.innerWidth - 150, e.clientX + 16);
@@ -2281,10 +2294,11 @@ const PREVIEW_ZOOM_LEVELS = [1, 2, 3, 4];
   });
   canvasEl.addEventListener('click', (e) => {
     // 取色模式下：在提取结果上点选颜色（邻域采样，透明区域给出提示）
+    // 以提取完成的为准：点选结果中已显示的颜色，精确叠加/删除该颜色
     if (state.pickingTarget === target) {
-      const rgb = sampleCanvasColor(canvasEl, e);
-      if (rgb) {
-        addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
+      const picked = sampleCanvasColor(canvasEl, e, true);
+      if (picked) {
+        addCustomInk(target, picked[0][0], picked[0][1], picked[0][2], state.pickExclude, picked);
       } else {
         showStatus('此处附近未检测到墨迹（透明区域）— 请点选有颜色的笔画，或改在上方原图预览上取色');
       }
@@ -2352,10 +2366,10 @@ function activeInkSpec(target) {
   const presets = ink.presets;
   const extractList = ink.customs.filter(c => c.on && !c.exclude);
   const hues = extractList.map(c => c.hue);
-  const hueEntries = extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val }));
+  const hueEntries = extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val, set: c.set }));
   const excludeList = ink.customs.filter(c => c.on && c.exclude);
   const excludes = excludeList.map(c => c.hue);
-  const excludeColors = excludeList.map(c => ({ hue: c.hue, sat: c.sat != null ? c.sat : 1, val: c.val != null ? c.val : 1 }));
+  const excludeColors = excludeList.map(c => ({ hue: c.hue, sat: c.sat != null ? c.sat : 1, val: c.val != null ? c.val : 1, set: c.set }));
   // 无任何选择时兜底红章（用于初始自动提取）；一旦有手工颜色则完全按手工选择，不叠加默认色
   if (presets.length === 0 && hues.length === 0 && excludes.length === 0) {
     return { presets: ['red'], hues: [], hueEntries: [], excludes: [], excludeColors: [] };
@@ -2469,8 +2483,45 @@ function renderCustomInkChips(target) {
   renderGroup(excContainer, customs.filter(c => c.exclude));
 }
 
+// ============================================================
+// 精确颜色取色模型（v2.11.5）：手工取色不做色相/饱和度/亮度窗口推断，
+// 点选什么颜色就叠加/删除什么颜色 —— 匹配 = 与点选位置采集的颜色簇
+// 中任一色的 RGB 距离 ≤ PICK_COLOR_TOL
+// ============================================================
+const PICK_COLOR_TOL = 26;   // 精确色匹配容差（RGB 欧氏距离，覆盖抗锯齿/压缩噪声）
+const PICK_SET_MAX = 6;      // 每个色点采集的邻域代表色数量上限
+
+function matchesPickedColors(r, g, b, colors) {
+  for (let k = 0; k < colors.length; k++) {
+    const dr = r - colors[k][0], dg = g - colors[k][1], db = b - colors[k][2];
+    if (dr * dr + dg * dg + db * db <= PICK_COLOR_TOL * PICK_COLOR_TOL) return true;
+  }
+  return false;
+}
+
+// 邻域颜色簇聚类：收集与基准色相近（同笔画渐变）的代表色，互相距离 > 24 视为不同代表
+function collectColorSet(base, pixels) {
+  const reps = [base];
+  for (const p of pixels) {
+    let near = false;
+    for (const q of reps) {
+      const dr = p[0] - q[0], dg = p[1] - q[1], db = p[2] - q[2];
+      if (dr * dr + dg * dg + db * db <= 24 * 24) { near = true; break; }
+    }
+    if (!near) {
+      // 只保留与基准色同属一笔画的颜色（距离受限），防止把邻接的其他颜色带进来
+      const dr = p[0] - base[0], dg = p[1] - base[1], db = p[2] - base[2];
+      if (dr * dr + dg * dg + db * db > 80 * 80) continue;
+      reps.push(p);
+      if (reps.length >= PICK_SET_MAX) break;
+    }
+  }
+  return reps;
+}
+
 // 手工添加墨色（来自取色器）：直接记录颜色，在自动提取结果上叠加（提取）或剔除（排除）
-function addCustomInk(target, r, g, b, exclude) {
+// colorSet：点选位置邻域采集的颜色簇 [[r,g,b],...]，精确匹配用
+function addCustomInk(target, r, g, b, exclude, colorSet) {
   const { h, s, v } = rgbToHsv(r, g, b);
   const ink = state.ink[target];
   // 颜色数量上限：超过 MAX_INK_COLORS 给与提示
@@ -2479,9 +2530,9 @@ function addCustomInk(target, r, g, b, exclude) {
     return false;
   }
   const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-  ink.customs.push({ hue: h, sat: s, val: v, hex, on: true, exclude: !!exclude });
+  ink.customs.push({ hue: h, sat: s, val: v, hex, on: true, exclude: !!exclude, set: colorSet && colorSet.length ? colorSet : [[r, g, b]] });
   renderInkPanel(target);
-  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（色相 ${Math.round(h)}°）`);
+  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（精确匹配该颜色）`);
   return true;
 }
 
@@ -2569,7 +2620,7 @@ function maybeRefineRegion(target) {
   if (!st.original) return;
   const extractList = state.ink[target].customs.filter(c => c.on && !c.exclude);
   if (!extractList.length) return;
-  const spec = { presets: [], hues: [], hueEntries: extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val })), excludes: [], excludeColors: [] };
+  const spec = { presets: [], hues: [], hueEntries: extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val, set: c.set })), excludes: [], excludeColors: [] };
   const imageData = getOrigData(st);
   const detection = detectStampCandidates(imageData, spec);
   if (!detection.regions.length) return;
@@ -2620,16 +2671,27 @@ function recomputeExtracted(target) {
     const map = cropMapFor(st);
     const orig = getOrigData(st);
     const ow = orig._w, oh = orig._h;
-    const EXTRACT_TOL = 18, EXCLUDE_TOL = 8;
+    const TOL2 = PICK_COLOR_TOL * PICK_COLOR_TOL;
 
-    // 1) 提取色：叠加原图匹配像素 —— 「点选必出」宽匹配
-    //    双方均为彩色：色相 ±40° + 亮度 ±0.38 + 饱和度 ±0.38（亮度/饱和度为主，暗色像素色相抖动大不苛求）
-    //    无彩点选（灰/黑）：色相不可靠 → 亮度 ±0.20 + 饱和度 ±0.38
-    //    彩色点选要求像素具备基本饱和度（s≥0.10）：无彩底纸与淡彩墨在亮度/饱和度窗口内
-    //    无法区分，无彩兜底会把整张底纸染成墨迹（与 isStampPixel 规则同步）
-    for (const c of customs.filter(c => !c.exclude)) {
-      const cSat = c.sat != null ? c.sat : 1;
-      const cVal = c.val != null ? c.val : 1;
+    // 1) 提取色：叠加原图中与点选颜色簇精确匹配的像素（v2.11.5：
+    //    不做色相/饱和度/亮度窗口推断，点选什么颜色就叠加什么颜色）。
+    //    先按所有颜色的 RGB 包围盒快速排除（纯整数比较），再逐色集合比较
+    const extractColors = customs.filter(c => !c.exclude);
+    let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
+    for (const c of extractColors) {
+      for (const p of (c.set || [])) {
+        rMin = Math.min(rMin, p[0]); rMax = Math.max(rMax, p[0]);
+        gMin = Math.min(gMin, p[1]); gMax = Math.max(gMax, p[1]);
+        bMin = Math.min(bMin, p[2]); bMax = Math.max(bMax, p[2]);
+      }
+    }
+    const margin = PICK_COLOR_TOL;
+    rMin = Math.max(0, rMin - margin); rMax = Math.min(255, rMax + margin);
+    gMin = Math.max(0, gMin - margin); gMax = Math.min(255, gMax + margin);
+    bMin = Math.max(0, bMin - margin); bMax = Math.min(255, bMax + margin);
+    for (const c of extractColors) {
+      const set = c.set || [];
+      if (!set.length) continue;
       for (let y = 0; y < OUT; y++) {
         const oy = Math.min(oh - 1, Math.max(0, Math.round(map.sy + (y - map.dy) / map.ratio)));
         const rowO = oy * ow;
@@ -2640,33 +2702,33 @@ function recomputeExtracted(target) {
           const ox = Math.min(ow - 1, Math.max(0, Math.round(map.sx + (x - map.dx) / map.ratio)));
           const oi = (rowO + ox) * 4;
           const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
-          const { h, s, v } = rgbToHsv(r, g, b);
-          const dV = Math.abs(v - cVal), dS = Math.abs(s - cSat);
-          const hit = cSat >= 0.12
-            ? (s >= 0.10 && hueCircleDist(h, c.hue) <= 40 && dV <= 0.38 && dS <= 0.38)   // 彩色点选：像素须有基本饱和度 + 色相匹配
-            : (dV <= 0.20 && dS <= 0.38);                                               // 无彩点选（灰/黑/暗色）：亮度/饱和度贴近
-          if (hit) {
-            img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
-            img.data[i + 3] = 255;
-            added++;
+          if (r < rMin || r > rMax || g < gMin || g > gMax || b < bMin || b > bMax) continue; // 包围盒快速排除
+          for (let k = 0; k < set.length; k++) {
+            const dr = r - set[k][0], dg = g - set[k][1], db = b - set[k][2];
+            if (dr * dr + dg * dg + db * db <= TOL2) {
+              img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+              img.data[i + 3] = 255;
+              added++;
+              break;
+            }
           }
         }
       }
     }
-    // 2) 排除色：剔除当前结果中匹配的像素（容差略窄于提取，避免误删邻近墨色）
+    // 2) 排除色：剔除当前结果中精确匹配的像素（点选什么颜色就删什么颜色）
     for (const c of customs.filter(c => c.exclude)) {
-      const cSat = c.sat != null ? c.sat : 1;
-      const cVal = c.val != null ? c.val : 1;
+      const set = c.set || [];
+      if (!set.length) continue;
       for (let i = 0; i < img.data.length; i += 4) {
         if (img.data[i + 3] < 30) continue;
-        const { h, s, v } = rgbToHsv(img.data[i], img.data[i + 1], img.data[i + 2]);
-        const dV = Math.abs(v - cVal), dS = Math.abs(s - cSat);
-        const hit = (cSat >= 0.12 && s >= 0.12)
-          ? (hueCircleDist(h, c.hue) <= 30 && dV <= 0.25 && dS <= 0.32)
-          : (dV <= 0.15 && dS <= 0.30);
-        if (hit) {
-          img.data[i + 3] = 0;
-          removed++;
+        const r = img.data[i], g = img.data[i + 1], b = img.data[i + 2];
+        for (let k = 0; k < set.length; k++) {
+          const dr = r - set[k][0], dg = g - set[k][1], db = b - set[k][2];
+          if (dr * dr + dg * dg + db * db <= TOL2) {
+            img.data[i + 3] = 0;
+            removed++;
+            break;
+          }
         }
       }
     }
@@ -2918,21 +2980,10 @@ function previewCursorPos(zone, e) {
 // 提取色：在 7×7 邻域内取"最像墨迹"的像素（饱和度最高，排除白底/黑字），
 //         避免点击笔画间隙或抗锯齿边缘取到过浅的颜色导致"像没反应"
 // 排除色：取点击处 3×3 平均，保证取到用户指向的精确颜色
-function samplePreviewColor(zone, e) {
+function samplePreviewColor(zone, e, wantSet) {
   const pos = previewCursorPos(zone, e);
   if (!pos) return null;
   const { img, nx, ny } = pos;
-
-  if (state.pickExclude) {
-    const s3x = Math.max(0, Math.min(img.naturalWidth - 3, nx - 1));
-    const s3y = Math.max(0, Math.min(img.naturalHeight - 3, ny - 1));
-    _pickCanvas.width = 3; _pickCanvas.height = 3;
-    _pickCtx.drawImage(img, s3x, s3y, 3, 3, 0, 0, 3, 3);
-    const d3 = _pickCtx.getImageData(0, 0, 3, 3).data;
-    let r = 0, g = 0, b = 0;
-    for (let i = 0; i < d3.length; i += 4) { r += d3[i]; g += d3[i + 1]; b += d3[i + 2]; }
-    return [Math.round(r / 9), Math.round(g / 9), Math.round(b / 9)];
-  }
 
   const R = 3; // 7×7 邻域
   const sx = Math.max(0, nx - R), sy = Math.max(0, ny - R);
@@ -2941,24 +2992,30 @@ function samplePreviewColor(zone, e) {
   _pickCanvas.width = w; _pickCanvas.height = h;
   _pickCtx.drawImage(img, sx, sy, w, h, 0, 0, w, h);
   const d = _pickCtx.getImageData(0, 0, w, h).data;
-  let best = null, bestScore = -1;
-  for (let i = 0; i < d.length; i += 4) {
-    const { s: ss, v: vv } = rgbToHsv(d[i], d[i + 1], d[i + 2]);
-    if (vv < 0.08 || vv > 0.97 || ss < 0.05) continue; // 跳过黑字与白底
-    if (ss > bestScore) { bestScore = ss; best = [d[i], d[i + 1], d[i + 2]]; }
+  // 基准色：点击处 3×3 均值（跳过近黑/近白像素，抗噪）
+  let br = 0, bg = 0, bb = 0, bn = 0;
+  const near = [];
+  for (let yy = 0; yy < h; yy++) {
+    for (let xx = 0; xx < w; xx++) {
+      const i = (yy * w + xx) * 4;
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const v = mx / 255, s = mx > 0 ? (mx - mn) / mx : 0;
+      if (v < 0.08 || v > 0.97) continue; // 跳过近黑与近白
+      near.push([r, g, b]);
+      if (Math.abs(xx - (nx - sx)) <= 1 && Math.abs(yy - (ny - sy)) <= 1) { br += r; bg += g; bb += b; bn++; }
+    }
   }
-  if (!best) {
-    // 邻域内无有效颜色：退回 3×3 平均（保留旧行为兜底）
-    const s3x = Math.max(0, Math.min(img.naturalWidth - 3, nx - 1));
-    const s3y = Math.max(0, Math.min(img.naturalHeight - 3, ny - 1));
-    _pickCanvas.width = 3; _pickCanvas.height = 3;
-    _pickCtx.drawImage(img, s3x, s3y, 3, 3, 0, 0, 3, 3);
-    const d3 = _pickCtx.getImageData(0, 0, 3, 3).data;
-    let r = 0, g = 0, b = 0;
-    for (let i = 0; i < d3.length; i += 4) { r += d3[i]; g += d3[i + 1]; b += d3[i + 2]; }
-    return [Math.round(r / 9), Math.round(g / 9), Math.round(b / 9)];
+  if (!bn) {
+    // 3×3 全为极端色：退回全邻域均值（保留旧行为兜底）
+    if (!near.length) return null;
+    for (const p of near) { br += p[0]; bg += p[1]; bb += p[2]; }
+    bn = near.length;
   }
-  return best;
+  const base = [Math.round(br / bn), Math.round(bg / bn), Math.round(bb / bn)];
+  if (!wantSet) return base;
+  // 精确色集合：邻域内与基准色同属一笔画的颜色簇（聚类去重）
+  return collectColorSet(base, near);
 }
 
 // 取色放大镜：显示光标处 4× 放大的图像区域 + 十字准线
@@ -2985,7 +3042,8 @@ function renderPickZoom(zone, e) {
 
 // 在已提取印章画布上采样颜色：取邻域内 alpha 最高的像素（透明区域忽略）
 // 邻域半径随缩放倍数放大（显示尺度恒定 ±3px），解决"点在笔画间隙就取不到色"的问题
-function sampleCanvasColor(canvas, e) {
+// wantSet=true 时返回精确色集合（邻域不透明像素的颜色簇）
+function sampleCanvasColor(canvas, e, wantSet) {
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return null;
   const x = Math.floor((e.clientX - rect.left) / rect.width * canvas.width);
@@ -2997,11 +3055,14 @@ function sampleCanvasColor(canvas, e) {
   const ex = Math.min(canvas.width - 1, x + R), ey = Math.min(canvas.height - 1, y + R);
   const d = ctx.getImageData(sx, sy, ex - sx + 1, ey - sy + 1).data;
   let best = null, bestA = 0;
+  const opaque = [];
   for (let i = 3; i < d.length; i += 4) {
+    if (d[i] >= 30) opaque.push([d[i - 3], d[i - 2], d[i - 1]]);
     if (d[i] > bestA) { bestA = d[i]; best = [d[i - 3], d[i - 2], d[i - 1]]; }
   }
   if (bestA < 30) return null;
-  return best;
+  if (!wantSet) return best;
+  return collectColorSet(best, opaque);
 }
 
 // 提取结果画布放大镜
@@ -3037,7 +3098,7 @@ function renderCanvasZoom(canvas, e) {
     const { h, s } = rgbToHsv(r, g, b);
     const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
     pickSwatch.style.background = hex;
-    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 色相 ${Math.round(h)}°${s < 0.12 ? ' · 偏灰' : ''}`;
+    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 精确匹配该颜色`;
     renderPickZoom(zone, e);
     pickLoupe.style.display = 'block';
     const lx = Math.min(window.innerWidth - 150, e.clientX + 16);
@@ -3050,12 +3111,12 @@ function renderCanvasZoom(canvas, e) {
   });
   zone.addEventListener('click', (e) => {
     if (state.pickingTarget !== target) return;
-    const rgb = samplePreviewColor(zone, e);
-    if (!rgb) {
+    const picked = samplePreviewColor(zone, e, true);
+    if (!picked) {
       showStatus('未取到颜色：请点选图片内印章墨迹处（图片边缘留白区域无法取色）');
       return;
     }
-    addCustomInk(target, rgb[0], rgb[1], rgb[2], state.pickExclude);
+    addCustomInk(target, picked[0][0], picked[0][1], picked[0][2], state.pickExclude, picked);
   });
 });
 

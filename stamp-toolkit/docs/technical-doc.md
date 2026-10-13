@@ -173,10 +173,10 @@ const INK_BANDS = {
 - 提取阶段：色带各向外扩 5° 保留褪色边缘；每像素取距离最近的命中色带计算置信度，并按色带增强对应通道（红→R、蓝→B、紫→R+B）
 - UI 约束：至少保留一种墨色（最后一种不可取消）；切换后已加载印章自动重提取并重置变换
 - 后端 `/ocr` 的 `color` 参数接受逗号分隔多值（如 `red,blue,purple`），`_single_ink_mask` 按色取并集
-- 手工取色（v2.3.0 起，v2.4.0 按印章独立，v2.5.0 增加排除，v2.9.4 增量模型，v2.10.2 宽匹配）：`state.ink[target].customs` 保存自选色 `{hue, sat, val, hex, on, exclude}`，面板以色点芯片展示、支持 × 剔除、启停与「提取/排除」切换。匹配规则（检测 isStampPixel 与增量提取 recomputeExtracted 同步）：
-  - **彩色点选**（点选色饱和度 ≥ 0.12）：像素饱和度 ≥ 0.10 且色相差 ≤ 40° 且 |Δ亮度| ≤ 0.38 且 |Δ饱和度| ≤ 0.38 —— 像素饱和度门槛防止灰纸等无彩底色在亮度/饱和度窗口内被整片误判为墨迹（v2.11.3）
-  - **无彩点选**（黑/灰，饱和度 < 0.12）：亮度 ≥ 0.05 且 |Δ亮度| ≤ 0.20 且 |Δ饱和度| ≤ 0.38
-  - 后端 OCR 的 hues 命中仍按色相环 ±18°（含 0°/360° 回绕）
+- 手工取色（v2.3.0 起，v2.4.0 按印章独立，v2.5.0 增加排除，v2.9.4 增量模型，v2.11.5 精确颜色模型）：`state.ink[target].customs` 保存自选色 `{hue, sat, val, hex, on, exclude, set}`，`set` 为点选位置邻域采集的颜色簇 `[[r,g,b],...]`（collectColorSet 聚类去重，≤ 6 个代表色）。匹配规则（检测 isStampPixel、排除 isExcludedBy、增量提取 recomputeExtracted 三处同步）：
+  - **精确匹配**（v2.11.5）：像素 RGB 与颜色簇中任一色的欧氏距离 ≤ 26（PICK_COLOR_TOL）即命中，无任何 HSV 窗口推断——点选什么颜色就叠加/删除什么颜色
+  - 性能：增量叠加为纯整数距离比较（无逐像素 HSV 转换），先按全部点选色的 RGB 包围盒（±26 margin）快速排除，单次全量重算 ~18ms（1200² 画布）
+  - 无 set 的旧数据回退 v2.11.3 HSV 窗口规则；后端 OCR 的 hues 命中仍按色相环 ±18°（含 0°/360° 回绕）
 - **颜色排除（v2.5.0）**：`activeInkSpec(target)` 返回 `{presets, hues, excludes}`；排除色优先——像素命中排除色相即判为非墨迹（前端 `isStampPixel`/`extractStamp` 与后端 `extract_ink_mask` 均先做排除相减）。后端 `/ocr` 新增 `excludes` 参数，经 `parse_ink_colors` 解析后贯通印章中心/多印章检测与通道提取
 - 预设色可全部清空、仅按自选色提取：`activeInkSpec(target)` 与后端 `parse_ink_colors` 仅在预设与 hues 均为空时才兜底红章；两枚印章的预设/自选色完全独立
 
