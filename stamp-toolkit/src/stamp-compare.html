@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.8</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.9</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.8';
+const APP_VERSION = '2.11.9';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2687,48 +2687,67 @@ function maybeRefineRegion(target) {
   const spec = { presets: [], hues: [], hueEntries: extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val, set: c.set })), excludes: [], excludeColors: [] };
   const imageData = getOrigData(st);
   const detection = detectStampCandidates(imageData, spec);
-  if (!detection.regions.length) return;
-  const r0 = detection.regions[0];
-  if (!r0.area || r0.area <= 0) return; // fallback 整图（该色也定位失败）→ 不动
+  const valid = (detection.regions || []).filter(r => r.area && r.area > 0);
+  if (!valid.length) return; // fallback 整图（手工色也定位失败）→ 不动
 
   const W = st.original.width, H = st.original.height;
-  const bcx = st.bbox ? st.bbox.x + st.bbox.w / 2 : W / 2;
-  const bcy = st.bbox ? st.bbox.y + st.bbox.h / 2 : H / 2;
-  const dist = Math.hypot(r0.cx - bcx, r0.cy - bcy);
-  const refW = st.bbox ? st.bbox.w : W;
-  // 中心偏离明显（>25% 边长）→ 当前定位与手工色所在区域不符，迁移
-  if (dist <= refW * 0.25) return;
+  // 手工色墨迹整体范围 = 全部有效候选的并集（候选可能只覆盖章的局部墨迹，
+  // 如淡章浓淡不均时左右弧各自成块 —— 仅取最大候选会让部分手工色墨迹
+  // 落在框外，被 crop 映射 clamp 裁掉）
+  const u = valid.reduce((acc, r) => ({
+    x1: Math.min(acc.x1, r.x), y1: Math.min(acc.y1, r.y),
+    x2: Math.max(acc.x2, r.x + r.w), y2: Math.max(acc.y2, r.y + r.h),
+  }), { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
+  const r0 = valid[0];
 
-  // 迁移目标框（v2.11.7 起只扩不缩；v2.11.8 改为以当前框中心为锚的圆形扩展）：
-  // 手工色候选只覆盖点选颜色所在的局部墨迹（如一段外圈、几个文字），直接用它的
-  // 半径会把框缩小到局部、裁掉整章其余部分；而矩形并集又会被框外远端杂物拉偏
-  // 中心（印章不居中）。规则：
-  //   - 新区域与当前 bbox 重叠或间隙 < max(24, 当前框 15%) → 同一枚章：
-  //     保持当前框中心不动，半径取 max(当前半径, 锚点到新区域最远角距离)+6
-  //   - 完全分离（另一枚印章）→ 用新区域自身框
-  let newHalf = Math.ceil(r0.radius) + 6;
-  let ncx = r0.cx, ncy = r0.cy;
+  // 目标框（v2.11.9）：每次取色后无条件确保框覆盖全部手工色墨迹与已有提取内容。
+  //   - 手工色范围与当前 bbox 重叠或间隙 < max(24, 当前框 15%) → 同枚章：
+  //     圆覆盖 —— 把「全部手工色候选（各为质心+半径的圆）」与「当前框圆」
+  //     （代表框内已提取内容）从大到小做最小覆盖圆（增量近似）。以圆为单元
+  //     幂等收敛（重复取色不膨胀）；矩形四角模型会把无墨迹的框角撑入圆内，
+  //     且重复吸收会持续膨胀
+  //   - 完全分离（点的是另一枚印章）→ 迁移到手工色自身框
+  //   - 框无变化时不重置基础（避免无谓重算）
+  let ncx, ncy, newHalf;
+  let replace = false;
   if (st.bbox) {
     const b = st.bbox;
-    const gapX = Math.max(b.x - (r0.x + r0.w), r0.x - (b.x + b.w), 0);
-    const gapY = Math.max(b.y - (r0.y + r0.h), r0.y - (b.y + b.h), 0);
+    const gapX = Math.max(b.x - u.x2, u.x1 - (b.x + b.w), 0);
+    const gapY = Math.max(b.y - u.y2, u.y1 - (b.y + b.h), 0);
     const gap = Math.hypot(gapX, gapY);
     if (gap <= Math.max(24, Math.max(b.w, b.h) * 0.15)) {
-      const acx = b.x + b.w / 2, acy = b.y + b.h / 2;
-      const far = Math.max(
-        Math.hypot(r0.x - acx, r0.y - acy),
-        Math.hypot(r0.x + r0.w - acx, r0.y - acy),
-        Math.hypot(r0.x - acx, r0.y + r0.h - acy),
-        Math.hypot(r0.x + r0.w - acx, r0.y + r0.h - acy),
-      );
+      const circles = [[b.x + b.w / 2, b.y + b.h / 2, Math.max(b.w, b.h) / 2]]
+        .concat(valid.map(r => [r.cx, r.cy, r.radius]));
+      circles.sort((a, b2) => b2[2] - a[2]); // 大圆优先，减少序依赖
+      let acx = circles[0][0], acy = circles[0][1], aR = circles[0][2];
+      for (const [cx, cy, r] of circles) {
+        const d = Math.hypot(cx - acx, cy - acy);
+        if (d + r > aR) {
+          const t = (d + r - aR) / (2 * d);
+          acx += (cx - acx) * t;
+          acy += (cy - acy) * t;
+          aR += (d + r - aR) / 2;
+        }
+      }
       ncx = acx; ncy = acy;
-      newHalf = Math.ceil(Math.max(Math.max(b.w, b.h) / 2, far)) + 6;
+      newHalf = Math.ceil(aR) + 6;
+    } else {
+      replace = true;
     }
+  } else {
+    replace = true;
+  }
+  if (replace) {
+    ncx = r0.cx; ncy = r0.cy;
+    newHalf = Math.ceil(r0.radius) + 6;
   }
   const cropHalf = Math.round(newHalf);
   const cx = Math.max(cropHalf, Math.min(W - cropHalf, Math.round(ncx)));
   const cy = Math.max(cropHalf, Math.min(H - cropHalf, Math.round(ncy)));
-  st.bbox = { x: cx - cropHalf, y: cy - cropHalf, w: cropHalf * 2, h: cropHalf * 2, fitSize: cropHalf * 2 };
+  const nx = cx - cropHalf, ny = cy - cropHalf, nw = cropHalf * 2;
+  // 框未变化（尺寸与位置都一致）→ 保持现状，不触发基础重算
+  if (st.bbox && st.bbox.x === nx && st.bbox.y === ny && st.bbox.w === nw) return;
+  st.bbox = { x: nx, y: ny, w: nw, h: nw, fitSize: nw };
   st.candidates = detection.regions;
   st.candidateIndex = 0;
   st.circular = r0.circular;
