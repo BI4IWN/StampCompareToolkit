@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.9</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.10</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.9';
+const APP_VERSION = '2.11.10';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2676,6 +2676,31 @@ function cropMapFor(st) {
   };
 }
 
+// 已提取内容的真实墨迹圆：从基础画布非透明像素反算回原图坐标。
+// 用于取色时的区域重建 —— 框只是估计（会被反复撑大虚高），墨迹才是内容；
+// 被排除色删掉的像素自动不计入（用户已删除的内容不再约束框）
+function baseContentCircle(st) {
+  if (!st.baseExtracted) return null;
+  const b = st.baseExtracted;
+  const d = b.getContext('2d').getImageData(0, 0, b.width, b.height).data;
+  let minX = 1e9, minY = 1e9, maxX = -1, maxY = -1;
+  for (let y = 0; y < b.height; y += 3) {
+    for (let x = 0; x < b.width; x += 3) {
+      if (d[(y * b.width + x) * 4 + 3] >= 30) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null;
+  const map = cropMapFor(st);
+  const ox1 = map.sx + (minX - map.dx) / map.ratio, oy1 = map.sy + (minY - map.dy) / map.ratio;
+  const ox2 = map.sx + (maxX - map.dx) / map.ratio, oy2 = map.sy + (maxY - map.dy) / map.ratio;
+  return [(ox1 + ox2) / 2, (oy1 + oy2) / 2, Math.max(ox2 - ox1, oy2 - oy1) / 2];
+}
+
 // 手工提取色定位校正：黑白/灰等非预设色印章在默认红预设下定位失败
 // （bbox 落到纸面噪点或角落）时，按手工提取色重新检测印章区域并迁移 bbox，
 // 使增量叠加覆盖完整印章而非一个角
@@ -2716,8 +2741,12 @@ function maybeRefineRegion(target) {
     const gapY = Math.max(b.y - u.y2, u.y1 - (b.y + b.h), 0);
     const gap = Math.hypot(gapX, gapY);
     if (gap <= Math.max(24, Math.max(b.w, b.h) * 0.15)) {
-      const circles = [[b.x + b.w / 2, b.y + b.h / 2, Math.max(b.w, b.h) / 2]]
-        .concat(valid.map(r => [r.cx, r.cy, r.radius]));
+      // 覆盖集合：全部手工色候选圆 + 已提取内容墨迹圆（框圆仅作无内容时兜底）。
+      // 框圆是估计值且会被本次结果再撑大，作为输入会造成"每取一色框大一圈、
+      // 章在画布中相对缩小并偏移"；墨迹圆反映真实内容，多取色时框收敛稳定
+      const content = baseContentCircle(st);
+      const anchor = content || [b.x + b.w / 2, b.y + b.h / 2, Math.max(b.w, b.h) / 2];
+      const circles = [anchor].concat(valid.map(r => [r.cx, r.cy, r.radius]));
       circles.sort((a, b2) => b2[2] - a[2]); // 大圆优先，减少序依赖
       let acx = circles[0][0], acy = circles[0][1], aR = circles[0][2];
       for (const [cx, cy, r] of circles) {
