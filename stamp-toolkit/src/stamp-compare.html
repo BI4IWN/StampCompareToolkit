@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.6</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.7</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.6';
+const APP_VERSION = '2.11.7';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2491,7 +2491,7 @@ function renderCustomInkChips(target) {
 // 点选什么颜色就叠加/删除什么颜色 —— 匹配 = 与点选位置采集的颜色簇
 // 中任一色的 RGB 距离 ≤ PICK_COLOR_TOL
 // ============================================================
-const PICK_COLOR_TOL = 26;   // 精确色匹配容差（RGB 欧氏距离，覆盖抗锯齿/压缩噪声）
+const PICK_COLOR_TOL = 20;   // 精确色匹配容差（RGB 欧氏距离：覆盖抗锯齿/压缩噪声，又不吞并相近底色）
 const PICK_SET_MAX = 6;      // 每个色点采集的邻域代表色数量上限
 
 function matchesPickedColors(r, g, b, colors) {
@@ -2638,9 +2638,29 @@ function maybeRefineRegion(target) {
   // 中心偏离明显（>25% 边长）→ 当前定位与手工色所在区域不符，迁移
   if (dist <= refW * 0.25) return;
 
-  const cropHalf = Math.ceil(r0.radius) + 6; // 与 detectStampCandidates 一致的外圈余量
-  const cx = Math.max(cropHalf, Math.min(W - cropHalf, Math.round(r0.cx)));
-  const cy = Math.max(cropHalf, Math.min(H - cropHalf, Math.round(r0.cy)));
+  // 迁移目标框（v2.11.7）：手工色候选只覆盖点选颜色所在的局部墨迹（如一段外圈、
+  // 几个文字），直接用它的半径会把框缩小到局部、裁掉整章其余部分。
+  // 规则：
+  //   - 新区域与当前 bbox 重叠或间隙 < max(24, 当前框 15%) → 视为同一枚章，
+  //     取两框并集（只扩不缩，保证外圈完整）
+  //   - 完全分离（另一枚印章）→ 用新区域自身框
+  let newHalf = Math.ceil(r0.radius) + 6;
+  let ncx = r0.cx, ncy = r0.cy;
+  if (st.bbox) {
+    const b = st.bbox;
+    const gapX = Math.max(b.x - (r0.x + r0.w), r0.x - (b.x + b.w), 0);
+    const gapY = Math.max(b.y - (r0.y + r0.h), r0.y - (b.y + b.h), 0);
+    const gap = Math.hypot(gapX, gapY);
+    if (gap <= Math.max(24, Math.max(b.w, b.h) * 0.15)) {
+      const ux1 = Math.min(b.x, r0.x), uy1 = Math.min(b.y, r0.y);
+      const ux2 = Math.max(b.x + b.w, r0.x + r0.w), uy2 = Math.max(b.y + b.h, r0.y + r0.h);
+      ncx = (ux1 + ux2) / 2; ncy = (uy1 + uy2) / 2;
+      newHalf = Math.ceil(Math.max(ux2 - ux1, uy2 - uy1) / 2) + 6;
+    }
+  }
+  const cropHalf = Math.round(newHalf);
+  const cx = Math.max(cropHalf, Math.min(W - cropHalf, Math.round(ncx)));
+  const cy = Math.max(cropHalf, Math.min(H - cropHalf, Math.round(ncy)));
   st.bbox = { x: cx - cropHalf, y: cy - cropHalf, w: cropHalf * 2, h: cropHalf * 2, fitSize: cropHalf * 2 };
   st.candidates = detection.regions;
   st.candidateIndex = 0;
