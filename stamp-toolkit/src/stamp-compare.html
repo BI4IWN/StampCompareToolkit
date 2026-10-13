@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.7</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.8</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.7';
+const APP_VERSION = '2.11.8';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -1818,23 +1818,130 @@ function detectStampCandidates(imageData, spec) {
     .sort((a, b) => b.area - a.area)
     .slice(0, 6);
 
+  // 单组件统计（碎片预评估与最终候选共用）：质心 / bbox 中心、距离分布、圆形度、半径
+  // 圆形章中心用 bbox 几何中心（v2.11.8）：质心按墨迹面积加权，候选框内混入
+  // 章外同色文字/线条时会被拉偏导致印章不居中；bbox 中心只受几何范围影响
+  const compStats = comp => {
+    const { minX, minY, maxX, maxY } = comp;
+    let comX = 0, comY = 0, comCount = 0;
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (inkMask[y * width + x]) { comX += x; comY += y; comCount++; }
+      }
+    }
+    if (comCount === 0) return null;
+    comX /= comCount; comY /= comCount;
+    const bcx = (minX + maxX) / 2, bcy = (minY + maxY) / 2;
+    const distances = [];
+    let maxRbc = 0; // 墨迹到 bbox 中心最远距离
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (inkMask[y * width + x]) {
+          distances.push(Math.sqrt((x - comX) ** 2 + (y - comY) ** 2));
+          const dbc = Math.sqrt((x - bcx) ** 2 + (y - bcy) ** 2);
+          if (dbc > maxRbc) maxRbc = dbc;
+        }
+      }
+    }
+    distances.sort((a, b) => a - b);
+    const maxR = distances[distances.length - 1] || 0;
+    const bw = maxX - minX + 1, bh = maxY - minY + 1;
+    const p50 = distances[Math.floor(distances.length * 0.5)] || 0;
+    const p97 = distances[Math.floor(distances.length * 0.97)] || maxR;
+    const bboxCircular = Math.abs(bw - bh) / Math.max(bw, bh) < 0.18;
+    const ringLike = p97 > 0 && p50 > 0.5 * p97;
+    let circular = bboxCircular || ringLike;
+    const bboxHalf = Math.max(bw, bh) / 2;
+
+    // 环心拟合（v2.11.8）：章与同色文字/线块在膨胀层粘连成单个非圆组件时，
+    // 质心（面积加权）与 bbox 中心都会被杂物拉偏（印章不居中、框内带入杂物）。
+    // 印章环墨迹在距环心同一半径处密集 —— 距离直方图呈尖峰（峰位=环半径），
+    // 且环上墨迹角度覆盖 360°；杂物块距离分散、角度集中扇区。网格搜索中心，
+    // 取「峰带 [0.85R, 1.15R] 墨迹占比 × 角度覆盖率」最高者为环心
+    let fitCx = null, fitCy = null, fitR = null;
+    if (!circular && comCount > 3000) {
+      const pts = [];
+      for (let y = minY; y <= maxY; y += 3) {
+        for (let x = minX; x <= maxX; x += 3) {
+          if (inkMask[y * width + x]) { pts.push(x, y); }
+        }
+      }
+      const nPts = pts.length / 2;
+      const binW = 10;
+      const nBins = Math.ceil(Math.hypot(bw, bh) / binW) + 2;
+      let best = null;
+      for (let gx = -8; gx <= 8; gx++) {
+        for (let gy = -8; gy <= 8; gy++) {
+          const tcx = bcx + gx * (bw / 30), tcy = bcy + gy * (bh / 30);
+          const hist = new Int32Array(nBins);
+          const ds = new Float32Array(nPts);
+          for (let k = 0; k < nPts; k++) {
+            const dd = Math.hypot(pts[2 * k] - tcx, pts[2 * k + 1] - tcy);
+            ds[k] = dd;
+            hist[Math.min(nBins - 1, (dd / binW) | 0)]++;
+          }
+          let pi = 0;
+          for (let i2 = 1; i2 < nBins; i2++) if (hist[i2] > hist[pi]) pi = i2;
+          const R = pi * binW + binW / 2;
+          if (R < 20) continue;
+          const lo = R * 0.85, hi = R * 1.15;
+          let inBand = 0;
+          const buckets = new Uint8Array(16);
+          for (let k = 0; k < nPts; k++) {
+            if (ds[k] >= lo && ds[k] <= hi) {
+              inBand++;
+              const ang = Math.atan2(pts[2 * k + 1] - tcy, pts[2 * k] - tcx);
+              let bi = ((ang / (Math.PI / 8)) | 0) % 16;
+              if (bi < 0) bi += 16;
+              buckets[bi] = 1;
+            }
+          }
+          let cov = 0;
+          for (let i2 = 0; i2 < 16; i2++) cov += buckets[i2];
+          cov /= 16;
+          const score = (inBand / nPts) * cov;
+          if (!best || score > best.score) best = { score, cov, cx: tcx, cy: tcy, R };
+        }
+      }
+      if (best && best.score >= 0.12 && best.cov >= 0.85) {
+        fitCx = best.cx; fitCy = best.cy; fitR = best.R;
+        circular = true;
+      }
+    }
+
+    const finalRadius = fitR != null
+      ? Math.max(fitR * 1.15, bboxHalf * 0.55)  // 拟合 R 为环中线（直方图峰），外缘外扩 15%
+      : (circular ? Math.max(p97 + 2, maxRbc + 3, bboxHalf) : bboxHalf);
+    return {
+      circular,
+      cx: fitCx != null ? fitCx : (circular ? bcx : comX),
+      cy: fitCy != null ? fitCy : (circular ? bcy : comY),
+      radius: finalRadius,
+    };
+  };
+
   // Pass 4.5: 断裂印章碎片合并 — 淡印/断笔会把同一枚章的圆环切成多个连通域
   // （如仅左下弧最浓，其余弧段过淡未相连），直接取最大域会把定位框缩到一个角。
   // 两轮合并：
-  //   a) 贴近合并：候选包围盒相交或贴近（中心距 ≤ 两框半径和 × 1.05），迭代传递
+  //   a) 贴近合并：候选包围盒相交或贴近（中心距 ≤ 两框半径和 × 1.05），迭代传递。
+  //      完整圆环保护（v2.11.8）：任一组自身已是圆形（完整章）时，只吸收中心距
+  //      ≤ 1.3 × 较大半径的环带内组件 —— 章外同色文字/线块虽贴近但中心在环带外，
+  //      不再被拽进印章候选（框被拉宽、印章偏移不居中、框内带入章外内容）
   //   b) 环形合并：合并后仍 ≥3 组时，检验各组中心是否围绕同一圆心呈环形分布
   //      （各点距圆心 0.5R~1.15R，且圆周角度最大空缺 < 140°）——断裂圆章的碎片
   //      散布圆周各处，独立多枚印章的碎片聚成簇（角度空缺大），以此区分
   if (selected.length > 1) {
+    const groupComp = g => g.comps.reduce((acc, c) => ({
+      area: acc.area + c.area,
+      minX: Math.min(acc.minX, c.minX), minY: Math.min(acc.minY, c.minY),
+      maxX: Math.max(acc.maxX, c.maxX), maxY: Math.max(acc.maxY, c.maxY),
+    }), { area: 0, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
     const bboxCenter = comps => {
-      const b = comps.reduce((acc, c) => ({
-        minX: Math.min(acc.minX, c.minX), minY: Math.min(acc.minY, c.minY),
-        maxX: Math.max(acc.maxX, c.maxX), maxY: Math.max(acc.maxY, c.maxY),
-      }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+      const b = groupComp({ comps });
       return { cx: (b.minX + b.maxX) / 2, cy: (b.minY + b.maxY) / 2, r: Math.max(b.maxX - b.minX, b.maxY - b.minY) / 2 };
     };
-    const groups = selected.map(c => ({ comps: [c] }));
-    // a) 贴近合并（迭代传递）
+    const groups = selected.map(c => ({ comps: [c], stats: compStats(c) })).filter(g => g.stats);
+    // a) 贴近合并（迭代传递；圆形组只吸收环带内组件）
     let merged = true;
     while (merged) {
       merged = false;
@@ -1842,12 +1949,16 @@ function detectStampCandidates(imageData, spec) {
       for (let i = 0; i < groups.length; i++) {
         for (let j = i + 1; j < groups.length; j++) {
           const a = bboxCenter(groups[i].comps), b = bboxCenter(groups[j].comps);
-          if (Math.hypot(a.cx - b.cx, a.cy - b.cy) <= (a.r + b.r) * 1.05) {
-            groups[i].comps = groups[i].comps.concat(groups[j].comps);
-            groups.splice(j, 1);
-            merged = true;
-            break outer;
+          const d = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+          if (d > (a.r + b.r) * 1.05) continue;
+          if (groups[i].stats.circular || groups[j].stats.circular) {
+            if (d > Math.max(groups[i].stats.radius, groups[j].stats.radius) * 1.3) continue;
           }
+          groups[i].comps = groups[i].comps.concat(groups[j].comps);
+          groups[i].stats = compStats(groupComp(groups[i])) || groups[i].stats;
+          groups.splice(j, 1);
+          merged = true;
+          break outer;
         }
       }
     }
@@ -1878,73 +1989,23 @@ function detectStampCandidates(imageData, spec) {
       if (distOK && angleOK) {
         const all = [].concat(...groups.map(g => g.comps));
         groups.length = 0;
-        groups.push({ comps: all });
+        groups.push({ comps: all, stats: compStats(groupComp({ comps: all })) });
       }
     }
-    const mergedComps = groups
-      .map(g => g.comps.reduce((acc, c) => ({
-        area: acc.area + c.area,
-        minX: Math.min(acc.minX, c.minX), minY: Math.min(acc.minY, c.minY),
-        maxX: Math.max(acc.maxX, c.maxX), maxY: Math.max(acc.maxY, c.maxY),
-      }), { area: 0, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }))
-      .sort((a, b) => b.area - a.area);
+    const mergedComps = groups.map(g => groupComp(g)).sort((a, b) => b.area - a.area);
     if (mergedComps.length) {
       mergedComps.slice(0, 3).forEach((mc, idx) => { Object.assign(selected[idx], mc); });
       selected.length = Math.min(mergedComps.length, 3);
     }
   }
 
-  // Pass 5: 对每个候选计算质心、半径、圆形度（在原始墨色掩膜上，限候选框内）
+  // Pass 5: 对每个候选计算中心、半径、圆形度（复用 compStats，原始墨色掩膜上限候选框内）
   const regions = selected.map(comp => {
-    const { minX, minY, maxX, maxY } = comp;
-    let comX = 0, comY = 0, comCount = 0;
-    for (let y = minY; y <= maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        if (inkMask[y * width + x]) {
-          comX += x;
-          comY += y;
-          comCount++;
-        }
-      }
-    }
-    if (comCount === 0) return null;
-    comX /= comCount;
-    comY /= comCount;
-
-    const distances = [];
-    for (let y = minY; y <= maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        if (inkMask[y * width + x]) {
-          distances.push(Math.sqrt((x - comX) ** 2 + (y - comY) ** 2));
-        }
-      }
-    }
-    distances.sort((a, b) => a - b);
-    const maxR = distances[distances.length - 1] || 0;
-
-    const bw = maxX - minX + 1;
-    const bh = maxY - minY + 1;
-
-    // 圆形度判定（双通道，圆环缺口/断笔时 bbox 宽高比会失效）：
-    // 1) bbox 宽高比接近 1；2) 距离分布呈环形 —— 半数墨迹位于 p97 半径外半段
-    const p50 = distances[Math.floor(distances.length * 0.5)] || 0;
-    const p97 = distances[Math.floor(distances.length * 0.97)] || maxR;
-    const bboxCircular = Math.abs(bw - bh) / Math.max(bw, bh) < 0.18;
-    const ringLike = p97 > 0 && p50 > 0.5 * p97;
-    const circular = bboxCircular || ringLike;
-
-    // 半径估计（v2.11.6：保证外圈完整显示）：
-    // - 圆形章取 max(p97+2, maxR+3, bbox 长边/2) —— maxR 为候选框内墨迹到质心的
-    //   最远距离，质心因浓墨不均偏移时（如下弧浓上弧淡），远端外圈靠 maxR 兜住，
-    //   仅 p97/bboxHalf 会在质心偏移方向裁掉外圈
-    // - 异形章用 bbox 长边一半（拖尾毛刺使 maxR 虚大）
-    // - 提取框额外 +6px 余量，圆环边缘/抗锯齿过渡不贴边裁切
-    const bboxHalf = Math.max(bw, bh) / 2;
-    let finalRadius = circular ? Math.max(p97 + 2, maxR + 3, bboxHalf) : bboxHalf;
-
-    const cropHalf = Math.ceil(finalRadius) + 6;
-    let cx = Math.round(comX);
-    let cy = Math.round(comY);
+    const s = compStats(comp);
+    if (!s) return null;
+    const cropHalf = Math.ceil(s.radius) + 6;
+    let cx = Math.round(s.cx);
+    let cy = Math.round(s.cy);
     cx = Math.max(cropHalf, Math.min(width - cropHalf, cx));
     cy = Math.max(cropHalf, Math.min(height - cropHalf, cy));
 
@@ -1953,10 +2014,10 @@ function detectStampCandidates(imageData, spec) {
       y: cy - cropHalf,
       w: cropHalf * 2,
       h: cropHalf * 2,
-      circular,
+      circular: s.circular,
       cx,
       cy,
-      radius: finalRadius,
+      radius: s.radius,
       area: comp.area,
     };
   }).filter(Boolean);
@@ -2638,11 +2699,12 @@ function maybeRefineRegion(target) {
   // 中心偏离明显（>25% 边长）→ 当前定位与手工色所在区域不符，迁移
   if (dist <= refW * 0.25) return;
 
-  // 迁移目标框（v2.11.7）：手工色候选只覆盖点选颜色所在的局部墨迹（如一段外圈、
-  // 几个文字），直接用它的半径会把框缩小到局部、裁掉整章其余部分。
-  // 规则：
-  //   - 新区域与当前 bbox 重叠或间隙 < max(24, 当前框 15%) → 视为同一枚章，
-  //     取两框并集（只扩不缩，保证外圈完整）
+  // 迁移目标框（v2.11.7 起只扩不缩；v2.11.8 改为以当前框中心为锚的圆形扩展）：
+  // 手工色候选只覆盖点选颜色所在的局部墨迹（如一段外圈、几个文字），直接用它的
+  // 半径会把框缩小到局部、裁掉整章其余部分；而矩形并集又会被框外远端杂物拉偏
+  // 中心（印章不居中）。规则：
+  //   - 新区域与当前 bbox 重叠或间隙 < max(24, 当前框 15%) → 同一枚章：
+  //     保持当前框中心不动，半径取 max(当前半径, 锚点到新区域最远角距离)+6
   //   - 完全分离（另一枚印章）→ 用新区域自身框
   let newHalf = Math.ceil(r0.radius) + 6;
   let ncx = r0.cx, ncy = r0.cy;
@@ -2652,10 +2714,15 @@ function maybeRefineRegion(target) {
     const gapY = Math.max(b.y - (r0.y + r0.h), r0.y - (b.y + b.h), 0);
     const gap = Math.hypot(gapX, gapY);
     if (gap <= Math.max(24, Math.max(b.w, b.h) * 0.15)) {
-      const ux1 = Math.min(b.x, r0.x), uy1 = Math.min(b.y, r0.y);
-      const ux2 = Math.max(b.x + b.w, r0.x + r0.w), uy2 = Math.max(b.y + b.h, r0.y + r0.h);
-      ncx = (ux1 + ux2) / 2; ncy = (uy1 + uy2) / 2;
-      newHalf = Math.ceil(Math.max(ux2 - ux1, uy2 - uy1) / 2) + 6;
+      const acx = b.x + b.w / 2, acy = b.y + b.h / 2;
+      const far = Math.max(
+        Math.hypot(r0.x - acx, r0.y - acy),
+        Math.hypot(r0.x + r0.w - acx, r0.y - acy),
+        Math.hypot(r0.x - acx, r0.y + r0.h - acy),
+        Math.hypot(r0.x + r0.w - acx, r0.y + r0.h - acy),
+      );
+      ncx = acx; ncy = acy;
+      newHalf = Math.ceil(Math.max(Math.max(b.w, b.h) / 2, far)) + 6;
     }
   }
   const cropHalf = Math.round(newHalf);
