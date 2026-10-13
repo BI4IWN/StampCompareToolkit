@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.5</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.6</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.5';
+const APP_VERSION = '2.11.6';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -1933,13 +1933,16 @@ function detectStampCandidates(imageData, spec) {
     const ringLike = p97 > 0 && p50 > 0.5 * p97;
     const circular = bboxCircular || ringLike;
 
-    // 半径估计：
-    // - 圆形章用 p97+2（97 百分位抗毛刺与缺口拖尾）；不低于 bbox 长边一半（保证完整包含）
-    // - 异形章直接用 bbox 长边一半（maxR 受拖尾影响易偏大）
+    // 半径估计（v2.11.6：保证外圈完整显示）：
+    // - 圆形章取 max(p97+2, maxR+3, bbox 长边/2) —— maxR 为候选框内墨迹到质心的
+    //   最远距离，质心因浓墨不均偏移时（如下弧浓上弧淡），远端外圈靠 maxR 兜住，
+    //   仅 p97/bboxHalf 会在质心偏移方向裁掉外圈
+    // - 异形章用 bbox 长边一半（拖尾毛刺使 maxR 虚大）
+    // - 提取框额外 +6px 余量，圆环边缘/抗锯齿过渡不贴边裁切
     const bboxHalf = Math.max(bw, bh) / 2;
-    let finalRadius = circular ? Math.max(p97 + 2, bboxHalf) : bboxHalf;
+    let finalRadius = circular ? Math.max(p97 + 2, maxR + 3, bboxHalf) : bboxHalf;
 
-    const cropHalf = Math.ceil(finalRadius) + 2;
+    const cropHalf = Math.ceil(finalRadius) + 6;
     let cx = Math.round(comX);
     let cy = Math.round(comY);
     cx = Math.max(cropHalf, Math.min(width - cropHalf, cx));
@@ -2635,7 +2638,7 @@ function maybeRefineRegion(target) {
   // 中心偏离明显（>25% 边长）→ 当前定位与手工色所在区域不符，迁移
   if (dist <= refW * 0.25) return;
 
-  const cropHalf = Math.ceil(r0.radius) + 2;
+  const cropHalf = Math.ceil(r0.radius) + 6; // 与 detectStampCandidates 一致的外圈余量
   const cx = Math.max(cropHalf, Math.min(W - cropHalf, Math.round(r0.cx)));
   const cy = Math.max(cropHalf, Math.min(H - cropHalf, Math.round(r0.cy)));
   st.bbox = { x: cx - cropHalf, y: cy - cropHalf, w: cropHalf * 2, h: cropHalf * 2, fitSize: cropHalf * 2 };
