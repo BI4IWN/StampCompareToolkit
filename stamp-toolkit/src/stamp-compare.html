@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.10</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.11</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.10';
+const APP_VERSION = '2.11.11';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2004,19 +2004,23 @@ function detectStampCandidates(imageData, spec) {
     const s = compStats(comp);
     if (!s) return null;
     const cropHalf = Math.ceil(s.radius) + 6;
-    let cx = Math.round(s.cx);
-    let cy = Math.round(s.cy);
-    cx = Math.max(cropHalf, Math.min(width - cropHalf, cx));
-    cy = Math.max(cropHalf, Math.min(height - cropHalf, cy));
+    // 框钳制在图内（v2.11.11）：大半径候选（框径 > 图宽/高）时，原中心 clamp
+    // 会把框定位成 (cropHalf, cropHalf) 起点 —— 框右/下缘超出图像，drawImage
+    // 源区域超界产生错位/拉伸伪影（提取出原图范围外内容）。改为宽高分别
+    // 钳制到图像尺寸、位置平移入图（候选中心 cx/cy 保持圆心真值）
+    const rw = Math.min(cropHalf * 2, width);
+    const rh = Math.min(cropHalf * 2, height);
+    const rx = Math.max(0, Math.min(Math.round(s.cx) - Math.floor(rw / 2), width - rw));
+    const ry = Math.max(0, Math.min(Math.round(s.cy) - Math.floor(rh / 2), height - rh));
 
     return {
-      x: cx - cropHalf,
-      y: cy - cropHalf,
-      w: cropHalf * 2,
-      h: cropHalf * 2,
+      x: rx,
+      y: ry,
+      w: rw,
+      h: rh,
       circular: s.circular,
-      cx,
-      cy,
+      cx: Math.round(s.cx),
+      cy: Math.round(s.cy),
       radius: s.radius,
       area: comp.area,
     };
@@ -2770,13 +2774,16 @@ function maybeRefineRegion(target) {
     ncx = r0.cx; ncy = r0.cy;
     newHalf = Math.ceil(r0.radius) + 6;
   }
-  const cropHalf = Math.round(newHalf);
-  const cx = Math.max(cropHalf, Math.min(W - cropHalf, Math.round(ncx)));
-  const cy = Math.max(cropHalf, Math.min(H - cropHalf, Math.round(ncy)));
-  const nx = cx - cropHalf, ny = cy - cropHalf, nw = cropHalf * 2;
+  // 框钳制在图内（v2.11.11）：覆盖圆径可能超过图宽/高，原中心 clamp 会让框
+  // 定位到 (cropHalf, cropHalf) 起点、右/下缘超出图像 —— drawImage 源区域
+  // 超界产生错位/拉伸伪影。宽高分别钳制到图像尺寸、位置平移入图
+  const nw = Math.min(Math.round(newHalf) * 2, W);
+  const nh = Math.min(Math.round(newHalf) * 2, H);
+  const nx = Math.max(0, Math.min(Math.round(ncx) - Math.floor(nw / 2), W - nw));
+  const ny = Math.max(0, Math.min(Math.round(ncy) - Math.floor(nh / 2), H - nh));
   // 框未变化（尺寸与位置都一致）→ 保持现状，不触发基础重算
-  if (st.bbox && st.bbox.x === nx && st.bbox.y === ny && st.bbox.w === nw) return;
-  st.bbox = { x: nx, y: ny, w: nw, h: nw, fitSize: nw };
+  if (st.bbox && st.bbox.x === nx && st.bbox.y === ny && st.bbox.w === nw && st.bbox.h === nh) return;
+  st.bbox = { x: nx, y: ny, w: nw, h: nh, fitSize: Math.max(nw, nh) };
   st.candidates = detection.regions;
   st.candidateIndex = 0;
   st.circular = r0.circular;
