@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>截图</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; cursor: crosshair; user-select: none; }
+  #shot { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #mask { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.35); }
+  #sel { position: absolute; border: 2px solid #e74c3c; box-shadow: 0 0 0 9999px rgba(0,0,0,0); display: none; box-sizing: border-box; }
+  #sel .size { position: absolute; top: -28px; left: 0; background: #e74c3c; color: #fff; font: 12px/20px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; padding: 0 8px; border-radius: 3px; white-space: nowrap; }
+  #hint { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); background: rgba(30,30,30,0.85); color: #fff; font: 13px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; padding: 10px 16px; border-radius: 6px; }
+  #toolbar { position: absolute; display: none; gap: 6px; background: #fff; border-radius: 6px; padding: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+  #toolbar button { font: 13px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; padding: 8px 14px; border: 0; border-radius: 4px; cursor: pointer; }
+  #btn-ok { background: #e74c3c; color: #fff; }
+  #btn-cancel { background: #f0f0f0; color: #333; }
+</style>
+</head>
+<body>
+<img id="shot">
+<div id="mask"></div>
+<div id="sel"><div class="size"></div></div>
+<div id="hint">拖拽选择截图区域 · Enter/双击确认 · Esc 取消</div>
+<div id="toolbar">
+  <button id="btn-ok">✓ 确认截图</button>
+  <button id="btn-cancel">✕ 取消</button>
+</div>
+<script>
+const qs = new URLSearchParams(location.search.replace(/^\?/, ''));
+const SHOT = qs.get('shot') || '';
+const IDX = parseInt(qs.get('idx') || '0', 10);
+
+const shot = document.getElementById('shot');
+const mask = document.getElementById('mask');
+const sel = document.getElementById('sel');
+const sizeLabel = sel.querySelector('.size');
+const toolbar = document.getElementById('toolbar');
+shot.src = SHOT;
+
+let dragging = false, sx = 0, sy = 0, rect = null;
+
+function pageXY(e) { return { x: e.clientX, y: e.clientY }; }
+
+window.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  const p = pageXY(e);
+  dragging = true; sx = p.x; sy = p.y;
+  rect = { x: p.x, y: p.y, w: 0, h: 0 };
+  sel.style.display = 'block';
+  toolbar.style.display = 'none';
+  updateSel();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const p = pageXY(e);
+  rect = { x: Math.min(sx, p.x), y: Math.min(sy, p.y), w: Math.abs(p.x - sx), h: Math.abs(p.y - sy) };
+  updateSel();
+});
+window.addEventListener('mouseup', (e) => {
+  if (!dragging) return;
+  dragging = false;
+  if (rect.w < 4 || rect.h < 4) {   // 视为点击：取消选区
+    sel.style.display = 'none';
+    rect = null;
+    return;
+  }
+  placeToolbar();
+});
+sel.addEventListener('dblclick', confirm);
+window.addEventListener('dblclick', (e) => { if (rect) confirm(); });
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') cancel();
+  if (e.key === 'Enter' && rect) confirm();
+});
+document.getElementById('btn-ok').addEventListener('click', confirm);
+document.getElementById('btn-cancel').addEventListener('click', cancel);
+
+function updateSel() {
+  if (!rect) return;
+  sel.style.left = rect.x + 'px';
+  sel.style.top = rect.y + 'px';
+  sel.style.width = rect.w + 'px';
+  sel.style.height = rect.h + 'px';
+  sizeLabel.textContent = `${Math.round(rect.w)} × ${Math.round(rect.h)}`;
+  // 选区内透出原图
+  const vw = window.innerWidth, vh = window.innerHeight;
+  sel.style.clipPath = 'none';
+  mask.style.clipPath = `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${rect.x}px ${rect.y}px, ${rect.x + rect.w}px ${rect.y}px, ${rect.x + rect.w}px ${rect.y + rect.h}px, ${rect.x}px ${rect.y + rect.h}px, ${rect.x}px ${rect.y}px)`;
+}
+function placeToolbar() {
+  toolbar.style.display = 'flex';
+  const tw = toolbar.offsetWidth || 200;
+  let x = rect.x + rect.w - tw;
+  let y = rect.y + rect.h + 8;
+  if (y + 44 > window.innerHeight) y = rect.y - 52;
+  if (y < 0) y = 8;
+  if (x < 8) x = 8;
+  toolbar.style.left = x + 'px';
+  toolbar.style.top = y + 'px';
+}
+function confirm() {
+  if (!rect || rect.w < 2 || rect.h < 2) return;
+  // 截图窗口为全屏：坐标即屏幕坐标（相对本显示器原点）
+  window.stampDesktop.captureDone({ idx: IDX, rect: { x: rect.x, y: rect.y, width: rect.w, height: rect.h } });
+}
+function cancel() {
+  window.stampDesktop.captureCancel();
+}
+</script>
+</body>
+</html>

@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v2.11.11</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.0</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '2.11.11';
+const APP_VERSION = '3.0.0';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -5532,5 +5532,324 @@ statusBar.classList.add('visible');
   };
 })();
 </script>
+
+<!-- ============================================================
+     桌面版集成（Electron）：印章库 / 截图 / 设置。
+     网页版（无 window.stampDesktop 桥）自动隐藏全部入口。
+     ============================================================ -->
+<style>
+  .dt-btn { background: #fff; border: 1px solid #d8dce3; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: #333; }
+  .dt-btn:hover { border-color: #c0392b; color: #c0392b; }
+  .dt-btn.primary { background: #c0392b; border-color: #c0392b; color: #fff; }
+  .dt-btn.primary:hover { background: #a93226; }
+  .dt-overlay { position: fixed; inset: 0; background: rgba(20,24,30,0.5); z-index: 10000; display: none; align-items: center; justify-content: center; }
+  .dt-overlay.visible { display: flex; }
+  .dt-modal { background: #fff; border-radius: 10px; box-shadow: 0 12px 48px rgba(0,0,0,0.28); width: min(760px, 92vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; }
+  .dt-modal-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #eceff3; }
+  .dt-modal-head h3 { margin: 0; font-size: 16px; flex: 1; }
+  .dt-modal-body { padding: 16px 18px; overflow-y: auto; }
+  .dt-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .dt-row label { font-size: 13px; color: #555; min-width: 92px; }
+  .dt-input { flex: 1; min-width: 200px; border: 1px solid #d8dce3; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+  .dt-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .dt-lib-item { border: 1px solid #e5e8ee; border-radius: 8px; padding: 8px; text-align: center; position: relative; }
+  .dt-lib-item:hover { border-color: #c0392b; }
+  .dt-lib-item img { width: 100%; height: 110px; object-fit: contain; background: #fafbfc; border-radius: 4px; cursor: pointer; }
+  .dt-lib-name { font-size: 12px; color: #333; margin-top: 6px; line-height: 1.35; word-break: break-all; max-height: 2.7em; overflow: hidden; }
+  .dt-lib-time { font-size: 11px; color: #999; margin-top: 2px; }
+  .dt-lib-ops { display: flex; gap: 4px; margin-top: 6px; justify-content: center; }
+  .dt-lib-ops button { font-size: 11px; padding: 4px 8px; border: 1px solid #d8dce3; background: #fff; border-radius: 4px; cursor: pointer; }
+  .dt-lib-ops button:hover { border-color: #c0392b; color: #c0392b; }
+  .dt-lib-ops button.del:hover { border-color: #e74c3c; color: #e74c3c; }
+  .dt-cap-toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px); background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); padding: 14px 18px; z-index: 10001; display: none; align-items: center; gap: 10px; opacity: 0; transition: all .18s ease; }
+  .dt-cap-toast.visible { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+  .dt-cap-toast img { width: 86px; height: 86px; object-fit: contain; background: #fafbfc; border-radius: 6px; }
+  .dt-cap-toast .t { font-size: 13px; color: #333; margin-bottom: 8px; }
+  .dt-kbd-rec { border: 1px dashed #c0392b; color: #c0392b; text-align: center; }
+  .dt-hint { font-size: 12px; color: #8a919c; }
+</style>
+
+<div class="dt-overlay" id="dt-lib-overlay">
+  <div class="dt-modal">
+    <div class="dt-modal-head">
+      <h3>📚 印章库</h3>
+      <button class="dt-btn" id="dt-lib-reveal">打开目录</button>
+      <button class="dt-btn" id="dt-lib-changepath">更改保存路径</button>
+      <button class="dt-btn" id="dt-lib-close">关闭</button>
+    </div>
+    <div class="dt-modal-body">
+      <div class="dt-row">
+        <input class="dt-input" id="dt-lib-search" placeholder="🔍 按印章名称 / 备注 / OCR 名称搜索…">
+      </div>
+      <div class="dt-hint" id="dt-lib-path" style="margin-bottom:10px"></div>
+      <div class="dt-lib-grid" id="dt-lib-grid"></div>
+      <div class="dt-hint" id="dt-lib-empty" style="display:none; padding: 30px 0; text-align: center;">印章库为空 —— 对比界面上每个印章卡片右上角有「💾 存入库」按钮</div>
+      <div style="border-top:1px solid #eceff3; margin-top:16px; padding-top:14px">
+        <div class="dt-row">
+          <label>保存当前</label>
+          <select class="dt-input" id="dt-save-target" style="max-width:140px">
+            <option value="ref">参考章</option>
+            <option value="test">待验章</option>
+          </select>
+          <input class="dt-input" id="dt-save-name" placeholder="印章名称（默认取 OCR 名称）">
+        </div>
+        <div class="dt-row">
+          <label>备注</label>
+          <input class="dt-input" id="dt-save-note" placeholder="可选：来源文件、案件号等">
+          <button class="dt-btn primary" id="dt-save-btn">💾 存入库</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dt-overlay" id="dt-settings-overlay">
+  <div class="dt-modal" style="width:min(560px,92vw)">
+    <div class="dt-modal-head">
+      <h3>⚙️ 桌面版设置</h3>
+      <button class="dt-btn" id="dt-settings-close">关闭</button>
+    </div>
+    <div class="dt-modal-body">
+      <div class="dt-row">
+        <label>截图快捷键</label>
+        <button class="dt-input dt-kbd-rec" id="dt-kbd-btn" style="max-width:240px">点击后按下新快捷键</button>
+        <span class="dt-hint">全局生效（应用外也可触发）</span>
+      </div>
+      <div class="dt-row">
+        <label>截图完成后</label>
+        <select class="dt-input" id="dt-paste-target" style="max-width:240px">
+          <option value="ask">询问粘贴目标（推荐）</option>
+          <option value="ref">直接粘贴到参考章</option>
+          <option value="test">直接粘贴到待验章</option>
+          <option value="clipboard-only">仅复制到剪贴板</option>
+        </select>
+      </div>
+      <div class="dt-row">
+        <label>OCR 后端</label>
+        <select class="dt-input" id="dt-backend" style="max-width:240px">
+          <option value="true">自动启动（需 Python + PaddleOCR）</option>
+          <option value="false">不启动</option>
+        </select>
+        <span class="dt-hint">重启应用后生效</span>
+      </div>
+      <div class="dt-row">
+        <label>印章库路径</label>
+        <input class="dt-input" id="dt-set-libpath" readonly>
+        <button class="dt-btn" id="dt-set-choosepath">更改…</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dt-cap-toast" id="dt-cap-toast">
+  <img id="dt-cap-thumb">
+  <div>
+    <div class="t">截图完成 —— 已复制到剪贴板，粘贴到：</div>
+    <div style="display:flex; gap:8px">
+      <button class="dt-btn primary" id="dt-cap-ref">→ 参考章</button>
+      <button class="dt-btn primary" id="dt-cap-test">→ 待验章</button>
+      <button class="dt-btn" id="dt-cap-dismiss">仅复制</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const DT = window.stampDesktop;
+  if (!DT || !DT.available) return;   // 网页版：全部隐藏
+
+  const $ = (s) => document.querySelector(s);
+
+  // ---------- header 与印章卡片入口 ----------
+  const headerRow = document.querySelector('.header-row');
+  const dtNav = document.createElement('div');
+  dtNav.style.cssText = 'margin-left:auto; display:flex; gap:8px; align-items:center';
+  dtNav.innerHTML = [
+    '<button class="dt-btn" id="dt-nav-capture" title="截图（快捷键可在设置中修改）">📷 截图</button>',
+    '<button class="dt-btn" id="dt-nav-lib">📚 印章库</button>',
+    '<button class="dt-btn" id="dt-nav-settings">⚙️ 设置</button>',
+  ].join('');
+  headerRow.appendChild(dtNav);
+
+  // 每个印章卡片的「存入库」按钮
+  [['ref', '#zone-ref'], ['test', '#zone-test']].forEach((pair) => {
+    const target = pair[0], sel = pair[1];
+    const zone = $(sel);
+    const btn = document.createElement('button');
+    btn.className = 'remove-btn';
+    btn.title = '保存到印章库';
+    btn.textContent = '💾';
+    btn.style.cssText = 'right: 44px; font-size: 13px; line-height: 22px';
+    btn.addEventListener('click', (e) => { e.stopPropagation(); saveToLib(target); });
+    zone.appendChild(btn);
+  });
+
+  // ---------- 印章库 ----------
+  let libItems = [];
+  async function refreshLib(kw) {
+    libItems = kw ? await DT.libSearch(kw) : await DT.libList();
+    renderLib();
+  }
+  function renderLib() {
+    const grid = $('#dt-lib-grid');
+    grid.innerHTML = '';
+    $('#dt-lib-empty').style.display = libItems.length ? 'none' : 'block';
+    libItems.forEach((item) => {
+      const cell = document.createElement('div');
+      cell.className = 'dt-lib-item';
+      const t = new Date(item.savedAt);
+      const time = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+      cell.innerHTML = [
+        '<img alt="">',
+        '<div class="dt-lib-name"></div>',
+        '<div class="dt-lib-time"></div>',
+        '<div class="dt-lib-ops">',
+        '<button data-op="ref">→ 参考章</button>',
+        '<button data-op="test">→ 待验章</button>',
+        '<button data-op="del" class="del">删除</button>',
+        '</div>',
+      ].join('');
+      cell.querySelector('.dt-lib-name').textContent = item.name;
+      cell.querySelector('.dt-lib-time').textContent = time + (item.ocr && item.ocr.code ? ' · ' + String(item.ocr.code).slice(0, 13) : '');
+      const imgEl = cell.querySelector('img');
+      imgEl.addEventListener('click', () => loadFromLib(item.id, 'ref'));
+      cell.querySelectorAll('.dt-lib-ops button').forEach((b) => {
+        b.addEventListener('click', async () => {
+          const op = b.dataset.op;
+          if (op === 'del') {
+            if (!confirm('删除印章「' + item.name + '」？文件将同时移除。')) return;
+            await DT.libDelete(item.id);
+            refreshLib($('#dt-lib-search').value.trim());
+          } else {
+            loadFromLib(item.id, op);
+          }
+        });
+      });
+      DT.libLoad(item.id).then((r) => { if (r.ok) imgEl.src = r.png; });
+      grid.appendChild(cell);
+    });
+  }
+  async function loadFromLib(id, target) {
+    const r = await DT.libLoad(id);
+    if (!r.ok) { alert('印章文件缺失'); return; }
+    const src = r.originalPng || r.png;   // 默认载入原图（保留完整提取流程）
+    const img = new Image();
+    img.onload = () => { processStamp(img, target); $('#dt-lib-overlay').classList.remove('visible'); };
+    img.src = src;
+  }
+
+  async function saveToLib(target) {
+    const st = state[target];
+    if (!st || !st.extracted) { showStatus('该印章尚未加载，无法保存'); return; }
+    const defName = ($('#dt-save-target').value === target ? $('#dt-save-name').value.trim() : '')
+      || (st.ocrResult && st.ocrResult.company)
+      || ((target === 'ref' ? '参考章' : '待验章') + '_' + new Date().toISOString().slice(0, 10));
+    const finalName = prompt('保存到印章库 —— 印章名称（用于索引检索）：', defName);
+    if (finalName === null) return;
+    const png = st.extracted.toDataURL('image/png');
+    const original = st.original ? st.original.toDataURL('image/png') : null;
+    const r = await DT.libSave({ name: finalName || defName, note: '', png: png, original: original, ocr: st.ocrResult });
+    if (r.ok) showStatus('已保存到印章库：' + (finalName || defName));
+    if ($('#dt-lib-overlay').classList.contains('visible')) refreshLib($('#dt-lib-search').value.trim());
+  }
+
+  $('#dt-nav-lib').addEventListener('click', async () => {
+    const s = await DT.settingsGet();
+    $('#dt-lib-path').textContent = '保存位置：' + s.libPath;
+    $('#dt-save-target').value = state.target || 'ref';
+    $('#dt-lib-overlay').classList.add('visible');
+    refreshLib('');
+  });
+  $('#dt-lib-close').addEventListener('click', () => $('#dt-lib-overlay').classList.remove('visible'));
+  $('#dt-lib-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible'); });
+  $('#dt-lib-search').addEventListener('input', (e) => refreshLib(e.target.value.trim()));
+  $('#dt-lib-reveal').addEventListener('click', () => DT.libReveal());
+  $('#dt-lib-changepath').addEventListener('click', async () => {
+    const r = await DT.libChoosePath();
+    if (r.ok) { $('#dt-lib-path').textContent = '保存位置：' + r.path; refreshLib(''); }
+  });
+  $('#dt-save-btn').addEventListener('click', () => saveToLib($('#dt-save-target').value));
+  $('#dt-save-target').addEventListener('change', (e) => {
+    const st = state[e.target.value];
+    if (st && st.ocrResult && st.ocrResult.company && !$('#dt-save-name').value) $('#dt-save-name').value = st.ocrResult.company;
+  });
+
+  $('#dt-nav-capture').addEventListener('click', () => {
+    DT.captureStart();   // 主进程启动选区截图（与全局快捷键同一路径）
+  });
+
+  // ---------- 截图完成 ----------
+  let pendingCapture = null;
+  DT.onCaptureDone((data) => {
+    pendingCapture = data.dataUrl;
+    if (data.target === 'clipboard-only') { showStatus('截图已复制到剪贴板 —— Ctrl+V 可粘贴'); return; }
+    if (data.target === 'ref' || data.target === 'test') { pasteCapture(data.target); return; }
+    $('#dt-cap-thumb').src = data.dataUrl;
+    $('#dt-cap-toast').classList.add('visible');
+    clearTimeout(window._dtToastTimer);
+    window._dtToastTimer = setTimeout(() => $('#dt-cap-toast').classList.remove('visible'), 15000);
+  });
+  function pasteCapture(target) {
+    if (!pendingCapture) return;
+    const img = new Image();
+    img.onload = () => { processStamp(img, target); showStatus('截图已粘贴到' + (target === 'ref' ? '参考章' : '待验章')); };
+    img.src = pendingCapture;
+    $('#dt-cap-toast').classList.remove('visible');
+  }
+  $('#dt-cap-ref').addEventListener('click', () => pasteCapture('ref'));
+  $('#dt-cap-test').addEventListener('click', () => pasteCapture('test'));
+  $('#dt-cap-dismiss').addEventListener('click', () => $('#dt-cap-toast').classList.remove('visible'));
+
+  // ---------- 设置 ----------
+  $('#dt-nav-settings').addEventListener('click', async () => {
+    const s = await DT.settingsGet();
+    $('#dt-kbd-btn').textContent = s.captureShortcut + '（点击修改）';
+    $('#dt-paste-target').value = s.pasteTargetAfterCapture;
+    $('#dt-backend').value = String(s.autoStartBackend);
+    $('#dt-set-libpath').value = s.libPath;
+    $('#dt-settings-overlay').classList.add('visible');
+  });
+  $('#dt-settings-close').addEventListener('click', () => $('#dt-settings-overlay').classList.remove('visible'));
+  $('#dt-settings-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible'); });
+
+  $('#dt-paste-target').addEventListener('change', (e) => DT.settingsSet({ pasteTargetAfterCapture: e.target.value }));
+  $('#dt-backend').addEventListener('change', (e) => DT.settingsSet({ autoStartBackend: e.target.value === 'true' }));
+  $('#dt-set-choosepath').addEventListener('click', async () => {
+    const r = await DT.libChoosePath();
+    if (r.ok) $('#dt-set-libpath').value = r.path;
+  });
+
+  // 快捷键录制（Electron accelerator）
+  let recording = false;
+  $('#dt-kbd-btn').addEventListener('click', () => {
+    recording = true;
+    $('#dt-kbd-btn').textContent = '请按下组合键…（Esc 取消）';
+  });
+  window.addEventListener('keydown', (e) => {
+    if (!recording) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === 'Escape') { recording = false; $('#dt-kbd-btn').textContent = '点击后按下新快捷键'; return; }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) return;   // 必须含修饰键
+    const parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.metaKey) parts.push('Cmd');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    let key = e.key.length === 1 ? e.key.toUpperCase() : e.code.replace(/^Key|^Digit/, '');
+    const map = { PLUS: 'Plus', MINUS: 'Minus', COMMA: ',', PERIOD: '.', SLASH: '/', SEMICOLON: ';', QUOTE: "'", BRACKETLEFT: '[', BRACKETRIGHT: ']' };
+    if (map[key]) key = map[key];
+    if (/^F\d+$/.test(e.code)) key = e.code;
+    if (!/^[A-Z0-9]$|^F\d+$|^(Plus|Minus|,|\.|\/|;|'|\[|\])$/.test(key)) return;
+    const accel = parts.concat([key]).join('+');
+    const normalized = accel.replace(/^(Ctrl|Cmd)/, 'CommandOrControl');
+    recording = false;
+    DT.settingsSet({ captureShortcut: normalized }).then(() => {
+      $('#dt-kbd-btn').textContent = accel + '（已更新）';
+      showStatus('截图快捷键已更新为 ' + accel);
+    });
+  }, true);
+})();
+</script>
+
 </body>
 </html>

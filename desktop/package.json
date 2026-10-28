@@ -1,0 +1,59 @@
+{
+  "name": "stamp-compare-desktop",
+  "productName": "印章比对工具",
+  "version": "3.0.0",
+  "description": "本地印章对比工具桌面版（Stamp Compare Toolkit）",
+  "main": "main.js",
+  "author": "BI4IWN",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win"
+  },
+  "devDependencies": {
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.bi4iwn.stampcompare",
+    "productName": "印章比对工具",
+    "files": [
+      "main.js",
+      "preload.js",
+      "capture.html",
+      "settings.html",
+      "app/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../stamp-toolkit",
+        "to": "stamp-toolkit",
+        "filter": [
+          "src/**",
+          "docs/**"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

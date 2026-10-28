@@ -16,6 +16,23 @@
 
 ---
 
+## 桌面版架构（Electron，v3.0.0）
+
+```
+desktop/
+  main.js      主进程：窗口管理、本地静态服务(127.0.0.1:18799，同源加载前端页)、
+               API 反代 → Python 后端(8799)、Python 子进程托管（无环境静默降级）、
+               全局快捷键（globalShortcut）、选区截图（desktopCapturer + 每屏覆盖窗）、
+               印章库文件管理、设置持久化（userData/settings.json）
+  preload.js   contextIsolation 受控桥（window.stampDesktop）：截图事件、印章库 IPC、设置 IPC
+  capture.html 选区截图覆盖窗：拖框 + 尺寸提示 + 确认/取消；确认后主进程按显示器缩放
+               换算裁剪 → clipboard.writeImage → webContents.send('capture-done')
+```
+
+- 印章库存储：`{libPath}/印章名_{id}.png`（提取结果）+ `印章名_{id}_原图.png` + `index.json`（名称/备注/OCR/时间索引）；名称默认取 `state[target].ocrResult.company`
+- 前端集成：`stamp-compare.html` 末尾独立模块，无 `window.stampDesktop` 桥时 early return（网页版零感知）；截图完成浮层 → `processStamp(img, 'ref'|'test')` 复用完整提取管线
+- 打包：electron-builder，stamp-toolkit 作为 extraResources 随包分发；mac(dmg arm64/x64 + zip) · win(nsis/portable)
+
 ## 一、系统架构
 
 ### 整体架构
