@@ -1,7 +1,7 @@
 {
   "name": "stamp-compare-desktop",
   "productName": "印章比对工具",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "本地印章对比工具桌面版（Stamp Compare Toolkit）",
   "main": "main.js",
   "author": "BI4IWN",

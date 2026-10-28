@@ -45,6 +45,9 @@ if [[ "$TARGET" == win-* ]]; then
   "$ANY_PY" -m pip install --no-warn-script-location \
       --platform win_amd64 --only-binary=:all: --target "$SP" \
       -i "$PYPIMIRROR" rapidocr-onnxruntime opencv-python-headless numpy pillow
+  # rapidocr 依赖会拉入完整版 opencv-python（与 headless 的 cv2 同名冲突风险）：删除其元数据保留 headless
+  rm -rf "$SP"/opencv_python-*.dist-info 2>/dev/null || true
+  ls -d "$SP"/opencv_python_headless-*.dist-info >/dev/null || { echo "opencv-python-headless 未安装"; exit 1; }
   echo "完成: $OUT/$DIR（win 运行时无法在非 Windows 主机上验证，安装日志为准）"
   exit 0
 fi

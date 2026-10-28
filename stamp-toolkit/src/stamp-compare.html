@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.3</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.4</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.0.3';
+const APP_VERSION = '3.0.4';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -5772,6 +5772,39 @@ statusBar.classList.add('visible');
     img.src = src;
   }
 
+  // 输入对话框（自制模态）：Electron 渲染进程不支持 window.prompt（静默返回
+  // null 且不显示任何窗口），保存印章库等需要用户输入的交互必须用 DOM 模态
+  function dtPrompt(title, defVal, okLabel) {
+    return new Promise((resolve) => {
+      const ov = document.createElement('div');
+      ov.className = 'dt-overlay visible';
+      ov.innerHTML = '<div class="dt-modal" style="width:min(460px,92vw)">'
+        + '<div class="dt-modal-head"><h3></h3></div>'
+        + '<div class="dt-modal-body">'
+        + '<input class="dt-input" style="width:100%" spellcheck="false">'
+        + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'
+        + '<button class="dt-btn dt-p-cancel">取消</button>'
+        + '<button class="dt-btn primary dt-p-ok"></button>'
+        + '</div></div></div>';
+      ov.querySelector('h3').textContent = title;
+      const input = ov.querySelector('input');
+      input.value = defVal || '';
+      ov.querySelector('.dt-p-ok').textContent = okLabel || '确定';
+      const done = (v) => { ov.remove(); resolve(v); };
+      ov.querySelector('.dt-p-ok').addEventListener('click', () => done(input.value.trim()));
+      ov.querySelector('.dt-p-cancel').addEventListener('click', () => done(null));
+      ov.addEventListener('click', (e) => { if (e.target === ov) done(null); });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') done(input.value.trim());
+        if (e.key === 'Escape') done(null);
+        e.stopPropagation();
+      });
+      document.body.appendChild(ov);
+      input.focus();
+      input.select();
+    });
+  }
+
   async function saveToLib(target) {
     const st = state[target];
     if (!st || !st.extracted) { showStatus('该印章尚未加载，无法保存'); return; }
@@ -5782,11 +5815,11 @@ statusBar.classList.add('visible');
       + '_' + pad(now.getHours()) + pad(now.getMinutes());
     const defName = (st.ocrResult && st.ocrResult.company && String(st.ocrResult.company).trim())
       || dateName;
-    const finalName = prompt('保存到印章库 —— 印章名称（用于索引检索）：', defName);
+    const finalName = await dtPrompt('保存到印章库 —— 印章名称（用于索引检索）', defName, '保存');
     if (finalName === null) return;
-    const png = st.extracted.toDataURL('image/png');
-    const original = st.original ? st.original.toDataURL('image/png') : null;
-    const r = await DT.libSave({ name: finalName || defName, note: '', png: png, original: original, ocr: st.ocrResult });
+    // 仅保存印章原图（一份；载入时走完整提取流程）
+    const png = (st.original || st.extracted).toDataURL('image/png');
+    const r = await DT.libSave({ name: finalName || defName, note: '', png: png, original: null, ocr: st.ocrResult });
     if (r.ok) showStatus('已保存到印章库：' + (finalName || defName));
     if ($('#dt-lib-overlay').classList.contains('visible')) refreshLib($('#dt-lib-search').value.trim());
   }
