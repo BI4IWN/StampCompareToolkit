@@ -72,16 +72,27 @@ function startStaticServer() {
   server.listen(HTTP_PORT, '127.0.0.1');
 }
 
-// ---------- Python 后端子进程（可选：OCR / AI 代理）----------
+// ---------- Python 后端子进程（OCR / AI 代理）----------
+// 优先级：安装包内置便携运行时（随包分发 RapidOCR + onnxruntime，开箱即用）
+//       → 系统安装的 python3 → 放弃（前端显示"需启动服务"）
 let pyProc = null;
+function bundledPython() {
+  const cands = process.platform === 'win32'
+    ? [path.join(__dirname, 'runtime', 'python-win-x64', 'python.exe'),
+       process.resourcesPath && path.join(process.resourcesPath, 'runtime', 'python-win-x64', 'python.exe')]
+    : [path.join(__dirname, 'runtime', `python-mac-${process.arch}`, 'bin', 'python3'),
+       process.resourcesPath && path.join(process.resourcesPath, 'runtime', `python-mac-${process.arch}`, 'bin', 'python3')];
+  for (const p of cands) if (p && fs.existsSync(p)) return p;
+  return null;
+}
 function startBackend() {
   if (!settings.autoStartBackend) return;
-  const py = process.platform === 'win32' ? 'python' : 'python3';
   const entry = path.join(RES, 'src', 'stamp_app.py');
   if (!fs.existsSync(entry)) return;
+  const py = bundledPython() || (process.platform === 'win32' ? 'python' : 'python3');
   try {
-    pyProc = spawn(py, [entry, '--port', String(PY_PORT)], { stdio: 'ignore', detached: false });
-    pyProc.on('error', () => { pyProc = null; });   // 无 Python 环境时静默降级
+    pyProc = spawn(py, [entry, '--port', String(PY_PORT), '--no-browser'], { stdio: 'ignore', detached: false });
+    pyProc.on('error', () => { pyProc = null; });   // 无任何 Python 环境时静默降级
     pyProc.on('exit', () => { pyProc = null; });
   } catch (e) { pyProc = null; }
 }

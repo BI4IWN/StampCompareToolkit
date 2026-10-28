@@ -73,6 +73,7 @@ def load_html_content():
 
 # Global OCR instance (loaded once at startup); None 表示 OCR 不可用
 ocr = None
+_ocr_engine = None   # 'rapid' | 'paddle' | None
 # PaddleOCR 推理锁：模型实例非线程安全，串行化并发请求
 _ocr_lock = threading.Lock()
 
@@ -373,14 +374,24 @@ def morphological_cleanup(binary, iterations=1):
 
 
 def run_ocr_on_image(img_array):
-    """Run PaddleOCR on a numpy image array. Returns list of (text, score).
+    """Run OCR on a numpy image array. Returns list of (text, score).
 
-    兼容 PaddleOCR 3.x (predict) 与 2.x (ocr) 两种 API。失败时抛出异常。
+    多引擎（v3.0.0）：优先 RapidOCR（onnxruntime，桌面安装包内置，轻量），
+    回退 PaddleOCR（兼容 3.x predict 与 2.x ocr 两种 API）。失败时抛出异常。
     """
+    results = []
+    if _ocr_engine == 'rapid':
+        with _ocr_lock:
+            res, _elapse = ocr(img_array)
+            for item in (res or []):
+                # RapidOCR 条目: [box(4x2), text, score]
+                if len(item) >= 3 and item[1]:
+                    results.append((str(item[1]), float(item[2])))
+        return results
+
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
         cv2.imwrite(f.name, img_array)
         temp_path = f.name
-    results = []
     try:
         with _ocr_lock:
             if hasattr(ocr, 'predict'):
@@ -911,20 +922,38 @@ def open_browser_delayed(port, delay=1.0):
 
 
 def load_ocr_model():
-    """加载 PaddleOCR 模型；依赖缺失时返回 None 而不是崩溃（对比功能不依赖后端）。"""
-    global ocr
+    """加载 OCR 引擎；依赖缺失时返回 None 而不是崩溃（对比功能不依赖后端）。
+
+    优先 RapidOCR（onnxruntime，轻量，桌面安装包内置运行时自带），
+    回退 PaddleOCR。
+    """
+    global ocr, _ocr_engine
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        print("加载 RapidOCR 引擎（onnxruntime）...")
+        ocr = RapidOCR()
+        _ocr_engine = 'rapid'
+        print("模型加载完成!")
+        return True
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"[提示] RapidOCR 初始化失败（{e}），尝试 PaddleOCR...")
+
     print("加载 PaddleOCR 模型（首次运行需下载，请耐心等待）...")
     try:
         from paddleocr import PaddleOCR
         ocr = PaddleOCR(lang='ch')
+        _ocr_engine = 'paddle'
         print("模型加载完成!")
         return True
     except ImportError as e:
         ocr = None
-        print(f"\n[警告] PaddleOCR 未安装（{e}），OCR 功能不可用。")
+        print(f"\n[警告] OCR 引擎未安装（{e}），OCR 功能不可用。")
         print("        页面服务将正常启动，印章对比/导出等功能不受影响。")
         print("        如需 OCR，请安装依赖后重启:")
-        print("        pip install paddlepaddle paddleocr opencv-python\n")
+        print("        pip install rapidocr-onnxruntime opencv-python-headless  （推荐，轻量）")
+        print("        或 pip install paddlepaddle paddleocr opencv-python\n")
         return False
     except Exception as e:
         ocr = None
