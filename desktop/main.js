@@ -3,6 +3,9 @@
 //       （可选，OCR/AI）+ 全局截图快捷键 + 选区截图 + 印章库文件管理 + 设置
 const { app, BrowserWindow, globalShortcut, clipboard, desktopCapturer,
         ipcMain, dialog, nativeImage, screen, shell, Menu } = require('electron');
+
+// macOS 菜单栏/Dock 显示应用名（开发模式下默认为 Electron，打包版兜底）
+if (process.platform === 'darwin') app.setName('印章比对工具');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -317,8 +320,23 @@ app.whenReady().then(() => {
   createWindow();
   registerCaptureShortcut();
 
+  const appName = '印章比对工具';
   const template = [
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    // 手动构建应用菜单（role:appMenu 的菜单栏标题取 bundle 名，开发模式显示 Electron）
+    ...(process.platform === 'darwin' ? [{
+      label: appName,
+      submenu: [
+        { role: 'about', label: '关于 ' + appName },
+        { type: 'separator' },
+        { role: 'services', submenu: [] },
+        { type: 'separator' },
+        { role: 'hide', label: '隐藏 ' + appName },
+        { role: 'hideOthers', label: '隐藏其他' },
+        { role: 'unhide', label: '全部显示' },
+        { type: 'separator' },
+        { role: 'quit', label: '退出 ' + appName },
+      ],
+    }] : []),
     { role: 'editMenu' },
     { label: '视图', submenu: [
         { role: 'reload', label: '重新加载' },
