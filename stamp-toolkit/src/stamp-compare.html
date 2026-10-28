@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.4</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.5</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.0.4';
+const APP_VERSION = '3.0.5';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -5815,7 +5815,15 @@ statusBar.classList.add('visible');
       + '_' + pad(now.getHours()) + pad(now.getMinutes());
     const defName = (st.ocrResult && st.ocrResult.company && String(st.ocrResult.company).trim())
       || dateName;
-    const finalName = await dtPrompt('保存到印章库 —— 印章名称（用于索引检索）', defName, '保存');
+    // 重名检测：已存在同名印章时提示（仍保存为新条目 / 返回修改名称）
+    let finalName = await dtPrompt('保存到印章库 —— 印章名称（用于索引检索）', defName, '保存');
+    while (finalName !== null) {
+      const dup = (await DT.libSearch(finalName)).some((it) => it.name === finalName);
+      if (!dup) break;
+      const go = confirm('印章库中已存在同名「' + finalName + '」。\n\n确定 = 仍保存为新条目（互不影响）\n取消 = 返回修改名称');
+      if (go) break;
+      finalName = await dtPrompt('名称重复 —— 请修改印章名称', finalName + '_2', '保存');
+    }
     if (finalName === null) return;
     // 仅保存印章原图（一份；载入时走完整提取流程）
     const png = (st.original || st.extracted).toDataURL('image/png');
