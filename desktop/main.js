@@ -69,6 +69,15 @@ function startStaticServer() {
       res.end(data);
     });
   });
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+      // 上个实例的静态服务仍在（残留）：直接复用，不再自建
+      console.log('[static] port in use, reusing existing service');
+      server = null;
+    } else {
+      console.error('[static] server error:', e);
+    }
+  });
   server.listen(HTTP_PORT, '127.0.0.1');
 }
 
@@ -94,7 +103,34 @@ function startBackend() {
     pyProc = spawn(py, [entry, '--port', String(PY_PORT), '--no-browser'], { stdio: 'ignore', detached: false });
     pyProc.on('error', () => { pyProc = null; });   // 无任何 Python 环境时静默降级
     pyProc.on('exit', () => { pyProc = null; });
+    watchBackendReady();
   } catch (e) { pyProc = null; }
+}
+
+// 后端就绪轮询：OCR 模型后台加载完成后通知渲染进程自动重连
+// （前端自身的短轮询会在模型加载完成前超时，这里兜底）
+function watchBackendReady() {
+  let tries = 0;
+  const timer = setInterval(() => {
+    tries++;
+    const http = require('http');
+    const req = http.get(`http://127.0.0.1:${PY_PORT}/health`, res => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try {
+          const h = JSON.parse(body);
+          if (h.status === 'ok' && h.ocr === true) {
+            clearInterval(timer);
+            if (win && !win.isDestroyed()) win.webContents.send('backend-ready');
+          }
+          // 'loading' 继续等；false（不可用）继续等一会儿（引擎可能在切换）
+        } catch (e) { /* 非 JSON，继续 */ }
+      });
+    });
+    req.on('error', () => {});
+    if (tries > 120) clearInterval(timer);   // 最长 2 分钟
+  }, 1000);
 }
 
 // ---------- 主窗口 ----------
@@ -106,12 +142,14 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     title: '印章比对工具',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  win.once('ready-to-show', () => win.show());
   win.loadURL(`http://127.0.0.1:${HTTP_PORT}/`);
   if (isDev) win.webContents.openDevTools({ mode: 'detach' });
   win.on('closed', () => { win = null; });

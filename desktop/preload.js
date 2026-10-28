@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('stampDesktop', {
   // 截图
   onCaptureDone: (cb) => ipcRenderer.on('capture-done', (_e, data) => cb(data)),
   onShortcutError: (cb) => ipcRenderer.on('shortcut-error', (accel) => cb(accel)),
+  onBackendReady: (cb) => ipcRenderer.on('backend-ready', () => cb()),
   captureCancel: () => ipcRenderer.send('capture-cancel'),
   captureStart: () => ipcRenderer.send('capture-start'),
   captureDone: (payload) => ipcRenderer.send('capture-done', payload),

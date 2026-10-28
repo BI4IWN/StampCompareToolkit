@@ -74,6 +74,7 @@ def load_html_content():
 # Global OCR instance (loaded once at startup); None 表示 OCR 不可用
 ocr = None
 _ocr_engine = None   # 'rapid' | 'paddle' | None
+ocr_loading = True    # 模型后台加载中（/health 返回 'loading'）
 # PaddleOCR 推理锁：模型实例非线程安全，串行化并发请求
 _ocr_lock = threading.Lock()
 
@@ -702,7 +703,8 @@ class StampAppHandler(BaseHTTPRequestHandler):
             self._send_json({
                 'status': 'ok',
                 'version': APP_VERSION,
-                'ocr': ocr is not None,
+                # 三态：true 已就绪 | 'loading' 模型后台加载中 | false 不可用
+                'ocr': True if ocr is not None else ('loading' if ocr_loading else False),
             })
         elif self.path == '/favicon.ico':
             # 无图标文件，返回 204 避免控制台 404 噪音
@@ -925,14 +927,15 @@ def load_ocr_model():
     """加载 OCR 引擎；依赖缺失时返回 None 而不是崩溃（对比功能不依赖后端）。
 
     优先 RapidOCR（onnxruntime，轻量，桌面安装包内置运行时自带），
-    回退 PaddleOCR。
+    回退 PaddleOCR。无论成败都清除 ocr_loading（/health 三态）。
     """
-    global ocr, _ocr_engine
+    global ocr, _ocr_engine, ocr_loading
     try:
         from rapidocr_onnxruntime import RapidOCR
         print("加载 RapidOCR 引擎（onnxruntime）...")
         ocr = RapidOCR()
         _ocr_engine = 'rapid'
+        ocr_loading = False
         print("模型加载完成!")
         return True
     except ImportError:
@@ -945,10 +948,12 @@ def load_ocr_model():
         from paddleocr import PaddleOCR
         ocr = PaddleOCR(lang='ch')
         _ocr_engine = 'paddle'
+        ocr_loading = False
         print("模型加载完成!")
         return True
     except ImportError as e:
         ocr = None
+        ocr_loading = False
         print(f"\n[警告] OCR 引擎未安装（{e}），OCR 功能不可用。")
         print("        页面服务将正常启动，印章对比/导出等功能不受影响。")
         print("        如需 OCR，请安装依赖后重启:")
@@ -957,6 +962,7 @@ def load_ocr_model():
         return False
     except Exception as e:
         ocr = None
+        ocr_loading = False
         print(f"\n[警告] PaddleOCR 模型加载失败（{e}），OCR 功能不可用，其余功能正常。\n")
         return False
 
@@ -974,13 +980,9 @@ def main():
     check_html_exists()
     print("前端页面已就绪")
 
-    # 加载 PaddleOCR 模型（可选；--no-ocr 时跳过以加快启动）
-    if args.no_ocr:
-        print("已跳过 OCR 模型加载（--no-ocr），OCR 功能不可用，其余功能正常。")
-    else:
-        load_ocr_model()
-
     # 启动 HTTP 服务（多线程：OCR 长耗时请求不阻塞页面/健康检查）
+    # v3.0.2：服务先启动（窗口/前端秒连），OCR 模型在后台线程加载，
+    # /health 在加载完成前返回 ocr:'loading'，前端持续轮询直至就绪
     try:
         server = ThreadingHTTPServer(('127.0.0.1', args.port), StampAppHandler)
     except OSError as e:
@@ -989,6 +991,14 @@ def main():
         print("  python3 stamp_app.py --port 9000")
         sys.exit(1)
     server.daemon_threads = True
+
+    def _load_ocr_async():
+        if args.no_ocr:
+            print("已跳过 OCR 模型加载（--no-ocr），OCR 功能不可用，其余功能正常。")
+        else:
+            load_ocr_model()
+
+    threading.Thread(target=_load_ocr_async, daemon=True).start()
 
     # 安装 SIGTERM 处理：PaddlePaddle 运行时会吞掉 SIGTERM 信号，
     # 导致 launcher 停止服务时进程不退出、端口无法释放

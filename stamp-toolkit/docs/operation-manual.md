@@ -30,6 +30,8 @@ v3.0.0 提供 macOS / Windows 桌面客户端（项目 `desktop/` 目录）：
 - **截图**：按 `Cmd/Ctrl+Shift+S`（默认，可在 ⚙️ 设置中录制修改，全局生效，应用外也可触发）→ 拖拽选择区域（多显示器支持，Enter/双击/✓ 确认，Esc 取消）→ 已复制剪贴板并弹出浮层，选择粘贴到**参考章**或**待验章**（也可在设置中固定目标或仅复制）；粘贴后自动走完整提取流程
 - **印章库**：📚 按钮打开。保存：印章卡片右上角「💾」或库面板下方（印章名称默认取 OCR 识别结果，作为检索索引，可修改）；保存路径可在设置/库面板更改（默认「文档/印章库」）；支持按名称/备注/OCR 名称搜索、缩略图浏览、一键载入到参考章/待验章、删除、打开目录
 - **OCR 开箱即用**：安装包内置便携 Python 运行时与 OCR 组件（RapidOCR/onnxruntime + OpenCV，模型随包分发、离线可用），启动时自动加载，**用户无需安装任何 Python 环境**；开发模式下优先使用 `desktop/runtime/` 内置运行时（`scripts/setup-runtime.sh mac-arm64` 生成），其次回退系统 python3（引擎优先级 RapidOCR → PaddleOCR），均不可用时 OCR 降级为提示，其余功能不受影响
+- **首次打开较慢的说明**：未签名的安装包首次启动时 macOS Gatekeeper / Windows SmartScreen 会对整个应用做安全扫描（约几十秒，属系统行为，仅首次）；OCR 模型在后台线程加载（界面即时可用，状态栏显示「OCR 模型加载中」，约 10-30 秒后自动就绪并重连）。Windows 未签名提示：更多信息 → 仍要运行
+- **Windows x64**：`npm run dist:win` 产出安装版（Setup）与便携版，均内置 OCR 运行时（295MB）；mac Intel（x64）dmg 未内置运行时，OCR 将回退系统 python3（装好 rapidocr-onnxruntime 即可）
 - 网页版（`stamp-compare.html`）继续独立可用，桌面功能入口在网页环境自动隐藏、零感知
 
 ## 一、启动与访问

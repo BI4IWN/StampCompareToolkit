@@ -3,7 +3,7 @@
 # 用法:
 #   scripts/setup-runtime.sh mac-arm64   # macOS Apple Silicon
 #   scripts/setup-runtime.sh mac-x64     # macOS Intel
-#   scripts/setup-runtime.sh win-x64     # Windows x64（在任意平台均可下载 win 运行时与依赖）
+#   scripts/setup-runtime.sh win-x64     # Windows x64（可在任意平台构建：pip 跨平台安装 win wheel）
 # 产物: desktop/runtime/python-<platform>/   （electron-builder 打包时随 extraResources 分发）
 set -euo pipefail
 
@@ -29,24 +29,28 @@ curl -sL --retry 3 -o "$TMP/py.tar.gz" "$MIRROR/$ART"
 mkdir -p "$TMP/extract"
 tar xzf "$TMP/py.tar.gz" -C "$TMP/extract"
 
-# install_only 包解压后即完整 python 目录（mac: python/，win: python/）
+# install_only 包解压后即完整 python 目录
 rm -rf "$OUT/$DIR"
 mv "$TMP/extract/python" "$OUT/$DIR"
 
 PYEXE="$OUT/$DIR/bin/python3"
-[ -x "$PYEXE" ] || PYEXE="$OUT/$DIR/python.exe"
+[ -e "$PYEXE" ] || PYEXE="$OUT/$DIR/python.exe"
 if [ ! -e "$PYEXE" ]; then echo "解压后未找到 python 可执行文件"; exit 1; fi
 
-echo "==> 安装 OCR 依赖（RapidOCR onnxruntime，内置模型，无网络也能识别）"
+echo "==> 安装 OCR 依赖（RapidOCR onnxruntime，内置模型，离线可用）"
 if [[ "$TARGET" == win-* ]]; then
-  # Windows 依赖需用 win 平台 wheel：在非 Windows 构建机上用 pip download + 指定平台
-  "$PYEXE" -m pip install --no-warn-script-location -i "$PYPIMIRROR" \
-      rapidocr-onnxruntime opencv-python-headless numpy pillow && true || {
-    echo "（非 Windows 主机安装 win 依赖失败时，请在 Windows 机器上执行本脚本）"; exit 1; }
-else
-  "$PYEXE" -m pip install --no-warn-script-location -i "$PYPIMIRROR" \
-      rapidocr-onnxruntime opencv-python-headless numpy pillow
+  # Windows 运行时可在任意平台构建：pip 跨平台安装 win_amd64 wheel 到目标 site-packages
+  ANY_PY="$(command -v python3 || command -v python)"
+  SP="$OUT/$DIR/Lib/site-packages"
+  "$ANY_PY" -m pip install --no-warn-script-location \
+      --platform win_amd64 --only-binary=:all: --target "$SP" \
+      -i "$PYPIMIRROR" rapidocr-onnxruntime opencv-python-headless numpy pillow
+  echo "完成: $OUT/$DIR（win 运行时无法在非 Windows 主机上验证，安装日志为准）"
+  exit 0
 fi
+
+"$PYEXE" -m pip install --no-warn-script-location -i "$PYPIMIRROR" \
+    rapidocr-onnxruntime opencv-python-headless numpy pillow
 
 echo "==> 验证"
 "$PYEXE" -c "from rapidocr_onnxruntime import RapidOCR; import cv2; print('runtime OK:', '$DIR')"

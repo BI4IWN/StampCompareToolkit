@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.0</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.2</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.0.2';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2639,8 +2639,7 @@ function ensureBaseExtraction(target) {
     // 区域锁定（手工色已重新定位）：预设色仅在锁定的 bbox 内提取，不再重新定位
     region = { x: st.bbox.x, y: st.bbox.y, w: st.bbox.w, h: st.bbox.h };
   } else {
-    const imageData = st.original.getContext('2d').getImageData(0, 0, st.original.width, st.original.height);
-    const detection = detectStampCandidates(imageData, spec);
+    const detection = detectRegionsScaled(st, spec);
     const idx = Math.min(st.candidateIndex || 0, detection.regions.length - 1);
     region = detection.regions[idx];
     st.candidates = detection.regions;
@@ -2653,6 +2652,37 @@ function ensureBaseExtraction(target) {
   st._baseKey = lockedKey;
   st._baseOriginal = st.original;
   return st.baseExtracted;
+}
+
+// 检测用缩图缓存（v3.0.2 粘贴提速）：全分辨率检测对大图（截图 2x/4K）开销
+// O(N) 过大导致粘贴卡顿 —— 检测在 0.5× 缩图上执行（连通域/环拟合几何特征
+// 不受缩放影响），坐标按 1/DETECT_SCALE 还原回原图
+const DETECT_SCALE = 0.5;
+function getDetectData(st) {
+  if (!st._detectData || st._detectSrc !== st.original) {
+    const w = Math.max(2, Math.round(st.original.width * DETECT_SCALE));
+    const h = Math.max(2, Math.round(st.original.height * DETECT_SCALE));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(st.original, 0, 0, w, h);
+    const d = ctx.getImageData(0, 0, w, h);
+    d._w = w; d._h = h;
+    st._detectData = d;
+    st._detectSrc = st.original;
+  }
+  return st._detectData;
+}
+function detectRegionsScaled(st, spec) {
+  const detection = detectStampCandidates(getDetectData(st), spec);
+  const k = 1 / DETECT_SCALE;
+  for (const r of detection.regions) {
+    r.x = Math.round(r.x * k); r.y = Math.round(r.y * k);
+    r.w = Math.round(r.w * k); r.h = Math.round(r.h * k);
+    r.cx = r.cx * k; r.cy = r.cy * k; r.radius = r.radius * k;
+  }
+  return detection;
 }
 
 // 原图全量像素缓存（叠加提取色时读取原图颜色）
@@ -2714,8 +2744,7 @@ function maybeRefineRegion(target) {
   const extractList = state.ink[target].customs.filter(c => c.on && !c.exclude);
   if (!extractList.length) return;
   const spec = { presets: [], hues: [], hueEntries: extractList.map(c => ({ hue: c.hue, sat: c.sat, val: c.val, set: c.set })), excludes: [], excludeColors: [] };
-  const imageData = getOrigData(st);
-  const detection = detectStampCandidates(imageData, spec);
+  const detection = detectRegionsScaled(st, spec);
   const valid = (detection.regions || []).filter(r => r.area && r.area > 0);
   if (!valid.length) return; // fallback 整图（手工色也定位失败）→ 不动
 
@@ -2790,7 +2819,6 @@ function maybeRefineRegion(target) {
   st._baseKey = null;          // 基础按新 bbox 重算
   st._aiBase = false;
   st._regionLocked = true;     // 锁定新区域：预设色不再重新定位，仅在锁定框内提取
-  st._origData = imageData; // 同一原图，缓存可复用
 }
 
 // 在基础自动提取上增量应用手工颜色：
@@ -3269,7 +3297,7 @@ function removeStamp(target) {
   // 取消进行中的 OCR
   cancelStampOCR(target);
 
-  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null, _aiBase: false, _regionLocked: false,
+  state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null, _detectData: null, _detectSrc: null, _aiBase: false, _regionLocked: false,
                     circular: false, bbox: null, candidates: null, candidateIndex: 0, inkSpec: null, corners: null,
                     rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
                     _sig: (state[target]._sig || 0) + 1, ocrResult: null };
@@ -5476,7 +5504,7 @@ statusBar.classList.add('visible');
 
   // 检测 OCR 服务
   var checkCount = 0;
-  var maxChecks = 5;
+  var maxChecks = 40;   // 桌面版模型后台加载较慢，1.5s×40 ≈ 60s
 
   function checkServer() {
     checkCount++;
@@ -5486,7 +5514,11 @@ statusBar.classList.add('visible');
     fetch(baseUrl + '/health', { mode: 'cors' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        if (d.status === 'ok' && d.ocr !== false) {
+        if (d.status === 'ok' && d.ocr === 'loading') {
+          // 模型后台加载中（桌面版内置运行时冷启动）：显示加载态并持续轮询
+          txt.textContent = 'OCR 模型加载中（首次约 10-30 秒）...';
+          setTimeout(checkServer, 1500);
+        } else if (d.status === 'ok' && d.ocr !== false) {
           setOcrAvailable();
         } else if (d.status === 'ok' && d.ocr === false) {
           // 服务在线但 PaddleOCR 未加载：识别方式为 AI 且配置视觉模式时仍可用
@@ -5820,6 +5852,24 @@ statusBar.classList.add('visible');
   });
 
   // 快捷键录制（Electron accelerator）
+  // 后端（OCR）就绪通知：模型后台加载完成后自动重连（前端短轮询超时后的兜底）
+  if (DT.onBackendReady) DT.onBackendReady(() => {
+    if (window._retryOCRConnection) window._retryOCRConnection();
+  });
+
+  // AI 模型配置：打开现有 AI 配置面板（与工具栏「🤖 AI」同一入口）
+  const aiRow = document.createElement('div');
+  aiRow.className = 'dt-row';
+  aiRow.innerHTML = '<label>AI 模型</label>' +
+    '<button class="dt-btn" id="dt-ai-cfg">🤖 打开 AI 配置（DeepSeek / 智谱 / 自定义）</button>' +
+    '<span class="dt-hint">识别方式在工具栏「识别」切换</span>';
+  document.querySelector('#dt-settings-overlay .dt-modal-body').appendChild(aiRow);
+  document.getElementById('dt-ai-cfg').addEventListener('click', () => {
+    $('#dt-settings-overlay').classList.remove('visible');
+    const btn = document.getElementById('btn-ai-cfg');
+    if (btn) btn.click();
+  });
+
   let recording = false;
   $('#dt-kbd-btn').addEventListener('click', () => {
     recording = true;
@@ -5829,7 +5879,9 @@ statusBar.classList.add('visible');
     if (!recording) return;
     e.preventDefault(); e.stopPropagation();
     if (e.key === 'Escape') { recording = false; $('#dt-kbd-btn').textContent = '点击后按下新快捷键'; return; }
-    if (!e.ctrlKey && !e.metaKey && !e.altKey) return;   // 必须含修饰键
+    const isFnKey = /^F(\d{1,2})$/.test(e.key) || /^F\d+$/.test(e.code);
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !isFnKey) return;   // 需含修饰键，或使用 F1-F24 功能键（如 F2）
+    if (isFnKey && (e.ctrlKey || e.metaKey || e.altKey)) { /* 功能键+修饰键也允许 */ }
     const parts = [];
     if (e.ctrlKey) parts.push('Ctrl');
     if (e.metaKey) parts.push('Cmd');

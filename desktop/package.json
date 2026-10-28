@@ -1,7 +1,7 @@
 {
   "name": "stamp-compare-desktop",
   "productName": "印章比对工具",
-  "version": "3.0.0",
+  "version": "3.0.2",
   "description": "本地印章对比工具桌面版（Stamp Compare Toolkit）",
   "main": "main.js",
   "author": "BI4IWN",
@@ -35,10 +35,6 @@
           "src/**",
           "docs/**"
         ]
-      },
-      {
-        "from": "runtime",
-        "to": "runtime"
       }
     ],
     "mac": {
@@ -57,12 +53,30 @@
             "arm64"
           ]
         }
+      ],
+      "extraResources": [
+        {
+          "from": "runtime",
+          "to": "runtime",
+          "filter": [
+            "python-mac-*/**"
+          ]
+        }
       ]
     },
     "win": {
       "target": [
         "nsis",
         "portable"
+      ],
+      "extraResources": [
+        {
+          "from": "runtime",
+          "to": "runtime",
+          "filter": [
+            "python-win-x64/**"
+          ]
+        }
       ]
     },
     "nsis": {
