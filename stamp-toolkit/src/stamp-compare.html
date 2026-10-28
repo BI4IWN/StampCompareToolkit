@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.2</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.3</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.0.2';
+const APP_VERSION = '3.0.3';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -5703,18 +5703,20 @@ statusBar.classList.add('visible');
   ].join('');
   headerRow.appendChild(dtNav);
 
-  // 每个印章卡片的「存入库」按钮
-  [['ref', '#zone-ref'], ['test', '#zone-test']].forEach((pair) => {
-    const target = pair[0], sel = pair[1];
-    const zone = $(sel);
-    const btn = document.createElement('button');
-    btn.className = 'remove-btn';
-    btn.title = '保存到印章库';
-    btn.textContent = '💾';
-    btn.style.cssText = 'right: 44px; font-size: 13px; line-height: 22px';
-    btn.addEventListener('click', (e) => { e.stopPropagation(); saveToLib(target); });
-    zone.appendChild(btn);
-  });
+  // 「存入库」按钮：置于参考章/待验章粘贴区下方（各一枚，独立保存）
+  const saveRow = document.createElement('div');
+  saveRow.style.cssText = 'display:flex; gap:10px; justify-content:center; margin:2px 0 6px';
+  const mkSaveBtn = (target) => {
+    const b = document.createElement('button');
+    b.className = 'dt-btn';
+    b.textContent = '💾 保存' + (target === 'ref' ? '参考章' : '待验章') + '到印章库';
+    b.addEventListener('click', () => saveToLib(target));
+    return b;
+  };
+  saveRow.appendChild(mkSaveBtn('ref'));
+  saveRow.appendChild(mkSaveBtn('test'));
+  const pasteRow = document.querySelector('.paste-row');
+  pasteRow.parentNode.insertBefore(saveRow, pasteRow.nextSibling);
 
   // ---------- 印章库 ----------
   let libItems = [];
@@ -5773,9 +5775,13 @@ statusBar.classList.add('visible');
   async function saveToLib(target) {
     const st = state[target];
     if (!st || !st.extracted) { showStatus('该印章尚未加载，无法保存'); return; }
-    const defName = ($('#dt-save-target').value === target ? $('#dt-save-name').value.trim() : '')
-      || (st.ocrResult && st.ocrResult.company)
-      || ((target === 'ref' ? '参考章' : '待验章') + '_' + new Date().toISOString().slice(0, 10));
+    // 默认名称：OCR 识别的印章名称；未识别则按日期时间生成（含时分避免重名）
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateName = '印章_' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate())
+      + '_' + pad(now.getHours()) + pad(now.getMinutes());
+    const defName = (st.ocrResult && st.ocrResult.company && String(st.ocrResult.company).trim())
+      || dateName;
     const finalName = prompt('保存到印章库 —— 印章名称（用于索引检索）：', defName);
     if (finalName === null) return;
     const png = st.extracted.toDataURL('image/png');
