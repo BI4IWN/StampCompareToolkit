@@ -1230,7 +1230,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.5</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.6</span></p>
   </header>
 
   <div class="paste-row">
@@ -1514,7 +1514,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.0.5';
+const APP_VERSION = '3.0.6';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -4232,9 +4232,18 @@ document.querySelectorAll('#axis-group .mode-btn').forEach((btn) => {
   });
 });
 
+// 角度等价：任意角度映射到 [-180,180)（滑块物理范围）；状态保留完整圈数
+function normAngle(a) {
+  return ((a % 360) + 540) % 360 - 180;
+}
+function nearestEquivalent(target, current) {
+  // 与 current 最接近、与 target 等价的角度（保持圈数连续，滑块拖动不跳圈）
+  return target + Math.round((current - target) / 360) * 360;
+}
+
 function syncSlidersToTarget() {
   const t = state[state.target];
-  $('#sl-rotate').value = t.rotate;
+  $('#sl-rotate').value = normAngle(t.rotate);
   $('#val-rotate').textContent = fmtNum(t.rotate) + '°';
   // 根据缩放轴选择显示的值
   const scaleVal = state.scaleAxis === 'y' ? t.scaleY : t.scaleX;
@@ -4257,7 +4266,8 @@ $('#sl-opacity').addEventListener('input', (e) => {
 });
 
 $('#sl-rotate').addEventListener('input', (e) => {
-  state[state.target].rotate = parseFloat(e.target.value);
+  const t = state[state.target];
+  t.rotate = nearestEquivalent(parseFloat(e.target.value), t.rotate);
   $('#val-rotate').textContent = fmtNum(state[state.target].rotate) + '°';
   scheduleRender();
 });
@@ -4739,7 +4749,7 @@ document.addEventListener('wheel', (e) => {
     if (Math.abs(rotAccum) >= WHEEL_ROT_THRESH) {
       const steps = Math.floor(Math.abs(rotAccum) / WHEEL_ROT_THRESH);
       const dir = rotAccum > 0 ? 1 : -1;
-      t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * steps * 0.1));
+      t.rotate = t.rotate + dir * steps * 0.1;   // 无限旋转（v3.0.6：不设 ±180 边界）
       rotAccum %= WHEEL_ROT_THRESH;
       changed = true;
     }
@@ -4780,7 +4790,7 @@ $('#sl-rotate').addEventListener('wheel', (e) => {
   const steps = Math.floor(Math.abs(_slRotAccum) / WHEEL_ROT_THRESH);
   if (steps > 0) {
     const dir = _slRotAccum > 0 ? 1 : -1;
-    t.rotate = Math.max(-180, Math.min(180, t.rotate + dir * steps * 0.1));
+    t.rotate = t.rotate + dir * steps * 0.1;   // 无限旋转
     _slRotAccum %= WHEEL_ROT_THRESH;
     syncSlidersToTarget();
     scheduleRender();
@@ -4841,13 +4851,13 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'ArrowLeft':
       e.preventDefault();
-      t.rotate = Math.max(-180, t.rotate - 0.1);
+      t.rotate = t.rotate - 0.1;
       syncSlidersToTarget();
       render();
       break;
     case 'ArrowRight':
       e.preventDefault();
-      t.rotate = Math.min(180, t.rotate + 0.1);
+      t.rotate = t.rotate + 0.1;
       syncSlidersToTarget();
       render();
       break;
