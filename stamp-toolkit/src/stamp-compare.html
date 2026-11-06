@@ -157,6 +157,10 @@
     display: block;
   }
 
+  /* 原图预览缩放（v3.0.7）：滚轮放大后卡片内滚动查看细节 */
+  .paste-zone.has-image { overflow: auto; }
+  .paste-zone .preview-img.zoomed { max-width: none; max-height: none; }
+
   .paste-zone .zone-badge {
     position: absolute;
     top: 12px;
@@ -1230,7 +1234,7 @@
         <button class="mode-btn" data-rec="ai">AI</button>
       </div>
     </div>
-    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.6</span></p>
+    <p>粘贴两张印章图片，自动提取归一化后多模式对比 <span style="opacity:.5">v3.0.7</span></p>
   </header>
 
   <div class="paste-row">
@@ -1464,7 +1468,7 @@
   <div class="rotate-strip" id="rotate-strip">
     <label>旋转</label>
     <div class="slider-group">
-      <input type="range" id="sl-rotate" min="-180" max="180" value="0" step="0.1" style="width:260px">
+      <input type="range" id="sl-rotate" min="0" max="360" value="0" step="0.1" style="width:260px">
       <span class="val" id="val-rotate">0°</span>
     </div>
     <span class="rotate-hint">悬停滑块滚轮调节</span>
@@ -1514,7 +1518,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.0.6';
+const APP_VERSION = '3.0.7';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -2227,6 +2231,36 @@ function extractStamp(canvas, region, inkSpec) {
 /* ============================================================
    Image Loading
    ============================================================ */
+// 原图预览缩放（v3.0.7）：粘贴/截图完成的原图支持滚轮缩放（0.25~8×，
+// CSS zoom 撑开布局，卡片内滚动查看），双击复位；取色坐标基于实时
+// rect 计算，放大后取色依然精确
+[['ref', zoneRef], ['test', zoneTest]].forEach((pair) => {
+  const target = pair[0], zone = pair[1];
+  zone.addEventListener('wheel', (e) => {
+    if (!state[target].original) return;
+    if (e.target.closest && e.target.closest('input,select,textarea,.dt-overlay')) return;
+    const img = zone.querySelector('.preview-img');
+    if (!img) return;
+    e.preventDefault();
+    const cur = state[target]._origZoom || 1;
+    const next = Math.max(0.25, Math.min(8, cur * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    applyOrigZoom(target, img, next);
+    showStatus((target === 'ref' ? '参考章' : '待验章') + ' 原图 ' + Math.round(next * 100) + '%（滚轮缩放 · 双击复位）');
+  }, { passive: false });
+  zone.addEventListener('dblclick', (e) => {
+    if (e.target.classList && e.target.classList.contains('preview-img') && (state[target]._origZoom || 1) !== 1) {
+      applyOrigZoom(target, e.target, 1);
+      showStatus('原图视图已复位');
+    }
+  });
+});
+function applyOrigZoom(target, img, z) {
+  state[target]._origZoom = z;
+  img.style.zoom = z;
+  if (z === 1) { img.classList.remove('zoomed'); img.style.zoom = ''; }
+  else img.classList.add('zoomed');
+}
+
 function loadImageFromFile(file, target) {
   if (!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
@@ -2254,6 +2288,9 @@ function processStamp(img, target) {
     zone.appendChild(preview);
   }
   preview.src = img.src;
+  state[target]._origZoom = 1;
+  preview.classList.remove('zoomed');
+  preview.style.zoom = '';
   showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 — 正在提取印章...`);
 
   // === 阶段 2：自动提取（预设色管线为"基础"；手工颜色在其上增量叠加/剔除）===
@@ -4232,9 +4269,9 @@ document.querySelectorAll('#axis-group .mode-btn').forEach((btn) => {
   });
 });
 
-// 角度等价：任意角度映射到 [-180,180)（滑块物理范围）；状态保留完整圈数
+// 角度等价：任意角度映射到 [0,360)（滑块/读数显示范围，不叠加圈数）；状态保留完整值
 function normAngle(a) {
-  return ((a % 360) + 540) % 360 - 180;
+  return ((a % 360) + 360) % 360;
 }
 function nearestEquivalent(target, current) {
   // 与 current 最接近、与 target 等价的角度（保持圈数连续，滑块拖动不跳圈）
@@ -4243,8 +4280,9 @@ function nearestEquivalent(target, current) {
 
 function syncSlidersToTarget() {
   const t = state[state.target];
-  $('#sl-rotate').value = normAngle(t.rotate);
-  $('#val-rotate').textContent = fmtNum(t.rotate) + '°';
+  const dispRot = normAngle(t.rotate);
+  $('#sl-rotate').value = dispRot > 359.95 ? 0 : dispRot;
+  $('#val-rotate').textContent = fmtNum(Math.round(dispRot * 10) / 10) + '°';
   // 根据缩放轴选择显示的值
   const scaleVal = state.scaleAxis === 'y' ? t.scaleY : t.scaleX;
   $('#sl-scale').value = scaleVal;
@@ -4268,7 +4306,7 @@ $('#sl-opacity').addEventListener('input', (e) => {
 $('#sl-rotate').addEventListener('input', (e) => {
   const t = state[state.target];
   t.rotate = nearestEquivalent(parseFloat(e.target.value), t.rotate);
-  $('#val-rotate').textContent = fmtNum(state[state.target].rotate) + '°';
+  $('#val-rotate').textContent = fmtNum(normAngle(t.rotate)) + '°';
   scheduleRender();
 });
 
@@ -4356,7 +4394,7 @@ $('#btn-report').addEventListener('click', () => {
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   const paramsRow = (t) =>
-    `旋转 ${fmtNum(t.rotate || 0)}° · 缩放 ${fmtNum(t.scaleX || 100)}%×${fmtNum(t.scaleY || 100)}% · 偏移 (${t.offsetX || 0}, ${t.offsetY || 0})px`;
+    `旋转 ${fmtNum(normAngle(t.rotate || 0))}° · 缩放 ${fmtNum(t.scaleX || 100)}%×${fmtNum(t.scaleY || 100)}% · 偏移 (${t.offsetX || 0}, ${t.offsetY || 0})px`;
 
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -4728,7 +4766,10 @@ document.addEventListener('wheel', (e) => {
     e.clientX >= cr.left - WHEEL_ROT_ZONE_SIDE && e.clientX <= cr.right + WHEEL_ROT_ZONE_SIDE &&
     e.clientY >= cr.top - WHEEL_ROT_ZONE_PAD && e.clientY <= cr.bottom + WHEEL_ROT_ZONE_PAD;
 
-  const t = state[state.target];
+  // Alt（Option）+滚轮 = 作用于另一枚印章：无需先 Tab 切换操作目标，
+  // 参考章与待验章都可直接缩放/旋转
+  const effTarget = e.altKey ? (state.target === 'ref' ? 'test' : 'ref') : state.target;
+  const t = state[effTarget];
   let changed = false;
   const now = performance.now();
 
@@ -4777,8 +4818,48 @@ document.addEventListener('wheel', (e) => {
   if (changed) {
     syncSlidersToTarget();
     scheduleRender();
+    if (e.altKey) showStatus(`Alt：正在调节${effTarget === 'ref' ? '参考章' : '待验章'}（松开 Alt 恢复调节${state.target === 'ref' ? '参考章' : '待验章'}）`);
   }
 }, { passive: false });
+
+// 滚轮操作区浅色标识（v3.0.7）：鼠标移动时实时高亮当前滚轮语义区，
+// 与页面普通滚动区域明确区分 —— 画布内 = 缩放（纵向）/旋转（横向），
+// 画布上下 ±280px 带 = 旋转；其余区域无标识（页面正常滚动）
+const wheelZoneHint = document.createElement('div');
+wheelZoneHint.id = 'wheel-zone-hint';
+wheelZoneHint.style.cssText = 'position:fixed;pointer-events:none;z-index:9000;display:none;'
+  + 'background:rgba(192,57,43,0.06);border:1.5px dashed rgba(192,57,43,0.45);border-radius:6px;';
+const wheelZoneTag = document.createElement('div');
+wheelZoneTag.style.cssText = 'position:absolute;top:-22px;left:8px;font:12px/18px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;'
+  + 'color:#c0392b;background:rgba(255,255,255,0.92);padding:0 8px;border-radius:3px;white-space:nowrap;';
+wheelZoneHint.appendChild(wheelZoneTag);
+document.body.appendChild(wheelZoneHint);
+
+let _wheelHintRaf = 0;
+document.addEventListener('mousemove', (e) => {
+  if (!(state.ref.extracted || state.test.extracted)) { wheelZoneHint.style.display = 'none'; return; }
+  if (e.target.closest && e.target.closest('input,select,textarea,.dt-overlay')) { wheelZoneHint.style.display = 'none'; return; }
+  if (_wheelHintRaf) return;
+  _wheelHintRaf = requestAnimationFrame(() => {
+    _wheelHintRaf = 0;
+    const cr = cmpCanvas.getBoundingClientRect();
+    const inCanvas = e.clientX >= cr.left && e.clientX <= cr.right && e.clientY >= cr.top && e.clientY <= cr.bottom;
+    const inZone = !inCanvas
+      && e.clientX >= cr.left - WHEEL_ROT_ZONE_SIDE && e.clientX <= cr.right + WHEEL_ROT_ZONE_SIDE
+      && e.clientY >= cr.top - WHEEL_ROT_ZONE_PAD && e.clientY <= cr.bottom + WHEEL_ROT_ZONE_PAD;
+    if (inCanvas) {
+      Object.assign(wheelZoneHint.style, { display: 'block', left: cr.left + 'px', top: cr.top + 'px', width: cr.width + 'px', height: cr.height + 'px' });
+      wheelZoneTag.textContent = '🖱 滚轮：纵向缩放 · 横向旋转 · Alt=另一枚';
+    } else if (inZone) {
+      Object.assign(wheelZoneHint.style, { display: 'block',
+        left: (cr.left - WHEEL_ROT_ZONE_SIDE) + 'px', width: (cr.width + WHEEL_ROT_ZONE_SIDE * 2) + 'px',
+        top: (cr.top - WHEEL_ROT_ZONE_PAD) + 'px', height: (cr.height + WHEEL_ROT_ZONE_PAD * 2) + 'px' });
+      wheelZoneTag.textContent = '🖱 滚轮：旋转 · Alt=另一枚';
+    } else {
+      wheelZoneHint.style.display = 'none';
+    }
+  });
+}, { passive: true });
 
 // 滑块区域滚轮支持：鼠标悬停在旋转/缩放滑块上时，滚轮直接调节对应参数
 // 旋转滑块步进 0.1°，与主滚轮旋转一致（累积小增量，鼠标一格≈0.8°，触控板更精细）
@@ -4832,7 +4913,7 @@ document.addEventListener('keydown', (e) => {
   if (!state.ref.extracted && !state.test.extracted) return;
   if (e.target.tagName === 'INPUT') return;
 
-  const t = state[state.target];
+  let t = state[state.target];
   switch (e.key) {
     case '1': setMode('overlay'); break;
     case '2': setMode('slider'); break;
@@ -4863,6 +4944,8 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'ArrowUp':
       e.preventDefault();
+      // Alt = 作用于另一枚印章
+      if (e.altKey) t = state.target === 'ref' ? state.test : state.ref;
       if (state.scaleAxis === 'uniform') {
         t.scaleX = Math.min(400, Math.round((t.scaleX + 0.1) * 10) / 10);
         t.scaleY = Math.min(400, Math.round((t.scaleY + 0.1) * 10) / 10);
@@ -4876,6 +4959,7 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'ArrowDown':
       e.preventDefault();
+      if (e.altKey) t = state.target === 'ref' ? state.test : state.ref;
       if (state.scaleAxis === 'uniform') {
         t.scaleX = Math.max(20, Math.round((t.scaleX - 0.1) * 10) / 10);
         t.scaleY = Math.max(20, Math.round((t.scaleY - 0.1) * 10) / 10);

@@ -242,6 +242,31 @@ function readIndex() {
   ensureLib();
   try { return JSON.parse(fs.readFileSync(libIndexFile(), 'utf8')); } catch (e) { return { seals: [] }; }
 }
+// 目录索引同步：库目录里存在但未登记的 PNG（用户手动放入的历史印章图）
+// 自动注册进 index.json —— 文件名即印章名称（去除保存时的 _时间戳_随机 后缀），
+// 保存时间取文件修改时间；_原图 副本与 index.json 不导入
+function syncLibIndex() {
+  const idx = readIndex();
+  const known = new Set(idx.seals.map(se => se.file));
+  let changed = false;
+  for (const f of fs.readdirSync(settings.libPath)) {
+    if (!/\.(png|jpe?g)$/i.test(f) || f.endsWith('_原图.png') || known.has(f)) continue;
+    const full = path.join(settings.libPath, f);
+    let mtime = new Date().toISOString();
+    try { mtime = fs.statSync(full).mtime.toISOString(); } catch (e) {}
+    idx.seals.push({
+      id: 'import_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      name: f.replace(/\.(png|jpe?g)$/i, '').replace(/_\d{13}_[a-z0-9]{4,10}$/i, ''),
+      note: '目录导入',
+      file: f,
+      originalFile: null,
+      ocr: null,
+      savedAt: mtime,
+    });
+    changed = true;
+  }
+  if (changed) writeIndex(idx);
+}
 function writeIndex(idx) { ensureLib(); fs.writeFileSync(libIndexFile(), JSON.stringify(idx, null, 2)); }
 function safeName(name) {
   return (name || '未命名印章').replace(/[\\/:*?"<>|\n\r]/g, '_').trim().slice(0, 80);
@@ -264,8 +289,9 @@ ipcMain.handle('lib:save', (e, { name, note, png, original, ocr }) => {
   writeIndex(idx);
   return { ok: true, id };
 });
-ipcMain.handle('lib:list', () => readIndex().seals);
+ipcMain.handle('lib:list', () => { syncLibIndex(); return readIndex().seals; });
 ipcMain.handle('lib:search', (e, q) => {
+  syncLibIndex();
   const kw = (q || '').trim().toLowerCase();
   const seals = readIndex().seals;
   if (!kw) return seals;
@@ -278,9 +304,10 @@ ipcMain.handle('lib:load', (e, id) => {
   if (!s) return { ok: false, error: 'not found' };
   const p = path.join(settings.libPath, s.file);
   if (!fs.existsSync(p)) return { ok: false, error: 'file missing' };
-  return { ok: true, png: 'data:image/png;base64,' + fs.readFileSync(p).toString('base64'),
+  const mime = /\.jpe?g$/i.test(s.file) ? 'image/jpeg' : 'image/png';
+  return { ok: true, png: `data:${mime};base64,` + fs.readFileSync(p).toString('base64'),
            originalPng: s.originalFile && fs.existsSync(path.join(settings.libPath, s.originalFile))
-             ? 'data:image/png;base64,' + fs.readFileSync(path.join(settings.libPath, s.originalFile)).toString('base64') : null,
+             ? `data:${mime};base64,` + fs.readFileSync(path.join(settings.libPath, s.originalFile)).toString('base64') : null,
            meta: s };
 });
 ipcMain.handle('lib:delete', (e, id) => {
