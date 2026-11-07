@@ -35,7 +35,21 @@ const loadSettings = () => {
   try {
     if (fs.existsSync(settingsFile())) {
       settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
+      return;
     }
+    // 首次运行（无设置文件）：若历史常用位置 ~/Downloads/印章库 存在且含印章图，
+    // 直接采用为库路径 —— 避免默认空库与用户已有印章库错配（打开库只见几个）
+    try {
+      const legacy = path.join(app.getPath('downloads'), '印章库');
+      if (fs.existsSync(legacy)) {
+        const imgs = fs.readdirSync(legacy).filter(f => /\.(png|jpe?g)$/i.test(f));
+        if (imgs.length > 0) {
+          settings.libPath = legacy;
+          saveSettings();
+          console.log(`[lib] 首次运行：检测到既有印章库 ${legacy}（${imgs.length} 张），已采用`);
+        }
+      }
+    } catch (e2) { /* 检测失败用默认 */ }
   } catch (e) { /* 损坏则用默认 */ }
 };
 const saveSettings = () => fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2));
