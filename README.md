@@ -518,12 +518,12 @@ python3 stamp_app.py --no-ocr     # 跳过 OCR 模型加载，启动更快（仅
 7. **识别**（可选）：点击「全部识别」提取印章文字信息——默认本地 PaddleOCR；页面左上角「识别」可切到 AI（需先点「🤖 AI」配置模型，AI 模式下印章加载后自动识别、每枚印章有独立识别按钮，视觉模式无需 PaddleOCR）
 8. **导出结果**：点击"导出"保存对比画面 PNG（⌘E）
 
-详细操作说明请参阅 [操作手册](docs/operation-manual.md)。
+详细操作说明请参阅 [操作手册](stamp-toolkit/docs/operation-manual.md)。
 
 ## 文档
 
-- [操作手册](docs/operation-manual.md) — 完整的功能使用说明和操作指南
-- [技术文档](docs/technical-doc.md) — 系统架构、算法原理、变换模型等技术细节
+- [操作手册](stamp-toolkit/docs/operation-manual.md) — 完整的功能使用说明和操作指南
+- [技术文档](stamp-toolkit/docs/technical-doc.md) — 系统架构、算法原理、变换模型等技术细节
 
 ## 许可
 
