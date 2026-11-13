@@ -1,0 +1,103 @@
+{
+  "name": "stamp-compare-desktop",
+  "productName": "印章比对工具",
+  "version": "3.6.8",
+  "description": "本地印章对比工具桌面版（Stamp Compare Toolkit）",
+  "main": "main.js",
+  "author": "BI4IWN",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist:mac": "electron-builder --mac && rm -rf dist/mac dist/mac-arm64",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win && rm -rf dist/mac dist/mac-arm64 dist/win-unpacked dist/win-arm64-unpacked"
+  },
+  "devDependencies": {
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.bi4iwn.stampcompare",
+    "productName": "印章比对工具",
+    "files": [
+      "main.js",
+      "preload.js",
+      "capture.html",
+      "settings.html",
+      "app/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../stamp-toolkit",
+        "to": "stamp-toolkit",
+        "filter": [
+          "src/**",
+          "docs/**"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "runtime",
+          "to": "runtime",
+          "filter": [
+            "python-mac-*/**"
+          ]
+        }
+      ],
+      "artifactName": "StampCompareToolkit-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "runtime",
+          "to": "runtime",
+          "filter": [
+            "python-win-x64/**"
+          ]
+        }
+      ],
+      "artifactName": "StampCompareToolkit-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "StampCompareToolkit-${version}-win-${arch}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false
+    },
+    "portable": {
+      "artifactName": "StampCompareToolkit-${version}-win-${arch}-portable.${ext}"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Electron 桌面版
+desktop/node_modules/
+desktop/dist/
+desktop/runtime/
