@@ -33,6 +33,7 @@ desktop/
 ```
 
 - 印章库存储：`{libPath}/印章名_{id}.png`（提取结果）+ `印章名_{id}_原图.png` + `index.json`（名称/备注/OCR/时间索引）；名称默认取 `state[target].ocrResult.company`
+- 改名（v3.6.9）：IPC `lib:rename {id, name}` → `safeName()` 过滤 `\/:*?"<>|` 并截断 80 字 → 若磁盘文件名符合 `名称_{id}[_原图].ext` 规则则同步 `fs.renameSync`（目标已存在时追加 ` (2)`、` (3)`…），否则只更新 `index.json` 中的名称（手工导入的文件保持文件名）→ 写回索引并返回 `{ok, name, file, renamed}`；前端入口为卡片「改名」按钮或双击名称，走 `dtPrompt()` 弹窗（Enter 保存 / Esc 取消）
 - 前端集成：`stamp-compare.html` 末尾独立模块，无 `window.stampDesktop` 桥时 early return（网页版零感知）；截图完成浮层 → `processStamp(img, 'ref'|'test')` 复用完整提取管线
 - OCR 运行时（v3.0.0）：安装包内置便携 Python（python-build-standalone，npmmirror 镜像）+ RapidOCR/onnxruntime + opencv-headless（`scripts/setup-runtime.sh` 一键构建，按平台放入 desktop/runtime/），随 extraResources 分发。主进程启动优先级：内置 runtime → 系统 python3；引擎优先级 RapidOCR（轻量、模型内置、离线可用）→ PaddleOCR（run_ocr_on_image 多引擎统一接口，_ocr_engine 标记当前引擎）
 - 打包：electron-builder，stamp-toolkit 与 runtime 作为 extraResources 随包分发；mac(dmg arm64/x64 + zip) · win(nsis/portable)

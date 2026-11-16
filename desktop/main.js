@@ -334,6 +334,42 @@ ipcMain.handle('lib:delete', (e, id) => {
   writeIndex(idx);
   return { ok: true };
 });
+// 重命名：本程序命名的文件同步改名（前缀 = 名称），外来导入的文件只改索引名称
+ipcMain.handle('lib:rename', (e, payload) => {
+  const { id, name } = payload || {};
+  const idx = readIndex();
+  const s = idx.seals.find(x => x.id === id);
+  if (!s) return { ok: false, error: 'not found' };
+  const next = safeName(name);
+  if (!next) return { ok: false, error: '名称不能为空' };
+  if (next === s.name) return { ok: true, name: s.name, file: s.file, renamed: false };
+  const pattern = new RegExp(`^(.+)_${String(s.id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(_原图)?\\.(png|jpe?g)$`, 'i');
+  const renameFile = (file, suffix) => {
+    if (!file) return file;
+    const m = String(file).match(pattern);
+    if (!m) return file;                       // 不是本程序的命名规则：保持磁盘文件名
+    const ext = m[3];
+    let target = `${next}_${s.id}${suffix}.${ext}`;
+    let n = 2;
+    while (target !== file && fs.existsSync(path.join(settings.libPath, target))) {
+      target = `${next} (${n++})_${s.id}${suffix}.${ext}`;
+    }
+    try {
+      fs.renameSync(path.join(settings.libPath, file), path.join(settings.libPath, target));
+      return target;
+    } catch (err) {
+      console.warn('[lib] rename failed', file, err && err.message);
+      return file;
+    }
+  };
+  s.file = renameFile(s.file, '');
+  s.originalFile = renameFile(s.originalFile, '_原图');
+  s.name = next;
+  s.renamedAt = new Date().toISOString();
+  writeIndex(idx);
+  return { ok: true, name: s.name, file: s.file, renamed: true };
+});
+
 ipcMain.handle('lib:choosePath', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: '选择印章库保存路径' });
   if (r.canceled || !r.filePaths.length) return { ok: false };

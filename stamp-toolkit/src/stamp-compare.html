@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.8</title>
+<title>印章对比工具 v3.6.9</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2701,7 +2701,7 @@
         <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.8">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.8</span></h1>
+      <h1 title="印章对比工具 v3.6.9">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.9</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local">本地</button>
@@ -10160,7 +10160,7 @@ statusBar.classList.add('visible');
         <tr><td>OCR</td><td>内置运行时开箱即用（首次加载约 10-30 秒，后台自动就绪）</td></tr>
       </table>
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.8</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.9</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
@@ -10333,14 +10333,17 @@ statusBar.classList.add('visible');
   .dt-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
   .dt-row label { font-size: 13px; color: #555; min-width: 92px; }
   .dt-input { flex: 1; min-width: 200px; border: 1px solid #d8dce3; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
-  .dt-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .dt-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
   .dt-lib-item { border: 1px solid #e5e8ee; border-radius: 8px; padding: 8px; text-align: center; position: relative; }
   .dt-lib-item:hover { border-color: #c0392b; }
   .dt-lib-item img { width: 100%; height: 110px; object-fit: contain; background: #fafbfc; border-radius: 4px; cursor: pointer; }
   .dt-lib-name { font-size: 12px; color: #333; margin-top: 6px; line-height: 1.35; word-break: break-all; max-height: 2.7em; overflow: hidden; }
   .dt-lib-time { font-size: 11px; color: #999; margin-top: 2px; }
-  .dt-lib-ops { display: flex; gap: 4px; margin-top: 6px; justify-content: center; }
-  .dt-lib-ops button { font-size: 11px; padding: 4px 8px; border: 1px solid #d8dce3; background: #fff; border-radius: 4px; cursor: pointer; }
+  .dt-lib-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+  .dt-lib-ops button {
+    font-size: 11px; line-height: 1.2; padding: 5px 4px; border: 1px solid #d8dce3; background: #fff;
+    border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .dt-lib-ops button:hover { border-color: #c0392b; color: #c0392b; }
   .dt-lib-ops button.del:hover { border-color: #e74c3c; color: #e74c3c; }
   .dt-cap-toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px); background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); padding: 14px 18px; z-index: 10001; display: none; align-items: center; gap: 10px; opacity: 0; transition: all .18s ease; }
@@ -10553,10 +10556,15 @@ statusBar.classList.add('visible');
         '<div class="dt-lib-ops">',
         '<button data-op="ref">→ 参考章</button>',
         '<button data-op="test">→ 待验章</button>',
+        '<button data-op="rename" title="重命名（也可双击名称）">改名</button>',
         '<button data-op="del" class="del">删除</button>',
         '</div>',
       ].join('');
-      cell.querySelector('.dt-lib-name').textContent = item.name;
+      const nameEl = cell.querySelector('.dt-lib-name');
+      nameEl.textContent = item.name;
+      nameEl.title = '双击改名';
+      nameEl.style.cursor = 'text';
+      nameEl.addEventListener('dblclick', () => renameLibItem(item));
       cell.querySelector('.dt-lib-time').textContent = time + (item.ocr && item.ocr.code ? ' · ' + String(item.ocr.code).slice(0, 13) : '');
       const imgEl = cell.querySelector('img');
       imgEl.addEventListener('click', () => loadFromLib(item.id, 'ref'));
@@ -10567,6 +10575,8 @@ statusBar.classList.add('visible');
             if (!confirm('删除印章「' + item.name + '」？文件将同时移除。')) return;
             await DT.libDelete(item.id);
             refreshLib($('#dt-lib-search').value.trim());
+          } else if (op === 'rename') {
+            renameLibItem(item);
           } else {
             loadFromLib(item.id, op);
           }
@@ -10576,6 +10586,19 @@ statusBar.classList.add('visible');
       grid.appendChild(cell);
     });
   }
+  // 重命名：文件与本程序命名规则一致时磁盘文件一起改名（见主进程 lib:rename）
+  async function renameLibItem(item) {
+    const v = await dtPrompt('重命名印章 —— 「' + item.name + '」', item.name, '保存');
+    if (v == null) return;
+    const name = String(v).trim();
+    if (!name) { showStatus('名称不能为空'); return; }
+    if (name === item.name) return;
+    const r = await DT.libRename(item.id, name);
+    if (!r || !r.ok) { showStatus('改名失败：' + ((r && r.error) || '未知错误')); return; }
+    await refreshLib($('#dt-lib-search').value.trim());
+    showStatus('已重命名为「' + r.name + '」');
+  }
+
   async function loadFromLib(id, target) {
     const r = await DT.libLoad(id);
     if (!r.ok) { alert('印章文件缺失'); return; }

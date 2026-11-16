@@ -46,6 +46,11 @@
 - 安全模型：contextIsolation + preload 受控桥（无 nodeIntegration）；桌面功能入口仅在 Electron 环境注入
 - **OCR 开箱即用**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime）组件，模型随包分发、离线可用，启动自动加载，无需用户安装 Python；系统装有 PaddleOCR 时自动作为回退引擎
 
+## v3.6.9
+
+- 印章库支持**改名**：卡片上的「改名」按钮，或双击印章名称；磁盘文件同步改名（`名称_id.png` / `名称_id_原图.png`），外来导入的文件只改索引名称，重名自动加 ` (2)` 后缀。
+- 版本号统一为 3.6.9。
+
 ## v3.6.8
 
 - **Windows 版发布**：新增 x64 安装包（NSIS）与免安装单文件，功能与 macOS 版对齐（本地视觉大模型除外）；随包内置 Windows 便携 Python 运行时 + RapidOCR。

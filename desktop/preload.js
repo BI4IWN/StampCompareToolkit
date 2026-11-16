@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('stampDesktop', {
   libSearch: (q) => ipcRenderer.invoke('lib:search', q),
   libLoad: (id) => ipcRenderer.invoke('lib:load', id),
   libDelete: (id) => ipcRenderer.invoke('lib:delete', id),
+  libRename: (id, name) => ipcRenderer.invoke('lib:rename', { id, name }),
   libChoosePath: () => ipcRenderer.invoke('lib:choosePath'),
   libReveal: () => ipcRenderer.invoke('lib:reveal'),
 
