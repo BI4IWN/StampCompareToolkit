@@ -57,7 +57,7 @@ import traceback
 import unicodedata
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
-APP_VERSION = '3.6.9'
+APP_VERSION = '3.6.10'
 
 # ============================================================
 # 内嵌 HTML 前端 (stamp-compare.html)

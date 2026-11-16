@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.9</title>
+<title>印章对比工具 v3.6.10</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2701,7 +2701,7 @@
         <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.9">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.9</span></h1>
+      <h1 title="印章对比工具 v3.6.10">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.10</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local">本地</button>
@@ -4634,7 +4634,11 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
     return false;
   }
   const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-  ink.customs.push({ hue: h, sat: s, val: v, hex, on: true, exclude: !!exclude, set: colorSet && colorSet.length ? colorSet : [[r, g, b]] });
+  // 深色取色（v ≤ 0.55）：笔画是渐变的，只按"精确色"匹配会只捞到描边、留下空心；
+  // 深色改用"至少这么深"的语义，见 recomputeExtracted 的 dark 分支
+  const dark = v <= 0.55;
+  ink.customs.push({ hue: h, sat: s, val: v, hex, on: true, exclude: !!exclude, dark,
+                     set: colorSet && colorSet.length ? colorSet : [[r, g, b]] });
   renderInkPanel(target);
   try { ovRenderColors(); } catch (e) { /* 查看器未初始化 */ }
   applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（精确匹配该颜色）`);
@@ -5257,6 +5261,9 @@ function recomputeExtracted(target) {
       }
     }
     const margin = PICK_COLOR_TOL;
+    // 深色取色按"不比所选更亮"匹配，笔画内部可能远比所选更暗 —— 包围盒下界要放开到 0
+    const hasDarkPick = extractColors.some(c => c.dark);
+    if (hasDarkPick) { rMin = 0; gMin = 0; bMin = 0; }
     rMin = Math.max(0, rMin - margin); rMax = Math.min(255, rMax + margin);
     gMin = Math.max(0, gMin - margin); gMax = Math.min(255, gMax + margin);
     bMin = Math.max(0, bMin - margin); bMax = Math.min(255, bMax + margin);
@@ -5283,6 +5290,25 @@ function recomputeExtracted(target) {
             if (Math.abs(hsv2.v - (c.val || 0)) > 0.12) continue;
             // 近中性灰 = 正文/纸边，不是印章的彩色淡墨，别收进来
             if (hsv2.s < 0.05 && (c.sat || 0) >= 0.06) continue;
+          }
+          if (c.dark) {
+            // 深色取色：同一笔画的内部比描边更暗，用"不比所选更亮"的单侧窗口把内部填实，
+            // 同时用饱和度/色相守住别的颜色（避免把黑色正文一并吞进来）
+            const hsv2 = rgbToHsv(r, g, b);
+            if (hsv2.v > (c.val || 0) + 0.10) continue;
+            const satPick = c.sat || 0;
+            if (satPick >= 0.25) {
+              if (Math.abs(hsv2.s - satPick) > 0.30) continue;
+              let dh = Math.abs(hsv2.h - c.h);
+              if (dh > 180) dh = 360 - dh;
+              if (dh > 40) continue;
+            } else if (hsv2.s > satPick + 0.15) {
+              continue;
+            }
+            img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+            img.data[i + 3] = 255;
+            added++;
+            continue;
           }
           for (let k = 0; k < set.length; k++) {
             const dr = r - set[k][0], dg = g - set[k][1], db = b - set[k][2];
@@ -10160,7 +10186,7 @@ statusBar.classList.add('visible');
         <tr><td>OCR</td><td>内置运行时开箱即用（首次加载约 10-30 秒，后台自动就绪）</td></tr>
       </table>
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.9</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.10</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
