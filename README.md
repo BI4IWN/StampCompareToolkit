@@ -1,4 +1,4 @@
-# 印章对比工具 (Stamp Compare Toolkit) v3.6.8
+# 印章对比工具 (Stamp Compare Toolkit) v3.6.10
 
 一款面向法务合规与文档核验场景的本地印章对比工具，支持将单据印章与合同印章进行可视化对比和文字识别。
 
@@ -29,9 +29,9 @@
 
 | 平台 | 安装包 | 说明 |
 |---|---|---|
-| macOS（Apple Silicon） | `StampCompareToolkit-3.6.8-mac-arm64.dmg` | 推荐；支持可选安装本地视觉大模型（MLX） |
-| macOS（Intel） | `StampCompareToolkit-3.6.8-mac-x64.dmg` | 本地视觉模型不可用，其余功能一致 |
-| Windows（x64） | `StampCompareToolkit-3.6.8-win-x64-setup.exe` / `...-win-x64-portable.exe` | 安装版 / 免安装版；详见 [Windows 版安装与使用](stamp-toolkit/docs/windows-guide.md) |
+| macOS（Apple Silicon） | `StampCompareToolkit-3.6.10-mac-arm64.dmg` | 推荐；支持可选安装本地视觉大模型（MLX） |
+| macOS（Intel） | `StampCompareToolkit-3.6.10-mac-x64.dmg` | 本地视觉模型不可用，其余功能一致 |
+| Windows（x64） | `StampCompareToolkit-3.6.10-win-x64-setup.exe` / `...-win-x64-portable.exe` | 安装版 / 免安装版；详见 [Windows 版安装与使用](stamp-toolkit/docs/windows-guide.md) |
 
 - **无需安装 Python**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用。
 - **本地视觉大模型为可选件**：仅 Apple Silicon 支持，首次启动探测硬件后再询问是否下载（约 1.5 GB），不随包分发；Windows 走 RapidOCR + 印章库匹配，或配置云端视觉模型。
