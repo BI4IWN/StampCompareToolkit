@@ -1,0 +1,163 @@
+{
+  "avg_ms_geom": 22.7,
+  "avg_ms_ocr": 330.2,
+  "avg_recall": 0.722,
+  "dewarped": 13,
+  "engine": "tract-rust(geom+unwrap+split+rec)",
+  "images": 19,
+  "rows": [
+    {
+      "file": "上海聚旦企业管理有限公司_1794824159163_1m0u8t.png",
+      "has_strip": true,
+      "pred": "业管理 有限公司 上 海聚直企",
+      "recall": 0.917,
+      "truth": "上海聚旦企业管理有限公司",
+      "warped": true
+    },
+    {
+      "file": "东元科技有限公司_1794212634372_njiqqs.png",
+      "has_strip": true,
+      "pred": "ceegoooooe 东元科 技有 限公司",
+      "recall": 1.0,
+      "truth": "东元科技有限公司",
+      "warped": true
+    },
+    {
+      "file": "东平县现代农业发展有限公司_1793169264945_6ugfg1.png",
+      "has_strip": true,
+      "pred": "公司SOs50 Ee26o东平 县现代农业 发展有限",
+      "recall": 1.0,
+      "truth": "东平县现代农业发展有限公司",
+      "warped": true
+    },
+    {
+      "file": "东平县现代农业发展有限公司_1793169312886_8dzxex.png",
+      "has_strip": true,
+      "pred": "公司SOs50 Ee26o东平 县现代农业 发展有限",
+      "recall": 1.0,
+      "truth": "东平县现代农业发展有限公司",
+      "warped": true
+    },
+    {
+      "file": "东营市垦利区市场监督管理局.png",
+      "has_strip": true,
+      "pred": "（基宗外蓝",
+      "recall": 0.0,
+      "truth": "东营市垦利区市场监督管理局",
+      "warped": false
+    },
+    {
+      "file": "东营市鸿鑫企业服务有限公司.png",
+      "has_strip": true,
+      "pred": "务有限公 司 东营市鸿鑫 企业服",
+      "recall": 1.0,
+      "truth": "东营市鸿鑫企业服务有限公司",
+      "warped": true
+    },
+    {
+      "file": "中国人民武装警察部队山东省总队机动支队.png",
+      "has_strip": true,
+      "pred": "中国 人民武装警 山东省 总队机动",
+      "recall": 0.737,
+      "truth": "中国人民武装警察部队山东省总队机动支队",
+      "warped": true
+    },
+    {
+      "file": "中国人民解放军71939部队政治工作部_1793417034582_ff0wqu.png",
+      "has_strip": true,
+      "pred": "工作部 中国人民 解放+7193 9政治",
+      "recall": 0.842,
+      "truth": "中国人民解放军71939部队政治工作部",
+      "warped": false
+    },
+    {
+      "file": "中国人民解放军71939部队政治工作部宣传科_1793417039581_cfjsc1.png",
+      "has_strip": true,
+      "pred": "工作部教社 #中国人 民解放军719 39部队政治",
+      "recall": 0.864,
+      "truth": "中国人民解放军71939部队政治工作部宣传科",
+      "warped": true
+    },
+    {
+      "file": "中国共产党临沂市兰山区委员会办公室_1793583097902_kgzpc8.png",
+      "has_strip": true,
+      "pred": "会爱 中 国共产党监沂 市兰山区委",
+      "recall": 0.706,
+      "truth": "中国共产党临沂市兰山区委员会办公室",
+      "warped": true
+    },
+    {
+      "file": "中国共产党兰陵县委员会政法委员会_1794471367401_a0o3qm.png",
+      "has_strip": true,
+      "pred": "徐养国  委员 区版",
+      "recall": 0.188,
+      "truth": "中国共产党兰陵县委员会政法委员会",
+      "warped": false
+    },
+    {
+      "file": "中国共产党济南市历下区委员会政法委员会_1794808085405_8s1ehl.png",
+      "has_strip": true,
+      "pred": "员会多售 中 国共产党济南 市历下区委",
+      "recall": 0.737,
+      "truth": "中国共产党济南市历下区委员会政法委员会",
+      "warped": true
+    },
+    {
+      "file": "中国共产党高唐县委员会政法委员会_1794877680236_f8seg1.png",
+      "has_strip": true,
+      "pred": "中 国共产党 高店业安",
+      "recall": 0.375,
+      "truth": "中国共产党高唐县委员会政法委员会",
+      "warped": false
+    },
+    {
+      "file": "中国工商银行股份有限公司费县支行_1794189561357_ukxf3a.png",
+      "has_strip": true,
+      "pred": "份有限公司 费真支行 中 国工商银行股",
+      "recall": 0.938,
+      "truth": "中国工商银行股份有限公司费县支行",
+      "warped": true
+    },
+    {
+      "file": "中国移动通信集团山东有限公司兰陵分公司.png",
+      "has_strip": true,
+      "pred": "同学陵分公司 026中国 移动通信集团 山东有限公司",
+      "recall": 0.947,
+      "truth": "中国移动通信集团山东有限公司兰陵分公司",
+      "warped": false
+    },
+    {
+      "file": "中国移动通信集团山东有限公司德州分公司.png",
+      "has_strip": true,
+      "pred": "1308107 阿丝动通信 集团山东有限 公司福热分公司",
+      "recall": 0.737,
+      "truth": "中国移动通信集团山东有限公司德州分公司",
+      "warped": false
+    },
+    {
+      "file": "中国移动通信集团山东有限公司枣庄分公司.png",
+      "has_strip": true,
+      "pred": "FWC 车",
+      "recall": 0.0,
+      "truth": "中国移动通信集团山东有限公司枣庄分公司",
+      "warped": false
+    },
+    {
+      "file": "中国移动通信集团山东有限公司沂水分公司.png",
+      "has_strip": true,
+      "pred": "公司0500288 中国移动通 信集团山东有 限公司沂水分",
+      "recall": 1.0,
+      "truth": "中国移动通信集团山东有限公司沂水分公司",
+      "warped": true
+    },
+    {
+      "file": "中国移动通信集团山东有限公司淄博分公司_1794790503518_f8pt9v.png",
+      "has_strip": true,
+      "pred": "公司 创婴中国移 动通信集 团山东有限",
+      "recall": 0.737,
+      "truth": "中国移动通信集团山东有限公司淄博分公司",
+      "warped": true
+    }
+  ],
+  "strips_ok": 19
+}
