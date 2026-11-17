@@ -12,6 +12,17 @@ const http = require('http');
 const { spawn } = require('child_process');
 
 const isDev = process.argv.includes('--dev');
+// ---------- 启动日志（Windows 上双击无反应时，看这个文件就能定位）----------
+let _logPath = null;
+function logLine(...parts) {
+  try {
+    if (!_logPath) _logPath = path.join(app.getPath('userData'), 'startup.log');
+    const line = `[${new Date().toISOString()}] ` + parts.map(p => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ');
+    fs.appendFileSync(_logPath, line + '\n');
+  } catch (e) { /* 日志失败不影响启动 */ }
+  try { console.log(line); } catch (e) {}
+}
+
 // 资源目录：打包版在 resources/stamp-toolkit，开发版在上层目录 —— 自动探测
 const _pkgRes = process.resourcesPath && path.join(process.resourcesPath, 'stamp-toolkit');
 const RES = (!isDev && _pkgRes && fs.existsSync(_pkgRes)) ? _pkgRes : path.join(__dirname, '..', 'stamp-toolkit');
@@ -95,7 +106,10 @@ function startStaticServer() {
       console.error('[static] server error:', e);
     }
   });
-  server.listen(HTTP_PORT, '127.0.0.1');
+  return new Promise((resolve, reject) => {
+    server.once('error', err => { logLine('静态服务启动失败', err && err.code, err && err.message); reject(err); });
+    server.listen(HTTP_PORT, '127.0.0.1', () => { logLine('静态服务已监听', HTTP_PORT); resolve(); });
+  });
 }
 
 // ---------- Python 后端子进程（OCR / AI 代理）----------
@@ -116,9 +130,10 @@ function startBackend() {
   const entry = path.join(RES, 'src', 'stamp_app.py');
   if (!fs.existsSync(entry)) return;
   const py = bundledPython() || (process.platform === 'win32' ? 'python' : 'python3');
+  logLine('后端 Python', py, '脚本', entry);
   try {
     pyProc = spawn(py, [entry, '--port', String(PY_PORT), '--no-browser'], { stdio: 'ignore', detached: false });
-    pyProc.on('error', () => { pyProc = null; });   // 无任何 Python 环境时静默降级
+    pyProc.on('error', (err) => { logLine('后端启动失败', err && err.message); pyProc = null; });   // 无任何 Python 环境时静默降级
     pyProc.on('exit', () => { pyProc = null; });
     watchBackendReady();
   } catch (e) { pyProc = null; }
@@ -166,7 +181,27 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  win.once('ready-to-show', () => win.show());
+  let shown = false;
+  const showOnce = (why) => {
+    if (shown || !win || win.isDestroyed()) return;
+    shown = true;
+    logLine('显示主窗口', why);
+    win.show();
+  };
+  win.once('ready-to-show', () => showOnce('ready-to-show'));
+  // 兜底：页面没加载出来（端口未就绪/被占用）也要让用户看到窗口，而不是"双击没反应"
+  setTimeout(() => showOnce('timeout-5s'), 5000);
+  win.webContents.on('did-fail-load', (e, code, desc, url) => {
+    logLine('页面加载失败', code, desc, url);
+    if (win && !win.isDestroyed()) {
+      win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+        `<body style="font:14px -apple-system,'Segoe UI',sans-serif;padding:40px;color:#333">
+           <h3>界面没能加载出来</h3>
+           <p>本地服务（127.0.0.1:${HTTP_PORT}）没有就绪，可能是端口被占用，或上一次的进程还开着。</p>
+           <p style="color:#888">诊断日志：${app.getPath('userData')}\\startup.log</p></body>`));
+      showOnce('did-fail-load');
+    }
+  });
   win.loadURL(`http://127.0.0.1:${HTTP_PORT}/`);
   if (isDev) win.webContents.openDevTools({ mode: 'detach' });
   win.on('closed', () => { win = null; });
@@ -390,9 +425,29 @@ ipcMain.handle('settings:set', (e, patch) => {
 ipcMain.handle('settings:reset', () => { settings = { ...DEFAULTS }; saveSettings(); registerCaptureShortcut(); return { ...settings }; });
 
 // ---------- 生命周期 ----------
-app.whenReady().then(() => {
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  // 已经有实例在跑：直接退出，避免第二个进程占着端口却没有窗口
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+  });
+}
+
+app.whenReady().then(async () => {
+  logLine('启动', app.getVersion(), process.platform, process.arch, 'packaged=' + app.isPackaged);
   loadSettings();
-  startStaticServer();
+  try {
+    await startStaticServer();
+  } catch (e) {
+    const msg = (e && e.code === 'EADDRINUSE')
+      ? `端口 ${HTTP_PORT} 已被占用。\n\n如果是本程序的上一个实例没退出，请在任务管理器里结束「印章比对工具」后重试。`
+      : `本地服务启动失败：${e && e.message}`;
+    dialog.showErrorBox('印章比对工具 启动失败', msg + `\n\n诊断日志：${path.join(app.getPath('userData'), 'startup.log')}`);
+    app.quit();
+    return;
+  }
   startBackend();
   createWindow();
   registerCaptureShortcut();
@@ -439,4 +494,12 @@ app.on('window-all-closed', () => {
   if (pyProc) { try { pyProc.kill(); } catch (e) {} }
   if (server) server.close();
   if (process.platform !== 'darwin') app.quit();
+});
+
+process.on('uncaughtException', (err) => {
+  logLine('uncaughtException', err && (err.stack || err.message));
+  try { dialog.showErrorBox('印章比对工具 出错了', String(err && err.message || err)); } catch (e) {}
+});
+process.on('unhandledRejection', (reason) => {
+  logLine('unhandledRejection', String(reason && (reason.stack || reason)));
 });
