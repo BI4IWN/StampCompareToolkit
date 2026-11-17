@@ -1,6 +1,6 @@
 # Windows 版安装与使用
 
-> 版本：v3.6.10 ｜ 适用系统：Windows 10 / 11（64 位）
+> 版本：v3.6.12 ｜ 适用系统：Windows 10 / 11（64 位）
 
 印章比对工具（Stamp Compare Toolkit）桌面版在 Windows 上提供两种分发形式，功能与 macOS 版一致（唯一差异见「平台差异」）。
 
@@ -10,8 +10,8 @@
 
 | 文件 | 说明 | 适用场景 |
 |---|---|---|
-| `StampCompareToolkit-3.6.10-win-x64-setup.exe` | NSIS 安装向导，可选安装目录，创建开始菜单/桌面快捷方式 | 长期使用、需要卸载项 |
-| `StampCompareToolkit-3.6.10-win-x64-portable.exe` | 免安装单文件，双击直接运行 | 临时使用、U 盘携带、无管理员权限 |
+| `StampCompareToolkit-3.6.12-win-x64-setup.exe` | NSIS 安装向导，可选安装目录，创建开始菜单/桌面快捷方式 | 长期使用、需要卸载项 |
+| `StampCompareToolkit-3.6.12-win-x64-portable.exe` | 免安装单文件，双击直接运行 | 临时使用、U 盘携带、无管理员权限 |
 
 - 体积约 180 MB（内含 Python 运行时与 OCR 引擎，**无需另装 Python**）。
 - 首次运行会解包到临时目录，启动约 3–10 秒。
