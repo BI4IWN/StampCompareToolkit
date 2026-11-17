@@ -375,6 +375,81 @@ fn strip_to_rgb(s: &image::GrayImage) -> RgbImage {
 }
 
 /// 批量识别：把多张裁剪图拼成一个 [N,3,48,320] 张量一次前向
+fn rotate180(img: &RgbImage) -> RgbImage {
+    let (w, h) = (img.width(), img.height());
+    let mut o = RgbImage::new(w, h);
+    for y in 0..h { for x in 0..w { o.put_pixel(w - 1 - x, h - 1 - y, *img.get_pixel(x, y)); } }
+    o
+}
+
+/// 文字行方向分类（0=正，1=倒）；返回 (是否需翻转, 置信度)
+fn need_rotate(cls: &Model, img: &RgbImage) -> Result<(bool, f32)> {
+    let rs = imageops::resize(img, 192, 48, imageops::FilterType::Triangle);
+    let mut data = vec![0f32; 3 * 48 * 192];
+    for y in 0..48 {
+        for x in 0..192 {
+            let px = rs.get_pixel(x as u32, y as u32).0;
+            for c in 0..3 { data[c * 48 * 192 + y * 192 + x] = (px[c] as f32 / 255.0 - 0.5) / 0.5; }
+        }
+    }
+    let input = tract_ndarray::Array4::from_shape_vec((1, 3, 48, 192), data)?;
+    let out = cls.run(tvec!(input.into_tensor().into()))?;
+    let o = out[0].to_array_view::<f32>()?;
+    let (a, b) = (o[[0, 0]], o[[0, 1]]);
+    Ok((b > a, a.max(b)))
+}
+
+fn to_halfwidth(c: char) -> char {
+    match c {
+        '０'..='９' => char::from_u32(c as u32 - 0xFF10 + '0' as u32).unwrap_or(c),
+        'Ａ'..='Ｚ' => char::from_u32(c as u32 - 0xFF21 + 'A' as u32).unwrap_or(c),
+        'ａ'..='ｚ' => char::from_u32(c as u32 - 0xFF41 + 'a' as u32).unwrap_or(c),
+        _ => c,
+    }
+}
+
+fn normalize_text(t: &str) -> String {
+    t.chars().map(to_halfwidth)
+        .filter(|c| c.is_ascii_alphanumeric() || ('\u{4e00}'..='\u{9fff}').contains(c) || *c == '(' || *c == ')' || *c == '-')
+        .collect()
+}
+
+const ORG_SUFFIX: &[&str] = &[
+    "股份有限公司", "有限责任公司", "有限公司", "分公司", "委员会办公室", "委员会",
+    "管理局", "公安局", "财政局", "银行", "支队", "部队", "分局", "集团", "公司", "局", "厅", "院", "所",
+];
+
+/// 结果后处理：拆出 (机构名, 编码, 类型)
+fn postprocess(text: &str) -> (String, String, String) {
+    let norm = normalize_text(text);
+    let mut best_code = String::new();
+    let mut run = String::new();
+    for c in norm.chars() {
+        if c.is_ascii_digit() { run.push(c); }
+        else { if run.len() > best_code.len() { best_code = run.clone(); } run.clear(); }
+    }
+    if run.len() > best_code.len() { best_code = run; }
+    if best_code.len() < 8 { best_code.clear(); }
+
+    let chars: Vec<char> = norm.chars().collect();
+    let mut best_org = String::new();
+    let mut best_type = String::new();
+    let mut best_len = 0usize;
+    for (i, _) in chars.iter().enumerate() {
+        for suf in ORG_SUFFIX {
+            let sc: Vec<char> = suf.chars().collect();
+            if i + sc.len() > chars.len() { continue; }
+            if chars[i..i + sc.len()] != sc[..] { continue; }
+            let mut start = i;
+            while start > 0 && ('\u{4e00}'..='\u{9fff}').contains(&chars[start - 1]) { start -= 1; }
+            let cand: String = chars[start..i + sc.len()].iter().collect();
+            let l = cand.chars().count();
+            if l > best_len { best_len = l; best_org = cand; best_type = suf.to_string(); }
+        }
+    }
+    (best_org, best_code, best_type)
+}
+
 fn rec_batch(model: &Model, dict: &[String], imgs: &[RgbImage], batch: usize) -> Result<Vec<(String, f32)>> {
     let mut out_texts: Vec<(String, f32)> = Vec::with_capacity(imgs.len());
     for chunk in imgs.chunks(batch) {
@@ -453,7 +528,7 @@ fn recall(truth: &str, pred: &str) -> f64 {
     hit as f64 / truth.chars().count().max(1) as f64
 }
 
-fn run_channel(rec: &Model, dict: &[String], batch: usize, img: &RgbImage, ch: &str) -> Result<(String, f32, f32, f64, f64, usize)> {
+fn run_channel(rec: &Model, dict: &[String], batch: usize, img: &RgbImage, ch: &str, cls: Option<&Model>) -> Result<(String, f32, f32, f64, f64, usize)> {
     std::env::set_var("OCR_CH", ch);
     let t0 = Instant::now();
     let masked = ink_mask(img);
@@ -536,7 +611,17 @@ fn run_channel(rec: &Model, dict: &[String], batch: usize, img: &RgbImage, ch: &
             if wcut < 8 { continue; }
             crops.push(imageops::crop_imm(&rgb, x0 as u32, 0, wcut as u32, rgb.height()).to_image());
         }
-        let texts = rec_batch(rec, dict, &crops, batch)?;
+        let fixed: Vec<RgbImage> = match cls {
+            Some(c) => {
+                let gate: f32 = std::env::var("OCR_CLS_GATE").ok().and_then(|v| v.parse().ok()).unwrap_or(0.90);
+                crops.iter().map(|cr| match need_rotate(c, cr) {
+                    Ok((flip, conf)) if flip && conf >= gate => rotate180(cr),
+                    _ => cr.clone(),
+                }).collect()
+            }
+            None => crops.clone(),
+        };
+        let texts = rec_batch(rec, dict, &fixed, batch)?;
         let mut joined = String::new();
         let (mut sum, mut cnt) = (0f32, 0usize);
         for (t, c) in texts {
@@ -560,26 +645,30 @@ fn run_channel(rec: &Model, dict: &[String], batch: usize, img: &RgbImage, ch: &
     Ok((text.trim().to_string(), best.map(|(_, c)| c).unwrap_or(0.0), score, t_geo, t_ocr, bands.len()))
 }
 
-fn process_one(rec: &Model, dict: &[String], batch: usize, path: &Path, file: &str, truth: &str) -> Result<(serde_json::Value, f64, f64)> {
+fn process_one(rec: &Model, dict: &[String], batch: usize, path: &Path, file: &str, truth: &str, cls: Option<&Model>) -> Result<(serde_json::Value, f64, f64)> {
     let img = image::open(path)?.to_rgb8();
     let ch_mode = std::env::var("OCR_CH").unwrap_or_else(|_| "auto".into());
     let primary = if ch_mode == "dark" || ch_mode == "both" { "rg" } else { ch_mode.as_str() };
-    let (t1, _c1, _s1, g1, o1, nb1) = run_channel(rec, dict, batch, &img, primary)?;
+    let (t1, _c1, _s1, g1, o1, nb1) = run_channel(rec, dict, batch, &img, primary, cls)?;
     let (mut best_text, mut g_ms, mut o_ms, mut nbands) = (t1.clone(), g1, o1, nb1);
     // rg 通道读不出东西（<8 字）时，再试暗度通道——淡章/灰章在暗度上更清楚
     if ch_mode == "auto" || ch_mode == "both" {
         let cjk = t1.chars().filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c)).count();
         if cjk < 4 {
-            let (t2, _c2, _s2, g2, o2, nb2) = run_channel(rec, dict, batch, &img, "dark")?;
+            let (t2, _c2, _s2, g2, o2, nb2) = run_channel(rec, dict, batch, &img, "dark", cls)?;
             g_ms += g2; o_ms += o2; nbands += nb2;
             let cjk2 = t2.chars().filter(|c| ('\u{4e00}'..='\u{9fff}').contains(c)).count();
             if cjk2 > cjk { best_text = t2; }
         }
     }
     let r = recall(truth, &best_text);
+    let (company, code, typ) = postprocess(&best_text);
+    let tn = normalize_text(truth);
+    let hit = !company.is_empty() && (tn.contains(&company) || company.contains(&tn));
     Ok((serde_json::json!({
         "file": file, "truth": truth, "pred": best_text, "recall": (r*1000.0).round()/1000.0,
-        "channels": ch_mode, "bands": nbands
+        "channels": ch_mode, "bands": nbands,
+        "company": company, "code": code, "type": typ, "name_hit": hit
     }), g_ms, o_ms))
 }
 
@@ -597,25 +686,29 @@ fn main() -> Result<()> {
 
     let t_all = Instant::now();
     let rec_path = root.join(format!("rec_batch{batch}.onnx"));
+    let cls = load(&root.join("cls_static.onnx"), [1, 3, 48, 192]).ok();
     let mut results: Vec<(serde_json::Value, f64, f64)> = Vec::new();
     if threads <= 1 {
         let rec = load(&rec_path, [batch, 3, REC_H, REC_W])?;
         for (file, truth) in &items {
-            results.push(process_one(&rec, &dict, batch, &imgs_dir.join(file), file, truth)?);
+            results.push(process_one(&rec, &dict, batch, &imgs_dir.join(file), file, truth, cls.as_ref())?);
         }
     } else {
         let chunk = (items.len() + threads - 1) / threads;
         let dict_ref = &dict;
         let rec_path_ref = &rec_path;
+        let cls_path_owned = root.join("cls_static.onnx");
         let imgs_ref = &imgs_dir;
         let parts: Vec<Vec<(serde_json::Value, f64, f64)>> = std::thread::scope(|sc| {
             let mut handles = Vec::new();
             for chunk_items in items.chunks(chunk.max(1)) {
+                let cls_path_c = cls_path_owned.clone();
                 handles.push(sc.spawn(move || -> Result<Vec<(serde_json::Value, f64, f64)>> {
                     let rec = load(rec_path_ref, [batch, 3, REC_H, REC_W])?;
+                    let cls_l: Option<Model> = load(&cls_path_c, [1, 3, 48, 192]).ok();
                     let mut out = Vec::new();
                     for (file, truth) in chunk_items {
-                        out.push(process_one(&rec, dict_ref, batch, &imgs_ref.join(file), file, truth)?);
+                        out.push(process_one(&rec, dict_ref, batch, &imgs_ref.join(file), file, truth, cls_l.as_ref())?);
                     }
                     Ok(out)
                 }));
@@ -634,15 +727,16 @@ fn main() -> Result<()> {
                  r["warped"].as_bool().unwrap_or(false), r["truth"].as_str().unwrap_or(""), r["pred"].as_str().unwrap_or("").chars().take(36).collect::<String>());
     }
     let avg: f64 = rows.iter().map(|r| r["recall"].as_f64().unwrap_or(0.0)).sum::<f64>() / n as f64;
+    let hits = rows.iter().filter(|r| r["name_hit"].as_bool().unwrap_or(false)).count();
     std::fs::write(root.join("baseline_pipeline.json"), serde_json::to_string_pretty(&serde_json::json!({
         "engine": "tract-rust(geom+unwrap+split+rec)", "rows": rows, "images": n, "batch": batch, "threads": threads,
         "avg_ms_geom": (t_geo / n as f64 * 10.0).round() / 10.0,
         "avg_ms_ocr": (t_ocr / n as f64 * 10.0).round() / 10.0,
         "wall_ms_total": (wall * 10.0).round() / 10.0,
         "wall_ms_per_image": (wall / n as f64 * 10.0).round() / 10.0,
-        "avg_recall": (avg * 1000.0).round() / 1000.0
+        "avg_recall": (avg * 1000.0).round() / 1000.0, "name_hits": hits
     }))?)?;
-    println!("\n平均字覆盖 {:.3}  几何 {:.1}ms/枚  识别 {:.1}ms/枚  | batch {} threads {} 墙钟 {:.0}ms（{:.0}ms/枚）",
-             avg, t_geo / n as f64, t_ocr / n as f64, batch, threads, wall, wall / n as f64);
+    println!("\n平均字覆盖 {:.3}  名称命中 {}/{}  几何 {:.1}ms/枚  识别 {:.1}ms/枚  | batch {} threads {} 墙钟 {:.0}ms（{:.0}ms/枚）",
+             avg, hits, n, t_geo / n as f64, t_ocr / n as f64, batch, threads, wall, wall / n as f64);
     Ok(())
 }
