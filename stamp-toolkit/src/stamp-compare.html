@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.10</title>
+<title>印章对比工具 v3.6.11</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2100,6 +2100,7 @@
   .ov-tol b { font-weight: 600; min-width: 30px; }
   .ov-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .ov-colors:empty { display: none; }
+  .ov-count { margin-left: auto; font: 10px/1 -apple-system, "SF Pro Text", "PingFang SC", sans-serif; color: var(--text-tertiary, #9aa0a6); font-variant-numeric: tabular-nums; }
   .ov-chip {
     display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px 0 5px;
     border: 1px solid var(--border); border-radius: 7px; background: var(--surface-solid);
@@ -2701,7 +2702,7 @@
         <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.10">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.10</span></h1>
+      <h1 title="印章对比工具 v3.6.11">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.11</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local">本地</button>
@@ -3391,7 +3392,7 @@ kbdToggle.addEventListener('click', () => {
 // INK_EXCLUDE_TOL：排除色的色相容差（收紧，避免误伤整枚印章）
 const INK_CUSTOM_TOL = 18;
 const INK_EXCLUDE_TOL = 6;
-const MAX_INK_COLORS = 10;  // 每枚印章最多支持的手工颜色数（超出提示）
+const MAX_INK_COLORS = 12;  // 每枚印章最多支持的手工颜色数（超出提示）
 const INK_BANDS = {
   red:    { name: '红章', hueLo: [0, 40],   hueHi: [320, 360], center: 0   },
   blue:   { name: '蓝章', hueLo: [180, 265], hueHi: null,       center: 222.5 },
@@ -4625,12 +4626,53 @@ function collectColorSet(base, pixels) {
 
 // 手工添加墨色（来自取色器）：直接记录颜色，在自动提取结果上叠加（提取）或剔除（排除）
 // colorSet：点选位置邻域采集的颜色簇 [[r,g,b],...]，精确匹配用
+let _lastInkNotice = '';   // 取色失败/被合并时的原因，供查看器就地提示
+function inkNotice() { return _lastInkNotice; }
+
 function addCustomInk(target, r, g, b, exclude, colorSet) {
   const { h, s, v } = rgbToHsv(r, g, b);
   const ink = state.ink[target];
-  // 颜色数量上限：超过 MAX_INK_COLORS 给与提示
+  _lastInkNotice = '';
+  // 与已有颜色几乎相同（ΔRGB ≤ 24）就不再占一个位置：已在用就提示，被停用的直接恢复
+  // 只把「几乎同色」视为重复（ΔRGB ≤ 8）；相邻取色（Δ 十几）是用户故意的，不该被吞
+  const dup = ink.customs.find(c => {
+    if (!c.set || !c.set.length) return false;
+    return c.exclude === !!exclude && c.set.some(q => (q[0]-r)**2 + (q[1]-g)**2 + (q[2]-b)**2 <= 8*8);
+  });
+  if (dup) {
+    if (!dup.on) {
+      dup.on = true;
+      renderInkPanel(target);
+      try { ovRenderColors(); } catch (e) {}
+      applyInkSelection(target, `已重新启用颜色 ${dup.hex}`);
+      _lastInkNotice = `颜色 ${dup.hex} 已在列表里，已重新启用`;
+      return false;
+    }
+    _lastInkNotice = `颜色 ${dup.hex} 已在列表里，不用重复添加`;
+    showStatus(_lastInkNotice);
+    return false;
+  }
+  // 到上限时先把「已停用」的颜色清掉，给新颜色腾位置（用户看不到它们，等于垃圾）
+  // 同一颜色已作为相反用途存在（提取↔排除）：直接替换那一条，避免两条互相打架
+  const crossIdx = ink.customs.findIndex(c => c.exclude !== !!exclude && c.set && c.set.some(q => (q[0]-r)**2 + (q[1]-g)**2 + (q[2]-b)**2 <= 10*10));
+  if (crossIdx >= 0) {
+    const oldHex = ink.customs[crossIdx].hex;
+    ink.customs.splice(crossIdx, 1);
+    renderInkPanel(target);
+    try { ovRenderColors(); } catch (e) {}
+    _lastInkNotice = `已把 ${oldHex} 从「${exclude ? '提取' : '排除'}」改为「${exclude ? '排除' : '提取'}」`;
+  }
   if (ink.customs.length >= MAX_INK_COLORS) {
-    showStatus(`已达颜色上限：最多支持 ${MAX_INK_COLORS} 种颜色，请先剔除不需要的颜色`);
+    const before = ink.customs.length;
+    ink.customs = ink.customs.filter(c => c.on);
+    if (ink.customs.length < before) {
+      renderInkPanel(target);
+      try { ovRenderColors(); } catch (e) {}
+    }
+  }
+  if (ink.customs.length >= MAX_INK_COLORS) {
+    _lastInkNotice = `已达颜色上限（${MAX_INK_COLORS} 个）：先在下方颜色条删掉不用的颜色再点选`;
+    showStatus(_lastInkNotice);
     return false;
   }
   const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
@@ -6079,6 +6121,12 @@ function ovRenderColors() {
     });
     box.appendChild(chip);
   });
+  // 右上角计数：让"还能加几个"可见，别到上限才发现
+  const cnt = document.createElement('span');
+  cnt.className = 'ov-count';
+  cnt.textContent = `${list.length}/${MAX_INK_COLORS}`;
+  cnt.title = `手工颜色 ${list.length} / ${MAX_INK_COLORS}（到上限后需先删除）`;
+  box.appendChild(cnt);
 }
 
 // 从右侧「提取结果」里点选颜色（排除时更直观：看到什么就删什么）
@@ -6116,6 +6164,7 @@ function ovPickFromResult(clientX, clientY) {
   }
   if (!best) { showStatus('这一点是透明的，请点笔画上'); return; }
   const ok = addCustomInk(OV.target, best[0], best[1], best[2], true, [best]);
+  if (!ok) { const info = document.getElementById('ov-info'); if (info) info.textContent = inkNotice() || '没有可排除的颜色'; }
   if (ok) {
     const hex = '#' + best.map(v => v.toString(16).padStart(2, '0')).join('');
     document.getElementById('ov-info').textContent = `已从提取结果中排除 ${hex} · 点右侧继续选，或点下方色块删除`;
@@ -6231,6 +6280,7 @@ function ovPickAt(clientX, clientY, exclude) {
   if (!best) { showStatus('这里没有可提取的颜色，请点印章笔画上'); return; }
   const set = collectColorSet(best, near);
   const ok = addCustomInk(OV.target, best[0], best[1], best[2], exclude, set);
+  if (!ok) document.getElementById('ov-info').textContent = inkNotice() || '没有可添加的颜色';
   if (ok) {
     const hex = '#' + best.map(v => v.toString(16).padStart(2, '0')).join('');
     document.getElementById('ov-info').textContent = `已${exclude ? '排除' : '提取'} ${hex} · 继续点选其他颜色`;
@@ -10186,7 +10236,7 @@ statusBar.classList.add('visible');
         <tr><td>OCR</td><td>内置运行时开箱即用（首次加载约 10-30 秒，后台自动就绪）</td></tr>
       </table>
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.10</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.11</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
