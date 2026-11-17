@@ -1,8 +1,8 @@
 {
-  "avg_ms_geom": 22.7,
-  "avg_ms_ocr": 330.2,
+  "avg_ms_geom": 12.3,
+  "avg_ms_ocr": 304.4,
   "avg_recall": 0.722,
-  "dewarped": 13,
+  "batch": 4,
   "engine": "tract-rust(geom+unwrap+split+rec)",
   "images": 19,
   "rows": [
@@ -89,7 +89,7 @@
     {
       "file": "中国共产党兰陵县委员会政法委员会_1794471367401_a0o3qm.png",
       "has_strip": true,
-      "pred": "徐养国  委员 区版",
+      "pred": "徐养国 委员 区版",
       "recall": 0.188,
       "truth": "中国共产党兰陵县委员会政法委员会",
       "warped": false
@@ -159,5 +159,7 @@
       "warped": true
     }
   ],
-  "strips_ok": 19
+  "threads": 4,
+  "wall_ms_per_image": 91.0,
+  "wall_ms_total": 1729.8
 }

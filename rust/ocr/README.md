@@ -162,3 +162,35 @@ python baseline_det_py.py && python compare_det.py
 cd ocr-tract && cargo build --release
 ./target/release/stamp_pipeline ../data ~/Downloads/印章库   # 输出 data/baseline_pipeline.json
 ```
+
+## 9. 批量推理 + 多线程（2026-11-17）
+
+### 9.1 做法
+
+- `rec_batchN.onnx`：把 `rec_static.onnx` 的 batch 维固化成 N（tract 需要静态形状）；`rec_batch()` 把每枚章的 4 段拼成一个 `[N,3,48,320]` 张量一次前向，解码按 batch 维。
+- `OCR_THREADS=N`：按图切块，每线程各持一份模型（`SimplePlan` 不共享），`std::thread::scope` 收集结果。
+- 环境变量：`OCR_BATCH`（默认 4）、`OCR_THREADS`（默认 1）。
+
+### 9.2 结果（19 张，字覆盖恒为 0.722）
+
+| 配置 | 识别/枚 | 墙钟/枚 |
+|---|---|---|
+| batch 1 · 1 线程（原串行） | 193–215ms | 212–237ms |
+| batch 4 · 1 线程 | 199–215ms | 215–237ms |
+| batch 4 · 2 线程 | 214ms | **126ms** |
+| batch 4 · 4 线程 | 274–304ms | **84–91ms** |
+| batch 4 · 8 线程 | 426ms | 82ms（饱和） |
+
+### 9.3 结论
+
+- **批量推理几乎不省时间**（193 vs 199ms）：tract 的每次 `run` 开销本来就小，4 段合批只是把同样的 FLOPs 一次算完；真正的瓶颈是单线程算力。
+  - 想让 batch 生效，得开 tract 的 op 级并行/加速后端（或换 ort），否则别为 batch 加复杂度。
+- **多线程是真收益**：2 线程 1.8×、4 线程 2.6×（84ms/枚）、8 线程饱和在 ~82ms（M1 8 核）。
+- 注意 `avg_ms_ocr` 在多线程下变大（274→304ms）是**每线程争抢 CPU 的累计值**，看墙钟才有意义。
+- 现状：**整枚章 84–91ms/枚（4 线程）**，其中几何 ~12ms、识别分摊 ~70ms；19 张总墙钟 1.6–1.7s。
+
+### 9.4 复现
+
+```bash
+OCR_BATCH=4 OCR_THREADS=4 ./target/release/stamp_pipeline ../data ~/Downloads/印章库
+```
