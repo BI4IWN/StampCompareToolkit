@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.11</title>
+<title>印章对比工具 v3.6.12</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2100,6 +2100,7 @@
   .ov-tol b { font-weight: 600; min-width: 30px; }
   .ov-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .ov-colors:empty { display: none; }
+  .ov-colors { max-height: 92px; overflow-y: auto; scrollbar-width: thin; }
   .ov-count { margin-left: auto; font: 10px/1 -apple-system, "SF Pro Text", "PingFang SC", sans-serif; color: var(--text-tertiary, #9aa0a6); font-variant-numeric: tabular-nums; }
   .ov-chip {
     display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px 0 5px;
@@ -2117,6 +2118,9 @@
   .ov-chip .del:hover { color: #c0392b; }
   .ov-colors .empty { font-size: 11px; color: var(--text-secondary); }
   .origin-viewer[data-mode="pick"] .ov-tol { display: flex; }
+  .ov-enh input[type="checkbox"] { accent-color: var(--accent); }
+  .ov-enh input[type="range"] { width: 74px; }
+  .ov-enh b { min-width: 44px; text-align: right; }
 
   .origin-viewer[data-mode="crop"] .ov-actions { display: flex; }
   .origin-viewer[data-mode="pick"] .ov-actions { display: flex; }
@@ -2702,7 +2706,7 @@
         <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.11">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.11</span></h1>
+      <h1 title="印章对比工具 v3.6.12">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.12</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local">本地</button>
@@ -2823,12 +2827,6 @@
           <input type="range" id="scp-gray-thr-ref" min="30" max="88" step="1" value="62">
           <span class="scp-gray-val" id="scp-gray-val-ref">62%</span>
         </div>
-        <div class="scp-gray-row" id="scp-enh-ref" style="display:flex">
-          <span class="scp-gray-label">颜色增强</span>
-          <label class="scp-enh-auto"><input type="checkbox" id="scp-enh-auto-ref" checked> 自动</label>
-          <input type="range" id="scp-enh-thr-ref" min="1" max="3" step="0.1" value="1" disabled>
-          <span class="scp-gray-val" id="scp-enh-val-ref">自动</span>
-        </div>
         <div class="scp-custom-row">
           <span class="scp-custom-tag">提取</span>
           <div class="scp-custom" id="scp-custom-ref"></div>
@@ -2875,12 +2873,6 @@
           <span class="scp-gray-label">黑度阈值</span>
           <input type="range" id="scp-gray-thr-test" min="30" max="88" step="1" value="62">
           <span class="scp-gray-val" id="scp-gray-val-test">62%</span>
-        </div>
-        <div class="scp-gray-row" id="scp-enh-test" style="display:flex">
-          <span class="scp-gray-label">颜色增强</span>
-          <label class="scp-enh-auto"><input type="checkbox" id="scp-enh-auto-test" checked> 自动</label>
-          <input type="range" id="scp-enh-thr-test" min="1" max="3" step="0.1" value="1" disabled>
-          <span class="scp-gray-val" id="scp-enh-val-test">自动</span>
         </div>
         <div class="scp-custom-row">
           <span class="scp-custom-tag">提取</span>
@@ -3149,6 +3141,12 @@
           <input type="range" id="ov-tol" min="4" max="40" step="1" value="14">
           <b id="ov-tol-val">14%</b>
         </label>
+        <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
+          <span>颜色加深</span>
+          <input type="checkbox" id="ov-enh-auto" checked>
+          <input type="range" id="ov-enh-thr" min="1" max="3" step="0.1" value="1" disabled>
+          <b id="ov-enh-val">自动</b>
+        </label>
         <button type="button" class="btn" id="ov-reset">重置框</button>
         <button type="button" class="btn" id="ov-cancel">取消</button>
         <button type="button" class="btn btn-primary" id="ov-apply">应用框选</button>
@@ -3392,7 +3390,7 @@ kbdToggle.addEventListener('click', () => {
 // INK_EXCLUDE_TOL：排除色的色相容差（收紧，避免误伤整枚印章）
 const INK_CUSTOM_TOL = 18;
 const INK_EXCLUDE_TOL = 6;
-const MAX_INK_COLORS = 12;  // 每枚印章最多支持的手工颜色数（超出提示）
+const MAX_INK_COLORS = 40;  // 每枚印章最多支持的手工颜色数（超出提示；单遍扫描，颜色多也不至于卡）
 const INK_BANDS = {
   red:    { name: '红章', hueLo: [0, 40],   hueHi: [320, 360], center: 0   },
   blue:   { name: '蓝章', hueLo: [180, 265], hueHi: null,       center: 222.5 },
@@ -4485,21 +4483,6 @@ function renderInkPanel(target) {
     if (slider) slider.value = String(thr);
     if (val) val.textContent = thr + '%';
   }
-  // 颜色增强行：自动档显示实际倍数，手动档可拖
-  const enhRow = document.getElementById('scp-enh-' + target);
-  if (enhRow) {
-    const enh = ink.enhance || (ink.enhance = { auto: true, factor: 1 });
-    const autoBox = document.getElementById('scp-enh-auto-' + target);
-    const enhSlider = document.getElementById('scp-enh-thr-' + target);
-    const enhVal = document.getElementById('scp-enh-val-' + target);
-    const eff = state[target].enhanceFactor || (enh.auto ? computeAutoEnhance(state[target].extracted || null) : enh.factor) || 1;
-    if (autoBox) autoBox.checked = !!enh.auto;
-    if (enhSlider) {
-      enhSlider.disabled = !!enh.auto;
-      enhSlider.value = String(enh.auto ? Math.max(1, Math.min(3, Math.round((eff || 1) * 10) / 10)) : enh.factor);
-    }
-    if (enhVal) enhVal.textContent = enh.auto ? ('自动 ' + (Math.round((eff || 1) * 10) / 10) + '×') : (enh.factor.toFixed(1) + '×');
-  }
   renderCustomInkChips(target);
 }
 
@@ -5290,10 +5273,9 @@ function recomputeExtracted(target) {
       return (d2 + a - b - c2) / ((x1 - x0 + 1) * (y1 - y0 + 1));
     };
 
-    // 1) 提取色：叠加原图中与点选颜色簇精确匹配的像素（v2.11.5：
-    //    不做色相/饱和度/亮度窗口推断，点选什么颜色就叠加什么颜色）。
-    //    先按所有颜色的 RGB 包围盒快速排除（纯整数比较），再逐色集合比较
+    // 1) 提取色 + 2) 排除色：单遍扫描像素，内部逐色判断（颜色多时避免 N 次全图扫描）
     const extractColors = customs.filter(c => !c.exclude);
+    const excludeColors = customs.filter(c => c.exclude);
     let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
     for (const c of extractColors) {
       for (const p of (c.set || [])) {
@@ -5306,23 +5288,56 @@ function recomputeExtracted(target) {
     // 深色取色按"不比所选更亮"匹配，笔画内部可能远比所选更暗 —— 包围盒下界要放开到 0
     const hasDarkPick = extractColors.some(c => c.dark);
     if (hasDarkPick) { rMin = 0; gMin = 0; bMin = 0; }
-    rMin = Math.max(0, rMin - margin); rMax = Math.min(255, rMax + margin);
-    gMin = Math.max(0, gMin - margin); gMax = Math.min(255, gMax + margin);
-    bMin = Math.max(0, bMin - margin); bMax = Math.min(255, bMax + margin);
-    for (const c of extractColors) {
-      const set = c.set || [];
-      if (!set.length) continue;
-      for (let y = 0; y < OUT; y++) {
-        const oy = Math.min(oh - 1, Math.max(0, Math.round(map.sy + (y - map.dy) / map.ratio)));
-        const rowO = oy * ow;
-        const rowI = y * OUT;
-        for (let x = 0; x < OUT; x++) {
-          const i = (rowI + x) * 4;
-          if (img.data[i + 3] >= 30) continue;
-          const ox = Math.min(ow - 1, Math.max(0, Math.round(map.sx + (x - map.dx) / map.ratio)));
-          const oi = (rowO + ox) * 4;
-          const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
-          if (r < rMin || r > rMax || g < gMin || g > gMax || b < bMin || b > bMax) continue; // 包围盒快速排除
+    if (extractColors.length) {
+      rMin = Math.max(0, rMin - margin); rMax = Math.min(255, rMax + margin);
+      gMin = Math.max(0, gMin - margin); gMax = Math.min(255, gMax + margin);
+      bMin = Math.max(0, bMin - margin); bMax = Math.min(255, bMax + margin);
+    }
+
+    // 排除色的容差：按亮度（V）为主、色相（H）为辅
+    const tolV = state.ink[target].pickTol || 0.14;
+
+    for (let y = 0; y < OUT; y++) {
+      const oy = Math.min(oh - 1, Math.max(0, Math.round(map.sy + (y - map.dy) / map.ratio)));
+      const rowO = oy * ow;
+      const rowI = y * OUT;
+      for (let x = 0; x < OUT; x++) {
+        const i = (rowI + x) * 4;
+        const ox = Math.min(ow - 1, Math.max(0, Math.round(map.sx + (x - map.dx) / map.ratio)));
+        const oi = (rowO + ox) * 4;
+        const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
+
+        // —— 排除：先减后加，排除优先于新增，避免"刚加进来又被剔掉"的抖动 ——
+        if (excludeColors.length) {
+          const vNow = Math.max(r, g, b) / 255;
+          let hit = false;
+          for (let ci = 0; ci < excludeColors.length; ci++) {
+            const c = excludeColors[ci];
+            if (Math.abs(vNow - (c.val || 0)) > tolV) continue;
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            const sNow = mx > 0 ? (mx - mn) / mx : 0;
+            if ((c.sat || 0) > 0.18) {
+              if (Math.abs(sNow - c.sat) > 0.32) continue;
+              const hNow = rgbToHsv(r, g, b).h;
+              let dh = Math.abs(hNow - c.h);
+              if (dh > 180) dh = 360 - dh;
+              if (dh > 10) continue;
+            } else if (sNow > 0.45) {
+              continue;
+            }
+            hit = true;
+            break;
+          }
+          if (hit) { img.data[i + 3] = 0; continue; }
+        }
+
+        if (!extractColors.length) continue;
+        if (img.data[i + 3] >= 30) continue;
+        if (r < rMin || r > rMax || g < gMin || g > gMax || b < bMin || b > bMax) continue; // 包围盒快速排除
+
+        let matched = false;
+        for (let ci = 0; ci < extractColors.length; ci++) {
+          const c = extractColors[ci];
           if (bgSum) {
             // 浅色取色：必须明显比 21×21 邻域平均更暗，纸白/正文底色一律不算墨
             const lum = r * 0.299 + g * 0.587 + b * 0.114;
@@ -5330,12 +5345,9 @@ function recomputeExtracted(target) {
             const hsv2 = rgbToHsv(r, g, b);
             if (Math.abs(hsv2.s - (c.sat || 0)) > 0.10) continue;
             if (Math.abs(hsv2.v - (c.val || 0)) > 0.12) continue;
-            // 近中性灰 = 正文/纸边，不是印章的彩色淡墨，别收进来
             if (hsv2.s < 0.05 && (c.sat || 0) >= 0.06) continue;
           }
           if (c.dark) {
-            // 深色取色：同一笔画的内部比描边更暗，用"不比所选更亮"的单侧窗口把内部填实，
-            // 同时用饱和度/色相守住别的颜色（避免把黑色正文一并吞进来）
             const hsv2 = rgbToHsv(r, g, b);
             if (hsv2.v > (c.val || 0) + 0.10) continue;
             const satPick = c.sat || 0;
@@ -5347,47 +5359,21 @@ function recomputeExtracted(target) {
             } else if (hsv2.s > satPick + 0.15) {
               continue;
             }
-            img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
-            img.data[i + 3] = 255;
-            added++;
-            continue;
+            matched = true; break;
           }
+          const set = c.set || [];
           for (let k = 0; k < set.length; k++) {
             const dr = r - set[k][0], dg = g - set[k][1], db = b - set[k][2];
-            if (dr * dr + dg * dg + db * db <= TOL2) {
-              img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
-              img.data[i + 3] = 255;
-              added++;
-              break;
-            }
+            if (dr * dr + dg * dg + db * db <= TOL2) { matched = true; break; }
           }
+          if (matched) break;
+        }
+        if (matched) {
+          img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+          img.data[i + 3] = 255;
+          added++;
         }
       }
-    }
-    // 2) 排除色：按「点选颜色 ± 容差」的 HSV 窗口剔除。
-    //    扫描件/印章的笔画是渐变的，只按精确 RGB 匹配几乎剔不掉东西，
-    //    因此按亮度（V）为主、色相（H）为辅做窗口匹配，容差可在取色面板调。
-    const tolV = state.ink[target].pickTol || 0.14;
-    for (const c of customs.filter(c => c.exclude)) {
-      const set = c.set || [];
-      const grayish = (c.sat || 0) <= 0.18;   // 黑白/灰章：只看亮度
-      for (let i = 0; i < img.data.length; i += 4) {
-        if (img.data[i + 3] < 30) continue;
-        const r = img.data[i], g = img.data[i + 1], b = img.data[i + 2];
-        const hsv = rgbToHsv(r, g, b);
-        if (Math.abs(hsv.v - c.val) > tolV) continue;
-        if (!grayish) {
-          if (Math.abs(hsv.s - c.sat) > 0.32) continue;
-          let dh = Math.abs(hsv.h - c.h);
-          if (dh > 180) dh = 360 - dh;
-          if (dh > 10) continue;
-        } else if (hsv.s > 0.45) {
-          continue;
-        }
-        img.data[i + 3] = 0;
-        removed++;
-      }
-      void set;
     }
   }
 
@@ -5487,37 +5473,6 @@ function applyInkSelection(target, reasonMsg) {
       drawExtractedPreview(target, state[target].extracted);
       updateVisibility();
       render();
-    });
-  }
-  // 颜色增强：自动 / 手动
-  const enhAuto = document.getElementById('scp-enh-auto-' + target);
-  const enhThr = document.getElementById('scp-enh-thr-' + target);
-  const applyEnh = () => {
-    recomputeExtracted(target);
-    drawExtractedPreview(target, state[target].extracted);
-    updateVisibility();
-    render();
-    renderInkPanel(target);
-  };
-  if (enhAuto) {
-    enhAuto.addEventListener('change', () => {
-      const inkNow = state.ink[target];
-      if (!inkNow.enhance) inkNow.enhance = { auto: true, factor: 1 };
-      inkNow.enhance.auto = enhAuto.checked;
-      if (!enhAuto.checked) {
-        // 从自动值起步，避免松开自动后突然跳回 1.0
-        inkNow.enhance.factor = Math.max(1, Math.min(3, Math.round((state[target].enhanceFactor || 1) * 10) / 10));
-      }
-      applyEnh();
-    });
-  }
-  if (enhThr) {
-    enhThr.addEventListener('input', () => {
-      const inkNow = state.ink[target];
-      if (!inkNow.enhance) inkNow.enhance = { auto: false, factor: 1 };
-      inkNow.enhance.auto = false;
-      inkNow.enhance.factor = Number(enhThr.value);
-      applyEnh();
     });
   }
   // ▣ 框选：打开原图查看器，在查看器里框选/微调（黑白扫描件、正文压章时用）
@@ -5986,6 +5941,7 @@ function ovSetMode(mode) {
   } else if (mode === 'pick') {
     hint.textContent = '点击墨迹处添加颜色 · 顶部切换「提取 / 排除」· 剔除容差越大去掉得越多 · Esc 退出取色';
     if (window.__ovSyncTol) window.__ovSyncTol();
+    if (window.__ovSyncEnh) window.__ovSyncEnh();
     ovRenderColors();
     apply.style.display = 'none';
     cancel.style.display = ''; cancel.textContent = '完成';
@@ -6316,6 +6272,53 @@ function ovPickAt(clientX, clientY, exclude) {
     tolVal.textContent = v + '%';
   };
   window.__ovSyncTol = syncTol;
+
+  // 颜色加深（原墨色面板里的"颜色增强"，移到取色界面）
+  const enhAuto = document.getElementById('ov-enh-auto');
+  const enhThr = document.getElementById('ov-enh-thr');
+  const enhVal = document.getElementById('ov-enh-val');
+  const syncEnh = () => {
+    const inkNow = state.ink[OV.target] || {};
+    const enh = inkNow.enhance || (inkNow.enhance = { auto: true, factor: 1 });
+    const eff = state[OV.target].enhanceFactor || (enh.auto ? computeAutoEnhance(state[OV.target].extracted || null) : enh.factor) || 1;
+    if (enhAuto) enhAuto.checked = !!enh.auto;
+    if (enhThr) {
+      enhThr.disabled = !!enh.auto;
+      enhThr.value = String(Math.max(1, Math.min(3, enh.auto ? Math.round(eff * 10) / 10 : enh.factor)));
+    }
+    if (enhVal) enhVal.textContent = enh.auto ? ('自动 ' + (Math.round(eff * 10) / 10) + '×') : (Number(enh.factor).toFixed(1) + '×');
+  };
+  window.__ovSyncEnh = syncEnh;
+  const applyEnhFromViewer = () => {
+    clearTimeout(_inkTimers[OV.target]);
+    _inkTimers[OV.target] = setTimeout(() => {
+      const d = recomputeExtracted(OV.target);
+      drawExtractedPreview(OV.target, state[OV.target].extracted);
+      render();
+      if (ovIsOpen()) ovDraw();
+      syncEnh();
+      showStatus(`${stampLabel(OV.target)}颜色加深已更新（增强 ${(state[OV.target].enhanceFactor || 1).toFixed(2)}×）`);
+    }, 200);
+  };
+  if (enhAuto) enhAuto.addEventListener('change', () => {
+    const inkNow = state.ink[OV.target];
+    if (!inkNow.enhance) inkNow.enhance = { auto: true, factor: 1 };
+    inkNow.enhance.auto = enhAuto.checked;
+    if (!enhAuto.checked) {
+      // 从自动值起步，避免松开自动后突然跳回 1.0
+      inkNow.enhance.factor = Math.max(1, Math.min(3, Math.round((state[OV.target].enhanceFactor || 1) * 10) / 10));
+    }
+    syncEnh();
+    applyEnhFromViewer();
+  });
+  if (enhThr) enhThr.addEventListener('input', () => {
+    const inkNow = state.ink[OV.target];
+    if (!inkNow.enhance) inkNow.enhance = { auto: false, factor: 1 };
+    inkNow.enhance.auto = false;
+    inkNow.enhance.factor = Number(enhThr.value);
+    if (enhVal) enhVal.textContent = Number(enhThr.value).toFixed(1) + '×';
+    applyEnhFromViewer();
+  });
   tolInput.addEventListener('input', () => {
     const v = Math.max(4, Math.min(40, parseInt(tolInput.value, 10) || 14));
     tolVal.textContent = v + '%';
@@ -10236,7 +10239,7 @@ statusBar.classList.add('visible');
         <tr><td>OCR</td><td>内置运行时开箱即用（首次加载约 10-30 秒，后台自动就绪）</td></tr>
       </table>
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.11</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.12</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
