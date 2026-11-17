@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.13</title>
+<title>印章对比工具 v3.6.14</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2706,7 +2706,7 @@
         <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.13">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.13</span></h1>
+      <h1 title="印章对比工具 v3.6.14">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.14</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local">本地</button>
@@ -3228,7 +3228,7 @@
 /* ============================================================
    State
    ============================================================ */
-const APP_VERSION = '3.6.8';
+const APP_VERSION = '3.6.14';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -4955,8 +4955,11 @@ function applyEnhance(img, factor, cutAlpha) {
   const ink = estimateInkColor(img);
   // 向墨色本色收拢：淡章的笔画被纸张白冲淡，收拢后同一 alpha 也能"更实"
   const pull = ink ? Math.min(0.7, 0.5 * (factor - 1)) : 0;
-  // alpha 提升：用 1-(1-a)^k 把半透明笔画压实（k 随强度增长），避免"淡粉一片"
-  const aExp = 1 + 1.6 * (factor - 1);
+  // alpha 重映射：把 [cut,1] 线性铺满 0-1，再轻微 gamma。
+  // 不做 1-(1-a)^k 这种"指数提亮"——那会把笔画外围的抗锯齿边一起堆成实心，
+  // 就是淡章里最刺眼的"晕染/糊成一片"。
+  const floor = cut ? cut / 255 : 0;
+  const gammaA = 0.85;
   const satK = 1 + 0.85 * (factor - 1);  // 饱和度提升
   const satFloor = 0.22 + 0.30 * (factor - 1); // 彩度下限：淡章被纸白冲淡后补回墨色
   const dimK = 1 - 0.13 * (factor - 1);  // 略压亮度，视觉更实
@@ -4964,11 +4967,12 @@ function applyEnhance(img, factor, cutAlpha) {
     const a = d[i + 3];
     if (a < 6) continue;
     const an = a / 255;
-    if (cut && a < cut) {           // 先切掉极淡的晕染边，再提亮剩下的笔画
+    if (floor && an < floor) {      // 先切掉极淡的一圈，再线性拉伸剩下的笔画
       d[i + 3] = 0;
       continue;
     }
-    const na = (1 - Math.pow(1 - an, aExp)) * 255;
+    const rel = floor < 1 ? (an - floor) / (1 - floor) : 1;
+    const na = Math.pow(Math.max(0, Math.min(1, rel)), gammaA) * 255;
     d[i + 3] = na > 255 ? 255 : na;
     if (na < 6) continue;
     let r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
@@ -10239,7 +10243,7 @@ statusBar.classList.add('visible');
         <tr><td>OCR</td><td>内置运行时开箱即用（首次加载约 10-30 秒，后台自动就绪）</td></tr>
       </table>
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.13</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.14</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
