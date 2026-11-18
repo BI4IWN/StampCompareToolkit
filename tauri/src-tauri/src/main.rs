@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.3", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.4", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -380,7 +380,7 @@ fn friendly_ai_error(msg: &str) -> String {
         || low.contains("not support image")
         || low.contains("multimodal")
     {
-        return "当前模型不支持图片输入（DeepSeek 只有文本模型）。请把服务商换成「智谱 AI（glm-4v-flash）」或「火山方舟（豆包视觉）」；若只想用 DeepSeek，请把提取方式切成「文本解析」。"
+        return "当前模型不支持图像理解：DeepSeek 请用 deepseek-flash（deepseek-v4-pro / deepseek-chat 仅文本），或改用智谱 glm-4v-flash / 火山方舟豆包视觉。"
             .to_string();
     }
     if low.contains("model not found") || low.contains("invalid model") || low.contains("no such model") {
