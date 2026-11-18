@@ -1,0 +1,44 @@
+<script>
+// P3-2：Tauri 版用 HTTP 端点冒充 Electron 的 window.stampDesktop，前端代码零改动
+(function () {
+  if (window.stampDesktop && window.stampDesktop.__tauri) return;
+  const post = async (p, b) => (await fetch(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}) })).json();
+  const getj = async (p) => (await fetch(p)).json();
+  let captureCb = null;
+  const shim = {
+    __tauri: true,
+    available: true,
+    platform: 'macos',
+    // 印章库
+    libSave: (payload) => post('/lib/save', payload),
+    libList: () => getj('/lib/list'),
+    libSearch: (q) => getj('/lib/search?q=' + encodeURIComponent(q || '')),
+    libLoad: (id) => getj('/lib/load?id=' + encodeURIComponent(id)),
+    libDelete: (id) => post('/lib/delete', { id }),
+    libRename: (id, name) => post('/lib/rename', { id, name }),
+    libChoosePath: () => post('/lib/choose-path', {}),
+    libReveal: () => post('/lib/reveal', {}),
+    // 设置
+    settingsGet: () => getj('/settings'),
+    settingsSet: (patch) => post('/settings', patch || {}),
+    settingsReset: () => post('/settings/reset', {}),
+    // 截图
+    onCaptureDone: (cb) => { captureCb = cb; },
+    onShortcutError: () => {},
+    onBackendReady: () => {},
+    captureCancel: () => {},
+    captureStart: async () => {
+      const r = await post('/capture/start', {});
+      if (!r.ok) { try { window.showStatus && window.showStatus(r.error || '截图失败'); } catch (e) {} return; }
+      const tick = async () => {
+        const s = await getj('/capture/poll?path=' + encodeURIComponent(r.path));
+        if (s.done) { if (captureCb) captureCb({ idx: 0, rect: null, png: s.png }); return; }
+        setTimeout(tick, 350);
+      };
+      setTimeout(tick, 400);
+    },
+    captureDone: (payload) => { if (captureCb) captureCb(payload); },
+  };
+  window.stampDesktop = shim;
+})();
+</script>

@@ -1,0 +1,14 @@
+<script>
+// 调试钩子：Rust 侧注入 window.__AUTOIMG__ 时自动加载该图（仅本机预览用于复现问题）
+(function(){
+  let tries = 0;
+  const tick = () => {
+    if (!window.__AUTOIMG__) { if (++tries < 60) return setTimeout(tick, 150); return; }
+    const img = new Image();
+    img.onload = () => { try { window.processStamp(img, 'ref'); } catch (e) { console.error(e); } };
+    img.onerror = () => console.error('autoimg fail');
+    img.src = '/diagimg?t=' + Date.now();
+  };
+  if (document.readyState === 'complete') tick(); else window.addEventListener('load', tick);
+})();
+</script>

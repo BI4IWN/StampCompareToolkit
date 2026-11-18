@@ -1,0 +1,13 @@
+{
+  "name": "stamp-tauri-spike",
+  "private": true,
+  "version": "0.4.0",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "scripts": {
+    "sync-web": "sh scripts/sync-web.sh",
+    "build": "npm run sync-web && tauri build",
+    "dev": "npm run sync-web && tauri dev"
+  }
+}

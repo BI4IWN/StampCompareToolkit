@@ -1,0 +1,4 @@
+target/
+node_modules/
+web/index.html
+*.dmg
