@@ -9750,8 +9750,8 @@ async function runStampOCR(target) {
     // AI 提取结果：{ai: {company, code, type, raw}, mode, model}
     if (useAI) {
       if (!data.success || !data.ai) {
-        const reason = data.error || 'AI 提取失败';
-        $(`#ocr-${target}-company`).textContent = 'AI 提取失败';
+        const reason = friendlyAIError(data.error || 'AI 提取失败');
+        $(`#ocr-${target}-company`).textContent = 'AI 提取失败：' + reason;
         $(`#ocr-${target}-code`).textContent = '—';
         $(`#ocr-${target}-type`).textContent = '—';
         fillEl.style.width = '100%';
