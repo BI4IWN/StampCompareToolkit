@@ -1122,6 +1122,10 @@
   .comparison.visible:hover .capture-hint { opacity: 0.7; }
 
   /* ---- Comparison Area ---- */
+  /* 拖滑块 / 拖印章时 WKWebView 会误触文本选择，表现为整块蓝色选区 */
+  .comparison, .comparison canvas, .dt-stage, #origin-viewer, #origin-viewer canvas {
+    -webkit-user-select: none; user-select: none;
+  }
   .comparison {
     background: var(--surface-solid);
     border-radius: var(--radius);
