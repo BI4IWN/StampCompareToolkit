@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.4", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.5", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -372,6 +372,30 @@ fn text_of(v: &Value) -> String {
 }
 
 /// 把上游的"模型不支持图片"类 400 翻成人话，避免用户看到 Unknown variant `image_url`
+
+/// 把每次 AI 调用的关键信息落到 /tmp/stamp-ai.log，便于定位上游失败（用户只看得到一句"提取失败"）
+fn log_ai(tag: &str, cfg: &Value, detail: &str) {
+    use std::io::Write;
+    let line = format!(
+        "[{}] {} base={} model={} mode={} :: {}\n",
+        chrono_like_now(),
+        tag,
+        cfg.get("base_url").and_then(|v| v.as_str()).unwrap_or("-"),
+        cfg.get("model").and_then(|v| v.as_str()).unwrap_or("-"),
+        cfg.get("mode").and_then(|v| v.as_str()).unwrap_or("-"),
+        detail.chars().take(400).collect::<String>()
+    );
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/stamp-ai.log") {
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
+fn chrono_like_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    format!("{}", secs)
+}
+
 fn friendly_ai_error(msg: &str) -> String {
     let low = msg.to_lowercase();
     if low.contains("unknown variant `image_url`")
@@ -399,11 +423,12 @@ fn extract_json(s: &str) -> Option<Value> {
 
 async fn api_ai_test(Json(body): Json<Value>) -> Json<Value> {
     let cfg = body.get("config").cloned().unwrap_or(Value::Null);
+    let cfg_ref = cfg.clone();
     let out = tokio::task::spawn_blocking(move || ai_chat(&cfg, json!("ping"), 8)).await
         .unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => Json(json!({"success": true, "model": v.get("model").cloned().unwrap_or(Value::Null), "reply": text_of(&v)})),
-        Err(e) => Json(json!({"success": false, "error": friendly_ai_error(&e)})),
+        Err(e) => { log_ai("test", &cfg_ref, &e); Json(json!({"success": false, "error": friendly_ai_error(&e)})) }
     }
 }
 
@@ -411,6 +436,7 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
     let cfg = body.get("config").cloned().unwrap_or(Value::Null);
     let image = body.get("image").and_then(|v| v.as_str()).unwrap_or("").to_string();
     if image.is_empty() { return Json(json!({"success": false, "error": "缺少 image"})); }
+    let cfg_ref = cfg.clone();
     let out = tokio::task::spawn_blocking(move || {
         let content = json!([
             { "type": "text", "text": "定位图中印章：给出圆心与半径（相对图片宽高的 0~1 归一化）。只返回 JSON：{\"cx\":0.5,\"cy\":0.5,\"r\":0.3}" },
@@ -420,6 +446,7 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => {
+            log_ai("stamp", &cfg_ref, &format!("ok: {}", v.to_string().chars().take(200).collect::<String>()));
             let text = text_of(&v);
             match extract_json(&text) {
                 Some(j) => Json(json!({"success": true, "stamp": {
@@ -431,7 +458,7 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
                 None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
             }
         }
-        Err(e) => Json(json!({"success": false, "error": friendly_ai_error(&e)})),
+        Err(e) => { log_ai("stamp", &cfg_ref, &e); Json(json!({"success": false, "error": friendly_ai_error(&e)})) }
     }
 }
 
@@ -439,6 +466,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let cfg = body.get("config").cloned().unwrap_or(Value::Null);
     let image = body.get("image").and_then(|v| v.as_str()).unwrap_or("").to_string();
     if image.is_empty() { return Json(json!({"success": false, "error": "缺少 image"})); }
+    let cfg_ref = cfg.clone();
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
         let content = json!([
@@ -463,6 +491,6 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                 None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
             }
         }
-        Err(e) => Json(json!({"success": false, "error": friendly_ai_error(&e)})),
+        Err(e) => { log_ai("ocr", &cfg_ref, &e); Json(json!({"success": false, "error": friendly_ai_error(&e)})) }
     }
 }
