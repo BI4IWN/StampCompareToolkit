@@ -290,3 +290,59 @@ pub fn lib_reveal() -> Value {
     let _ = std::process::Command::new("open").arg(&dir).spawn();
     json!({ "ok": true, "path": dir })
 }
+
+/// 归一化：只留中文/字母/数字（用于名称比对）
+fn norm_chars(s: &str) -> Vec<char> {
+    s.chars().filter(|c| c.is_alphanumeric()).flat_map(|c| c.to_lowercase()).collect()
+}
+
+/// 最长公共子序列占比（对错字/漏字鲁棒）
+fn lcs_ratio(a: &[char], b: &[char]) -> f64 {
+    if a.is_empty() || b.is_empty() { return 0.0; }
+    let (a, b) = if a.len() > 240 { (&a[..240], b) } else { (a, b) };
+    let n = a.len().min(240); let m = b.len().min(240);
+    let mut prev = vec![0u16; m + 1];
+    let mut cur = vec![0u16; m + 1];
+    for i in 1..=n {
+        for j in 1..=m {
+            cur[j] = if a[i - 1] == b[j - 1] { prev[j - 1] + 1 } else { prev[j].max(cur[j - 1]) };
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[m] as f64 / n as f64
+}
+
+/// 二元组重合率
+fn bigram_ratio(a: &[char], b: &[char]) -> f64 {
+    if a.len() < 2 || b.len() < 2 { return 0.0; }
+    let mut set: std::collections::HashSet<(char, char)> = std::collections::HashSet::new();
+    for w in b.windows(2) { set.insert((w[0], w[1])); }
+    let hit = a.windows(2).filter(|w| set.contains(&(w[0], w[1]))).count();
+    hit as f64 / (a.len() - 1) as f64
+}
+
+/// 在印章库里按名称相似度排 Top-K（与 Electron 的 rank_library_candidates 同义）
+pub fn rank_candidates(text: &str, k: usize) -> Vec<Value> {
+    let q = norm_chars(text);
+    if q.is_empty() { return vec![]; }
+    let all = lib_list();
+    let mut scored: Vec<(f64, Value)> = all.as_array().cloned().unwrap_or_default().into_iter().filter_map(|s| {
+        let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let comp = s.get("ocr").and_then(|o| o.get("company")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let target = if comp.chars().count() > name.chars().count() { comp.clone() } else { name.clone() };
+        let t = norm_chars(&target);
+        if t.is_empty() { return None; }
+        let score = 0.6 * lcs_ratio(&q, &t) + 0.4 * bigram_ratio(&q, &t);
+        Some((score, json!({
+            "id": s.get("id").cloned().unwrap_or(Value::Null),
+            "name": target,
+            "score": (score * 1000.0).round() / 1000.0,
+        })))
+    }).collect();
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    // 同名去重（库里同一枚章常有多份扫描件），避免 Top-3 里出现三条一样的名字
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    scored.into_iter()
+        .filter(|(_, v)| v.get("name").and_then(|n| n.as_str()).map(|n| seen.insert(n.to_string())).unwrap_or(false))
+        .take(k).map(|(_, v)| v).collect()
+}

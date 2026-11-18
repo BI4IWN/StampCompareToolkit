@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.0", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.1", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -228,14 +228,26 @@ async fn ocr(Json(body): Json<Value>) -> Json<Value> {
         let t0 = Instant::now();
         match eng.recognize(&img) {
             Ok(r) => {
+                let text_for_rank = r.text.clone();
+                let cands = library::rank_candidates(&text_for_rank, 3);
+                let top = cands.first().and_then(|c| c.get("score")).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                // 库名兜底：OCR 文本与库里某条足够接近时，直接用库名（等价 Electron 的 library 覆盖）
+                let cand_name = cands.first().and_then(|c| c.get("name")).and_then(|v| v.as_str()).map(|s| s.to_string());
+                let (company, match_source) = match (&r.company, &cand_name, top) {
+                    (_, Some(n), t) if t >= 0.50 => (Some(n.clone()), "library"),
+                    (c, _, _) => (c.clone(), "ocr"),
+                };
+                // 前端契约：必须带 success:true，texts 是 [{text}] 对象数组
+                let texts_obj: Vec<Value> = r.texts.iter().map(|t| json!({ "text": t })).collect();
                 return Json(json!({
+                    "success": true,
                     "engine": "rust-paddleocr-vl-rec",
                     "elapsed_ms": t0.elapsed().as_millis() as u64,
                     "stamps": [{
-                        "texts": r.texts, "full_text": r.text,
-                        "company": r.company, "type": r.kind, "code": r.code,
-                        "confidence": 0.0, "method": "rust-ring",
-                        "candidates": [], "needs_review": r.company.is_none(),
+                        "texts": texts_obj, "full_text": r.text, "raw_text": r.text,
+                        "company": company, "type": r.kind, "code": r.code, "match_source": match_source,
+                        "confidence": top, "method": "rust-ring",
+                        "candidates": cands, "needs_review": top < 0.72,
                         "warp_ratio": r.warp_ratio, "radius": r.radius,
                         "engine_ms": r.elapsed_ms
                     }]

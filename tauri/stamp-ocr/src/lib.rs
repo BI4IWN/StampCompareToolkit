@@ -32,7 +32,19 @@ impl Engine {
         Ok(Self { rec, cls, dict })
     }
 
+    /// 双通道策略：先按 auto（红章 r-g / 灰章暗度）跑；若识别出的汉字 <4，再强制走 dark 通道重跑，
+    /// 取汉字更多的那一次。与 08-ocr-spike/stamp_pipeline.rs 的 0.796 口径一致。
     pub fn recognize(&self, rgba: &RgbaImage) -> Result<Recog> {
+        let first = self.recognize_ch(rgba, None)?;
+        let cjk = |t: &str| t.chars().filter(|c| (*c as u32) >= 0x4e00).count();
+        if cjk(&first.text) >= 4 {
+            return Ok(first);
+        }
+        let second = self.recognize_ch(rgba, Some("dark"))?;
+        Ok(if cjk(&second.text) > cjk(&first.text) { second } else { first })
+    }
+
+    fn recognize_ch(&self, rgba: &RgbaImage, forced: Option<&str>) -> Result<Recog> {
         let t0 = std::time::Instant::now();
         let mut rgb = RgbImage::new(rgba.width(), rgba.height());
         for (x, y, p) in rgba.enumerate_pixels() {
@@ -41,7 +53,7 @@ impl Engine {
             let mix = |c: u8| (c as f32 * a + 255.0 * (1.0 - a)) as u8;
             rgb.put_pixel(x, y, image::Rgb([mix(p.0[0]), mix(p.0[1]), mix(p.0[2])]));
         }
-        let (strength, _) = ink_strength(&rgb);
+        let (strength, _) = ink_strength_ch(&rgb, forced);
         // 几何：先在 alpha 上做直线抑制 + 拟合/去畸变
         let mut alpha = alpha_of(rgba);
         suppress_lines(&mut alpha, rgba.width() as usize, rgba.height() as usize, 0.18);
@@ -82,7 +94,7 @@ impl Engine {
             kind: if kind.is_empty() { None } else { Some(kind) },
             warp_ratio,
             radius,
-            channel: "auto".into(),
+            channel: forced.unwrap_or("auto").to_string(),
             elapsed_ms: t0.elapsed().as_millis(),
         })
     }
@@ -106,7 +118,7 @@ fn load(path: &Path, shape: [usize; 4]) -> Result<Model> {
 /// 取墨：红章优先，红像素太少则退化为「暗色墨」
 /// 墨强度（0-255）：红章取 r-g，灰章取 255-min(rgb)
 
-fn ink_strength(img: &RgbImage) -> (Vec<u8>, bool) {
+fn ink_strength_ch(img: &RgbImage, forced: Option<&str>) -> (Vec<u8>, bool) {
     let mut n_red = 0usize;
     let total = (img.width() * img.height()) as f64;
     for px in img.pixels() {
@@ -114,7 +126,7 @@ fn ink_strength(img: &RgbImage) -> (Vec<u8>, bool) {
         if r > 90 && r - g > 40 && r - b > 40 { n_red += 1; }
     }
     let use_red = n_red as f64 > total * 0.002;
-    let mut ch = std::env::var("OCR_CH").unwrap_or_else(|_| "auto".into());
+    let mut ch = match forced { Some(c) => c.to_string(), None => std::env::var("OCR_CH").unwrap_or_else(|_| "auto".into()) };
     if ch == "auto" {
         // 红章：r-g 的强信号足够；淡章/灰章：暗度通道恢复更好
         let mut hist = vec![0usize; 256];
