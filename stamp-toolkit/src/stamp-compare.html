@@ -5955,6 +5955,18 @@ function applyAIExtraction(target, loc) {
 }
 
 // AI 提取印章主流程
+/* 把上游「模型不支持图片」这类报错翻成人话（DeepSeek 只有文本模型，vision 必然 400） */
+function friendlyAIError(msg) {
+  const t = String(msg || '');
+  const low = t.toLowerCase();
+  if (low.includes('image_url') || low.includes('unknown variant') || low.includes('does not support image') || low.includes('multimodal')) {
+    return '当前模型不支持图片输入：DeepSeek 只有文本模型。请把服务商换成「智谱 AI（glm-4v-flash）」或「火山方舟（豆包视觉）」；只想用 DeepSeek 就把提取方式切到「文本解析」。';
+  }
+  if (low.includes('401') || low.includes('authentication') || low.includes('invalid')) return 'API Key 无效或已过期：' + t;
+  if (low.includes('insufficient') || low.includes('quota') || low.includes('balance')) return '账号额度不足：' + t;
+  return t;
+}
+
 async function runAIStampExtract(target) {
   const st = state[target];
   if (!st || !st.original) {
@@ -5990,7 +6002,7 @@ async function runAIStampExtract(target) {
     const data = await resp.json();
     if (token !== state._aiStampSeq) return; // 过期响应丢弃
     if (!data.success || !data.stamp) {
-      showStatus('AI 提取失败：' + (data.error || '未知错误'));
+      showStatus('AI 提取失败：' + friendlyAIError(data.error || '未知错误'));
       return;
     }
     const loc = data.stamp;
@@ -5998,7 +6010,7 @@ async function runAIStampExtract(target) {
     showStatus(`${stampLabel(target)}已由 AI 提取印章（中心 ${(loc.cx * 100).toFixed(0)}%,${(loc.cy * 100).toFixed(0)}% · 半径 ${(loc.r * 100).toFixed(0)}%）— 可直接叠加对比`);
   } catch (err) {
     if (token === state._aiStampSeq) {
-      showStatus('AI 提取失败：' + err.message);
+      showStatus('AI 提取失败：' + friendlyAIError(err.message));
     }
   } finally {
     btn.classList.remove('running');
