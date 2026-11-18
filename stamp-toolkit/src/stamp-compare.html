@@ -5960,7 +5960,7 @@ function friendlyAIError(msg) {
   const t = String(msg || '');
   const low = t.toLowerCase();
   if (low.includes('image_url') || low.includes('unknown variant') || low.includes('does not support image') || low.includes('multimodal')) {
-    return '当前模型不支持图片输入：DeepSeek 只有文本模型。请把服务商换成「智谱 AI（glm-4v-flash）」或「火山方舟（豆包视觉）」；只想用 DeepSeek 就把提取方式切到「文本解析」。';
+    return '当前模型不支持图像理解：DeepSeek 请用 deepseek-flash（deepseek-v4-pro / deepseek-chat 只支持文本），或改用智谱 glm-4v-flash / 火山方舟豆包视觉。';
   }
   if (low.includes('401') || low.includes('authentication') || low.includes('invalid')) return 'API Key 无效或已过期：' + t;
   if (low.includes('insufficient') || low.includes('quota') || low.includes('balance')) return '账号额度不足：' + t;
@@ -9339,7 +9339,7 @@ $('#btn-verify').addEventListener('click', () => {
 
 // 服务商预设（与后端 AI_PROVIDERS 同源）
 const AI_PRESETS = {
-  deepseek: { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', mode: 'parse', keyHint: 'https://platform.deepseek.com 获取' },
+  deepseek: { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-flash', mode: 'vision', keyHint: 'https://platform.deepseek.com 获取（deepseek-flash 支持图像理解；deepseek-v4-pro / deepseek-chat 只支持文本）' },
   zhipu:    { name: '智谱 AI',  base_url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4v-flash', mode: 'vision', keyHint: 'https://open.bigmodel.cn 获取' },
   'ark-doubao': {
     name: '火山方舟（豆包视觉）',
