@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.2", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.3", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -371,6 +371,27 @@ fn text_of(v: &Value) -> String {
         .and_then(|c| c.as_str()).unwrap_or("").to_string()
 }
 
+/// 把上游的"模型不支持图片"类 400 翻成人话，避免用户看到 Unknown variant `image_url`
+fn friendly_ai_error(msg: &str) -> String {
+    let low = msg.to_lowercase();
+    if low.contains("unknown variant `image_url`")
+        || low.contains("image_url")
+        || low.contains("does not support image")
+        || low.contains("not support image")
+        || low.contains("multimodal")
+    {
+        return "当前模型不支持图片输入（DeepSeek 只有文本模型）。请把服务商换成「智谱 AI（glm-4v-flash）」或「火山方舟（豆包视觉）」；若只想用 DeepSeek，请把提取方式切成「文本解析」。"
+            .to_string();
+    }
+    if low.contains("model not found") || low.contains("invalid model") || low.contains("no such model") {
+        return format!("模型名无效，请检查服务商与模型名（{msg}）");
+    }
+    if low.contains("insufficient") || low.contains("quota") || low.contains("balance") {
+        return format!("账号额度不足或欠费（{msg}）");
+    }
+    msg.to_string()
+}
+
 fn extract_json(s: &str) -> Option<Value> {
     let a = s.find('{')?; let b = s.rfind('}')?;
     serde_json::from_str::<Value>(&s[a..=b]).ok()
@@ -382,7 +403,7 @@ async fn api_ai_test(Json(body): Json<Value>) -> Json<Value> {
         .unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => Json(json!({"success": true, "model": v.get("model").cloned().unwrap_or(Value::Null), "reply": text_of(&v)})),
-        Err(e) => Json(json!({"success": false, "error": e})),
+        Err(e) => Json(json!({"success": false, "error": friendly_ai_error(&e)})),
     }
 }
 
@@ -410,7 +431,7 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
                 None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
             }
         }
-        Err(e) => Json(json!({"success": false, "error": e})),
+        Err(e) => Json(json!({"success": false, "error": friendly_ai_error(&e)})),
     }
 }
 
@@ -442,6 +463,6 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                 None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
             }
         }
-        Err(e) => Json(json!({"success": false, "error": e})),
+        Err(e) => Json(json!({"success": false, "error": friendly_ai_error(&e)})),
     }
 }
