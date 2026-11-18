@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.1", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.2", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -302,6 +302,10 @@ fn main() {
                     .route("/health", get(health))
                     .route("/ocr", post(ocr))
                     .route("/diag", post(diag))
+                    .route("/ai/test", post(api_ai_test))
+                    .route("/ai/stamp", post(api_ai_stamp))
+                    .route("/ai-ocr", post(api_ai_ocr))
+                    .route("/ai/ocr", post(api_ai_ocr))
                     .route("/diagp", get(diagp))
                     .route("/diagimg", get(diagimg))
                     .route("/settings", get(api_settings_get).post(api_settings_set))
@@ -326,4 +330,118 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ---------- AI 代理（OpenAI 兼容）：/ai/test、/ai/stamp、/ai-ocr ----------
+fn ai_chat(cfg: &Value, content: Value, max_tokens: u32) -> Result<Value, String> {
+    let base = cfg.get("base_url").and_then(|v| v.as_str()).unwrap_or("").trim_end_matches('/').to_string();
+    let key = cfg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
+    let model = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("");
+    if base.is_empty() || key.is_empty() || model.is_empty() {
+        return Err("AI 配置不完整：需要 API 地址、模型与 API Key".into());
+    }
+    if !(base.starts_with("http://") || base.starts_with("https://")) {
+        return Err(format!("API 地址不合法：{base}"));
+    }
+    let url = format!("{base}/chat/completions");
+    let body = json!({
+        "model": model,
+        "messages": [{ "role": "user", "content": content }],
+        "max_tokens": max_tokens,
+        "temperature": 0
+    });
+    let resp = ureq::post(&url)
+        .set("Authorization", &format!("Bearer {key}"))
+        .set("Content-Type", "application/json")
+        .timeout(std::time::Duration::from_secs(60))
+        .send_json(body);
+    match resp {
+        Ok(r) => r.into_json::<Value>().map_err(|e| format!("响应解析失败：{e}")),
+        Err(ureq::Error::Status(code, r)) => {
+            let text = r.into_string().unwrap_or_default();
+            Err(format!("HTTP {code}：{}", text.chars().take(180).collect::<String>()))
+        }
+        Err(e) => Err(format!("网络错误：{e}")),
+    }
+}
+
+fn text_of(v: &Value) -> String {
+    v.get("choices").and_then(|c| c.get(0))
+        .and_then(|c| c.get("message")).and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str()).unwrap_or("").to_string()
+}
+
+fn extract_json(s: &str) -> Option<Value> {
+    let a = s.find('{')?; let b = s.rfind('}')?;
+    serde_json::from_str::<Value>(&s[a..=b]).ok()
+}
+
+async fn api_ai_test(Json(body): Json<Value>) -> Json<Value> {
+    let cfg = body.get("config").cloned().unwrap_or(Value::Null);
+    let out = tokio::task::spawn_blocking(move || ai_chat(&cfg, json!("ping"), 8)).await
+        .unwrap_or_else(|e| Err(format!("线程错误：{e}")));
+    match out {
+        Ok(v) => Json(json!({"success": true, "model": v.get("model").cloned().unwrap_or(Value::Null), "reply": text_of(&v)})),
+        Err(e) => Json(json!({"success": false, "error": e})),
+    }
+}
+
+async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
+    let cfg = body.get("config").cloned().unwrap_or(Value::Null);
+    let image = body.get("image").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    if image.is_empty() { return Json(json!({"success": false, "error": "缺少 image"})); }
+    let out = tokio::task::spawn_blocking(move || {
+        let content = json!([
+            { "type": "text", "text": "定位图中印章：给出圆心与半径（相对图片宽高的 0~1 归一化）。只返回 JSON：{\"cx\":0.5,\"cy\":0.5,\"r\":0.3}" },
+            { "type": "image_url", "image_url": { "url": image, "detail": "high" } }
+        ]);
+        ai_chat(&cfg, content, 200)
+    }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
+    match out {
+        Ok(v) => {
+            let text = text_of(&v);
+            match extract_json(&text) {
+                Some(j) => Json(json!({"success": true, "stamp": {
+                    "cx": j.get("cx").and_then(|x| x.as_f64()).unwrap_or(0.5),
+                    "cy": j.get("cy").and_then(|x| x.as_f64()).unwrap_or(0.5),
+                    "r":  j.get("r").and_then(|x| x.as_f64()).unwrap_or(0.3),
+                    "raw": text
+                }})),
+                None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
+            }
+        }
+        Err(e) => Json(json!({"success": false, "error": e})),
+    }
+}
+
+async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
+    let cfg = body.get("config").cloned().unwrap_or(Value::Null);
+    let image = body.get("image").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    if image.is_empty() { return Json(json!({"success": false, "error": "缺少 image"})); }
+    let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let out = tokio::task::spawn_blocking(move || {
+        let content = json!([
+            { "type": "text", "text": "读这枚印章：先判朝向（必要时转 180°），裁出印章，沿圆周读字。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}" },
+            { "type": "image_url", "image_url": { "url": image, "detail": "high" } }
+        ]);
+        ai_chat(&cfg, content, 400)
+    }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
+    match out {
+        Ok(v) => {
+            let text = text_of(&v);
+            match extract_json(&text) {
+                Some(j) => Json(json!({
+                    "success": true, "mode": "vision", "model": model_name,
+                    "ai": {
+                        "company": j.get("company").and_then(|x| x.as_str()).unwrap_or(""),
+                        "code": j.get("code").and_then(|x| x.as_str()).unwrap_or(""),
+                        "type": j.get("type").and_then(|x| x.as_str()).unwrap_or(""),
+                        "raw": text
+                    }
+                })),
+                None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
+            }
+        }
+        Err(e) => Json(json!({"success": false, "error": e})),
+    }
 }
