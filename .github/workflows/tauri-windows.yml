@@ -1,0 +1,55 @@
+name: tauri-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rust-rewrite]
+    paths:
+      - 'tauri/**'
+      - '.github/workflows/tauri-windows.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tauri/src-tauri
+
+      - name: Install frontend tooling
+        run: npm ci || npm install
+
+      - name: Sync web (frontend -> tauri/web/index.html)
+        shell: bash
+        env:
+          STAMP_REPO: ${{ github.workspace }}
+        run: sh scripts/sync-web.sh
+
+      - name: Build Windows bundles
+        run: npm run build -- --bundles nsis
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p ../out
+          find src-tauri/target/release/bundle -maxdepth 2 -type f \( -name '*.exe' -o -name '*.msi' \) -exec cp {} ../out/ \;
+          ls -lh ../out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stamp-toolkit-windows
+          path: out/*
+          if-no-files-found: error
