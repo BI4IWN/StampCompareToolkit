@@ -7,4 +7,4 @@ edition = "2021"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 tract-onnx = "0.21"
 anyhow = "1"
-stamp-core = { path = "../../07-rust-spike/stamp-core" }
+stamp-core = { path = "../stamp-core" }

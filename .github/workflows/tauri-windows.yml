@@ -32,7 +32,7 @@ jobs:
           workspaces: tauri/src-tauri
 
       - name: Install frontend tooling
-        run: npm ci || npm install
+        run: npm install --no-audit --no-fund
 
       - name: Sync web (frontend -> tauri/web/index.html)
         shell: bash

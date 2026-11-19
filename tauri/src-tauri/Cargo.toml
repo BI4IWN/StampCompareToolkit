@@ -17,5 +17,5 @@ tower-http = { version = "0.5", features = ["fs", "cors"] }
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 ureq = { version = "2", features = ["json"] }
-stamp-core = { path = "../../07-rust-spike/stamp-core" }
+stamp-core = { path = "../stamp-core" }
 stamp-ocr = { path = "../stamp-ocr" }
