@@ -9728,7 +9728,20 @@ async function runStampOCR(target) {
   statusEl.textContent = '发送图像到 OCR 服务...';
 
   // 将原始画布转为 base64 发送
-  const imgB64 = canvasToBase64(stampState.original);
+  // 交给 AI 视觉模型的是「已经做完了颜色分离 + 圆章校正」的章面（合成白底），
+  // 不是原始照片：原图里的黑色正文/签名正是误识的主要来源
+  const imgB64 = (() => {
+    try {
+      const src = stampState.extracted;
+      if (!src) return canvasToBase64(stampState.original);
+      const c = document.createElement('canvas');
+      c.width = src.width; c.height = src.height;
+      const cx = c.getContext('2d');
+      cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, c.width, c.height);
+      cx.drawImage(src, 0, 0);
+      return canvasToBase64(c);
+    } catch (e) { return canvasToBase64(stampState.original); }
+  })();
 
   // AI 识别分支：识别方式为 AI 且配置完整时走 /ai-ocr
   const aiCfg = window._aiConfig;
