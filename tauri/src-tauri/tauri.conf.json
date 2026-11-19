@@ -27,7 +27,8 @@
     ],
     "icon": [
       "icons/icon.icns",
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.ico"
     ],
     "resources": [
       "models/*"
