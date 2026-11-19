@@ -3023,18 +3023,18 @@
           <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-match-fill"></div></div>
         </div>
         <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>文字指标</span><span>—</span></div>
-          <div class="inspector-metric-track"></div>
+          <div class="inspector-metric-label"><span>文字指标</span><span id="inspector-text-val">—</span></div>
+          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-text-fill"></div></div>
         </div>
         <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>几何指标</span><span>—</span></div>
-          <div class="inspector-metric-track"></div>
+          <div class="inspector-metric-label"><span>几何指标</span><span id="inspector-geom-val">—</span></div>
+          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-geom-fill"></div></div>
         </div>
         <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>编码指标</span><span>—</span></div>
-          <div class="inspector-metric-track"></div>
+          <div class="inspector-metric-label"><span>编码指标</span><span id="inspector-code-val">—</span></div>
+          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-code-fill"></div></div>
         </div>
-        <div class="inspector-footnote">v0 判定仅基于墨迹重合度，文字/几何指标待 T3-JS 接入</div>
+        <div class="inspector-footnote" id="inspector-metric-note">文字＝机构名相似度；几何＝椭圆轴比一致性；编码＝防伪码一致度（有一项缺数据时显示 —）</div>
       </section>
 
       <section class="inspector-card" aria-labelledby="inspector-recognition-title">
@@ -7652,6 +7652,71 @@ function renderInspectorStamp(target) {
   }
 }
 
+// ---- T3-JS：文字 / 几何 / 编码三项指标 ----
+function t3LcsRatio(a, b) {
+  const A = String(a || '').replace(/\s+/g, '');
+  const B = String(b || '').replace(/\s+/g, '');
+  if (!A || !B) return null;
+  const m = A.length, n = B.length;
+  let prev = new Uint16Array(n + 1), cur = new Uint16Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      cur[j] = A[i - 1] === B[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    }
+    const t = prev; prev = cur; cur = t; cur.fill(0);
+  }
+  return (2 * prev[n]) / (m + n);
+}
+
+function t3GeomMetric() {
+  const shape = (t) => {
+    const st = state[t];
+    if (!st) return null;
+    // 1) 优先用提取画布重新拟合；2) 退化用 baseExtracted；3) 再退化用 warpInfo 记录
+    for (const key of ['extracted', 'baseExtracted']) {
+      const cv = st[key];
+      if (!cv) continue;
+      try {
+        const f = fitStampEllipse(cv);
+        if (f && f.a > 1 && f.b > 1) {
+          return { ratio: Math.min(f.a, f.b) / Math.max(f.a, f.b), r: (f.a + f.b) / 2 };
+        }
+      } catch (e) { /* 继续下一个来源 */ }
+    }
+    const wi = st.warpInfo;
+    if (wi && wi.a > 1 && wi.b > 1) {
+      return { ratio: Math.min(wi.a, wi.b) / Math.max(wi.a, wi.b), r: (wi.a + wi.b) / 2 };
+    }
+    return null;
+  };
+  const A = shape('ref'), B = shape('test');
+  if (!A || !B) return null;
+  const dRatio = Math.abs(A.ratio - B.ratio) / 0.12;      // 轴比差 0.12 记满扣
+  const dSize = Math.abs(A.r - B.r) / Math.max(A.r, B.r) / 0.25;  // 尺寸差 25% 记满扣
+  return Math.max(0, Math.min(1, 1 - (dRatio * 0.6 + dSize * 0.4)));
+}
+
+function t3CodeMetric() {
+  const c1 = String((state.ref.ocrResult || {}).code || '').replace(/\D/g, '');
+  const c2 = String((state.test.ocrResult || {}).code || '').replace(/\D/g, '');
+  if (!c1 || !c2) return null;
+  return c1 === c2 ? 1 : t3LcsRatio(c1, c2);
+}
+
+function t3RenderMetric(id, value) {
+  const valEl = document.getElementById('inspector-' + id + '-val');
+  const fillEl2 = document.getElementById('inspector-' + id + '-fill');
+  if (!valEl) return;
+  if (value === null || !Number.isFinite(value)) {
+    valEl.textContent = '—';
+    if (fillEl2) fillEl2.style.width = '0%';
+    return;
+  }
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
+  valEl.textContent = pct + '%';
+  if (fillEl2) fillEl2.style.width = pct + '%';
+}
+
 function updateInspector() {
   if (window.__syncToolbarSave) window.__syncToolbarSave();
   const hasStamp = !!(state.ref.original || state.test.original);
@@ -7670,6 +7735,13 @@ function updateInspector() {
   const normRef = normalizeCompanyName(refName);
   const normTest = normalizeCompanyName(testName);
   $('#inspector-name-warning').hidden = !(normRef && normTest && normRef !== normTest);
+
+  // T3-JS 三项指标
+  const refCo = String((state.ref.ocrResult || {}).company || '');
+  const testCo = String((state.test.ocrResult || {}).company || '');
+  t3RenderMetric('text', t3LcsRatio(refCo, testCo));
+  t3RenderMetric('geom', t3GeomMetric());
+  t3RenderMetric('code', t3CodeMetric());
 
   const diff = computeStampDiff();
   const gradeEl = $('#inspector-grade');
