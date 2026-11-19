@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.10", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.11", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -569,7 +569,43 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
 async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let cfg = body.get("config").cloned().unwrap_or(Value::Null);
     let image = body.get("image").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    if image.is_empty() { return Json(json!({"success": false, "error": "缺少 image"})); }
+    let text_in = body.get("text").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let mode = cfg.get("mode").and_then(|v| v.as_str()).unwrap_or("vision").to_string();
+    // 文本解析模式：只把本地 OCR 的粗文字发给模型，不塞图片（纯文本模型收图会返回空 content）
+    if image.is_empty() && text_in.is_empty() { return Json(json!({"success": false, "error": "缺少 image 或 text"})); }
+    if mode != "vision" && !text_in.is_empty() {
+        let cfg_ref = cfg.clone();
+        let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let body_text = text_in.clone();
+        let out = tokio::task::spawn_blocking(move || {
+            let prompt = format!(
+                "下面是从印章图片上 OCR 出来的粗文字（可能有错字、乱序、缺字）：\n---\n{}\n---\n请清洗并结构化：机构名称取最完整的一家（去掉零散单字、编号、日期），编码取 8~13 位纯数字（没有就空），类型从 公司/银行/机关/委员会/事务所/其他 里选一个。只返回 JSON：{{\"company\":\"\",\"code\":\"\",\"type\":\"\"}}",
+                body_text
+            );
+            ai_chat(&cfg, &prompt, None, 400)
+        }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
+        return match out {
+            Ok(v) => {
+                let text = text_of(&v);
+                match extract_json(&text) {
+                    Some(j) => Json(json!({
+                        "success": true, "mode": "parse", "model": model_name,
+                        "ai": {
+                            "company": j.get("company").and_then(|x| x.as_str()).unwrap_or(""),
+                            "code": j.get("code").and_then(|x| x.as_str()).unwrap_or(""),
+                            "type": j.get("type").and_then(|x| x.as_str()).unwrap_or(""),
+                            "raw": text
+                        }
+                    })),
+                    None => {
+                        log_ai("ocr-parse", &cfg_ref, &format!("no-json raw: {}", text.chars().take(400).collect::<String>()));
+                        Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text}))
+                    }
+                }
+            }
+            Err(e) => { log_ai("ocr-parse", &cfg_ref, &e); Json(json!({"success": false, "error": friendly_ai_error(&e)})) }
+        };
+    }
     let cfg_ref = cfg.clone();
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
