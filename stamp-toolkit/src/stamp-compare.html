@@ -1819,11 +1819,12 @@
   }
 
   /* 每枚印章的 AI 识别按钮（仅识别方式为 AI 时显示） */
-  .ai-ocr-row { justify-content: center; margin-bottom: 4px; }
+  .ai-ocr-row { justify-content: flex-start; margin: 0 0 2px; }
 
   .ai-ocr-btn {
-    padding: 5px 16px;
+    padding: 4px 14px;
     font-size: 12px;
+    line-height: 1.2;
     font-weight: 600;
     border: 1px solid var(--border-strong, #d8d4cf);
     border-radius: 999px;
@@ -1846,12 +1847,12 @@
     display: none;
     font-size: 12px;
   }
-  .ocr-inline.visible { display: block; }
+  .ocr-inline.visible { display: flex; flex-direction: column; gap: 5px; }
   .ocr-inline-row {
     display: flex;
     align-items: baseline;
     gap: 6px;
-    margin-bottom: 3px;
+    margin: 0;
     line-height: 1.4;
   }
   .ocr-inline-label {
