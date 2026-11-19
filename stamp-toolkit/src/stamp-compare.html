@@ -9736,6 +9736,30 @@ function ocrBusyEnd(target) {
   } catch (e) { /* ignore */ }
 }
 
+// AI 复核失败时的兜底：本地 PaddleOCR 直接出结果（约 0.8s），保证面板里总有东西
+async function localFallbackOCR(target, imgB64, spec) {
+  try {
+    const r = await fetch(OCR_SERVER + '/ocr', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: imgB64,
+        color: (spec && spec.presets ? spec.presets.join(',') : 'red'),
+        hues: (spec && spec.hues) || [],
+        excludes: (spec && spec.excludes) || [],
+        exclude_colors: ((spec && spec.excludeColors) || []).map(c => ({ hue: c.hue, sat: c.sat, val: c.val })),
+      }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const s0 = (d && d.stamps && d.stamps[0]) || {};
+    const company = (s0.company || d.company || '').trim();
+    const code = (s0.code || d.code || '').trim();
+    const type = (s0.type || s0.kind || d.type || '').trim();
+    if (company || code) return { company, code, type };
+  } catch (e) { /* 忽略 */ }
+  return null;
+}
+
 async function runStampOCR(target) {
   const t0 = performance.now();
   if (state._ocrRunning && state._ocrRunning[target]) return null;   // 防重复点击
@@ -9846,7 +9870,7 @@ async function runStampOCR(target) {
   })();
 
   // AI 识别分支：识别方式为 AI 且配置完整时走 /ai-ocr
-  const aiCfg = window._aiConfig;
+  const aiCfg = window._aiConfig || aiLoadConfig() || null;
   const useAI = state.recMode === 'ai' && aiCfgReady(aiCfg);
   if (useAI) {
     fillEl.style.width = '30%';
@@ -9868,12 +9892,18 @@ async function runStampOCR(target) {
     // 「文本解析」模式下，先本地 OCR 出粗文字，再交给 AI 清洗结构：
     // 文本模型收不到图片（发图会返回 200 但 content 为空），所以这条链路只发 text
     let localText = '';
-    if (useAI && aiCfg.mode !== 'vision') {
+    let localPeek = null;
+    // 本地 OCR 用「原尺寸提取画布」：imgB64 是给视觉模型的白底合成图，本地引擎对它解码不稳
+    const localImg = (() => {
+      try { return canvasToBase64(stampState.extracted || stampState.baseExtracted || stampState.original); }
+      catch (e) { return imgB64; }
+    })();
+    if (useAI) {
       try {
         const lr = await fetch(OCR_SERVER + '/ocr', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            image: imgB64,
+            image: localImg,
             color: spec.presets.join(','),
             hues: spec.hues || [],
             excludes: spec.excludes || [],
@@ -9883,16 +9913,38 @@ async function runStampOCR(target) {
         });
         if (lr.ok) {
           const ld = await lr.json();
-          localText = [ld.raw_text, ld.company, ld.code].filter(Boolean).join('\n').trim();
+          const s0 = (ld.stamps && ld.stamps[0]) || {};
+          localText = [s0.raw_text, s0.company, s0.code, ld.raw_text].filter(Boolean).join('\n').trim();
+          localPeek = {
+            success: true,
+            company: (s0.company || '').trim(),
+            code: (s0.code || '').trim(),
+            kind: (s0.type || s0.kind || '').trim(),
+          };
         }
       } catch (e) { /* 本地 OCR 失败就让 AI 自己读图 */ }
+      // 本地先出结果（约 0.8s），AI 回来后再覆盖——避免用户盯着 1~25 秒的空面板
+      if (localPeek && localPeek.success !== false) {
+        const lc = (localPeek.company || '').trim();
+        const lcode = (localPeek.code || '').trim();
+        const ltype = (localPeek.kind || '').trim();
+        if (lc || lcode) {
+          $(`#ocr-${target}-company`).textContent = lc || '未识别';
+          $(`#ocr-${target}-code`).textContent = lcode || '未检测到';
+          $(`#ocr-${target}-type`).textContent = ltype || '未检测到';
+          state[target].ocrResult = { company: lc, code: lcode, type: ltype, matchSource: 'local' };
+          updateInspector();
+          statusEl.textContent = '本地已出结果，AI 复核中…';
+          fillEl.style.width = '45%';
+        }
+      }
     }
     const resp = await fetch(OCR_SERVER + (useAI ? '/ai-ocr' : '/ocr'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         image: imgB64,
-        text: localText,
+        text: (useAI && aiCfg.mode !== 'vision') ? localText : '',
         color: spec.presets.join(','),
         hues: spec.hues || [],
         excludes: spec.excludes || [],
@@ -9918,6 +9970,31 @@ async function runStampOCR(target) {
     if (useAI) {
       if (!data.success || !data.ai) {
         const reason = friendlyAIError(data.error || 'AI 提取失败');
+        // AI 复核失败时保留本地先出的结果，不要把它擦成错误文案
+        let keepLocal = localPeek && (localPeek.company || localPeek.code) && localPeek.success !== false;
+        if (!keepLocal) {
+          const fb = await localFallbackOCR(target, localImg, spec);
+          if (fb) { localPeek = { company: fb.company, code: fb.code, kind: fb.type, success: true }; keepLocal = true; }
+        }
+        if (keepLocal) {
+          const lc = (localPeek.company || '').trim();
+          const lcode = (localPeek.code || '').trim();
+          const ltype = (localPeek.kind || '').trim();
+          $(`#ocr-${target}-company`).textContent = lc || '未识别';
+          $(`#ocr-${target}-code`).textContent = lcode || '未检测到';
+          $(`#ocr-${target}-type`).textContent = ltype || '未检测到';
+          state[target].ocrResult = { company: lc, code: lcode, type: ltype, matchSource: 'local' };
+          updateInspector();
+          fillEl.style.width = '100%';
+          const shortReason = String(reason).split('：')[0].slice(0, 28);
+          statusEl.textContent = `本地结果（AI 复核失败：${shortReason}）`;
+          statusEl.title = reason;
+          cancelBtn.classList.remove('visible');
+          state._ocrControllers[target] = null;
+          showStatus('AI 复核失败，已保留本地识别结果：' + reason);
+          ocrBusyEnd(target);
+          return { company: lc, code: lcode, type: ltype };
+        }
         $(`#ocr-${target}-company`).textContent = 'AI 提取失败：' + reason;
         $(`#ocr-${target}-code`).textContent = '—';
         $(`#ocr-${target}-type`).textContent = '—';
