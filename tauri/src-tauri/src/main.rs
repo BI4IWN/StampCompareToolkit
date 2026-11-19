@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.5", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.9", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -333,7 +333,7 @@ fn main() {
 }
 
 // ---------- AI 代理（OpenAI 兼容）：/ai/test、/ai/stamp、/ai-ocr ----------
-fn ai_chat(cfg: &Value, content: Value, max_tokens: u32) -> Result<Value, String> {
+fn ai_chat(cfg: &Value, prompt: &str, image: Option<&str>, max_tokens: u32) -> Result<Value, String> {
     let base = cfg.get("base_url").and_then(|v| v.as_str()).unwrap_or("").trim_end_matches('/').to_string();
     let key = cfg.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
     let model = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("");
@@ -343,7 +343,39 @@ fn ai_chat(cfg: &Value, content: Value, max_tokens: u32) -> Result<Value, String
     if !(base.starts_with("http://") || base.starts_with("https://")) {
         return Err(format!("API 地址不合法：{base}"));
     }
+    // 智谱/AWS 等「Anthropic 兼容」端点：/api/anthropic + /v1/messages + x-api-key
+    if base.contains("/anthropic") {
+        let url = format!("{base}/v1/messages");
+        let mut parts = vec![json!({"type": "text", "text": prompt})];
+        if let Some(img) = image {
+            let (media, data) = prepare_image_raw(img);
+            parts.push(json!({"type": "image", "source": {"type": "base64", "media_type": media, "data": data}}));
+        }
+        let body = json!({
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{ "role": "user", "content": parts }]
+        });
+        let resp = ureq::post(&url)
+            .set("x-api-key", key)
+            .set("anthropic-version", "2023-06-01")
+            .set("Content-Type", "application/json")
+            .timeout(std::time::Duration::from_secs(90))
+            .send_json(body);
+        return match resp {
+            Ok(r) => r.into_json::<Value>().map_err(|e| format!("响应解析失败：{e}")),
+            Err(ureq::Error::Status(code, r)) => {
+                let text = r.into_string().unwrap_or_default();
+                Err(format!("HTTP {code}：{}", text.chars().take(180).collect::<String>()))
+            }
+            Err(e) => Err(format!("网络错误：{e}")),
+        };
+    }
     let url = format!("{base}/chat/completions");
+    let mut content = vec![json!({"type": "text", "text": prompt})];
+    if let Some(img) = image {
+        content.push(json!({"type": "image_url", "image_url": {"url": prepare_image(img)}}));
+    }
     let body = json!({
         "model": model,
         "messages": [{ "role": "user", "content": content }],
@@ -353,7 +385,7 @@ fn ai_chat(cfg: &Value, content: Value, max_tokens: u32) -> Result<Value, String
     let resp = ureq::post(&url)
         .set("Authorization", &format!("Bearer {key}"))
         .set("Content-Type", "application/json")
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(90))
         .send_json(body);
     match resp {
         Ok(r) => r.into_json::<Value>().map_err(|e| format!("响应解析失败：{e}")),
@@ -365,15 +397,71 @@ fn ai_chat(cfg: &Value, content: Value, max_tokens: u32) -> Result<Value, String
     }
 }
 
+/// Anthropic 走原始 base64 + media_type，不带 data: 前缀
+fn prepare_image_raw(b64: &str) -> (String, String) {
+    use base64::Engine as _;
+    let raw = b64.trim();
+    let payload = if let Some(i) = raw.find("base64,") { &raw[i + 7..] } else { raw };
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(payload.trim()) {
+        Ok(b) => b,
+        Err(_) => return ("image/png".into(), payload.to_string()),
+    };
+    let img = match image::load_from_memory(&bytes) { Ok(i) => i, Err(_) => return ("image/png".into(), payload.to_string()) };
+    let (w, h) = (img.width(), img.height());
+    let scaled = if w.max(h) > 1024 {
+        let s = 1024.0 / w.max(h) as f32;
+        img.resize((w as f32 * s) as u32, (h as f32 * s) as u32, image::imageops::FilterType::Triangle)
+    } else { img };
+    let mut buf = std::io::Cursor::new(Vec::new());
+    if scaled.to_rgb8().write_to(&mut buf, image::ImageFormat::Jpeg).is_err() {
+        return ("image/png".into(), payload.to_string());
+    }
+    ("image/jpeg".into(), base64::engine::general_purpose::STANDARD.encode(buf.into_inner()))
+}
+
 fn text_of(v: &Value) -> String {
-    v.get("choices").and_then(|c| c.get(0))
+    if let Some(t) = v.get("choices").and_then(|c| c.get(0))
         .and_then(|c| c.get("message")).and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str()).unwrap_or("").to_string()
+        .and_then(|c| c.as_str()) {
+        return t.to_string();
+    }
+    // Anthropic: {"content":[{"type":"text","text":"…"}]}
+    if let Some(arr) = v.get("content").and_then(|c| c.as_array()) {
+        let mut out = String::new();
+        for blk in arr {
+            if let Some(t) = blk.get("text").and_then(|x| x.as_str()) { out.push_str(t); }
+        }
+        if !out.is_empty() { return out; }
+    }
+    String::new()
 }
 
 /// 把上游的"模型不支持图片"类 400 翻成人话，避免用户看到 Unknown variant `image_url`
 
 /// 把每次 AI 调用的关键信息落到 /tmp/stamp-ai.log，便于定位上游失败（用户只看得到一句"提取失败"）
+/// 前端传来的是裸 base64（canvasToBase64 去了 data: 前缀）；OpenAI 兼容接口要求 data URI，
+/// 而且 1200×1200 PNG 动辄 2MB，直接发既慢又容易超限 —— 统一缩到 ≤1024 并转 JPEG。
+fn prepare_image(b64: &str) -> String {
+    use base64::Engine as _;
+    let raw = b64.trim();
+    let payload = if let Some(i) = raw.find("base64,") { &raw[i + 7..] } else { raw };
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(payload.trim()) {
+        Ok(b) => b,
+        Err(_) => return format!("data:image/png;base64,{payload}"),
+    };
+    let img = match image::load_from_memory(&bytes) { Ok(i) => i, Err(_) => return format!("data:image/png;base64,{payload}") };
+    let (w, h) = (img.width(), img.height());
+    let scaled = if w.max(h) > 1024 {
+        let s = 1024.0 / w.max(h) as f32;
+        img.resize((w as f32 * s) as u32, (h as f32 * s) as u32, image::imageops::FilterType::Triangle)
+    } else { img };
+    let mut buf = std::io::Cursor::new(Vec::new());
+    if scaled.to_rgb8().write_to(&mut buf, image::ImageFormat::Jpeg).is_err() {
+        return format!("data:image/png;base64,{payload}");
+    }
+    format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(buf.into_inner()))
+}
+
 fn log_ai(tag: &str, cfg: &Value, detail: &str) {
     use std::io::Write;
     let line = format!(
@@ -417,14 +505,30 @@ fn friendly_ai_error(msg: &str) -> String {
 }
 
 fn extract_json(s: &str) -> Option<Value> {
-    let a = s.find('{')?; let b = s.rfind('}')?;
-    serde_json::from_str::<Value>(&s[a..=b]).ok()
+    // 模型常见包装：```json 围栏、前后解释文字、尾逗号、多个 JSON 片段
+    let mut txt = s.trim().to_string();
+    if let Some(i) = txt.find("```") {
+        let rest = &txt[i + 3..];
+        let rest = rest.strip_prefix("json").unwrap_or(rest);
+        if let Some(j) = rest.find("```") {
+            txt = rest[..j].trim().to_string();
+        } else {
+            txt = rest.trim().to_string();
+        }
+    }
+    let a = txt.find('{')?;
+    let b = txt.rfind('}')?;
+    let core = txt[a..=b].trim_end_matches(',').to_string();
+    if let Ok(v) = serde_json::from_str::<Value>(&core) { return Some(v); }
+    // 去尾逗号再试一次：{"a":1,} / [1,2,]
+    let cleaned = core.replace(",}", "}").replace(",]", "]");
+    serde_json::from_str::<Value>(&cleaned).ok()
 }
 
 async fn api_ai_test(Json(body): Json<Value>) -> Json<Value> {
     let cfg = body.get("config").cloned().unwrap_or(Value::Null);
     let cfg_ref = cfg.clone();
-    let out = tokio::task::spawn_blocking(move || ai_chat(&cfg, json!("ping"), 8)).await
+    let out = tokio::task::spawn_blocking(move || ai_chat(&cfg, "ping", None, 8)).await
         .unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => Json(json!({"success": true, "model": v.get("model").cloned().unwrap_or(Value::Null), "reply": text_of(&v)})),
@@ -438,11 +542,8 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
     if image.is_empty() { return Json(json!({"success": false, "error": "缺少 image"})); }
     let cfg_ref = cfg.clone();
     let out = tokio::task::spawn_blocking(move || {
-        let content = json!([
-            { "type": "text", "text": "定位图中印章：给出圆心与半径（相对图片宽高的 0~1 归一化）。只返回 JSON：{\"cx\":0.5,\"cy\":0.5,\"r\":0.3}" },
-            { "type": "image_url", "image_url": { "url": image, "detail": "high" } }
-        ]);
-        ai_chat(&cfg, content, 200)
+        let prompt = "图中是一枚印章（照片可能倾斜、旋转或透视变形）。第一步先判断印章朝向：沿圆周读字，若文字是倒的或横躺的，在脑中把图片旋转 0/90/180/270 到文字正立的那一个角度；第二步按这个正立视角给出印章圆心与半径（相对图片宽高的 0~1 归一化，圆心取圆环/椭圆的几何中心，不要取墨迹质心）。只返回 JSON：{\"cx\":0.5,\"cy\":0.5,\"r\":0.3}";
+        ai_chat(&cfg, prompt, Some(&image), 200)
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => {
@@ -455,7 +556,10 @@ async fn api_ai_stamp(Json(body): Json<Value>) -> Json<Value> {
                     "r":  j.get("r").and_then(|x| x.as_f64()).unwrap_or(0.3),
                     "raw": text
                 }})),
-                None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
+                None => {
+                    log_ai("stamp", &cfg_ref, &format!("no-json raw: {}", text.chars().take(400).collect::<String>()));
+                    Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text}))
+                }
             }
         }
         Err(e) => { log_ai("stamp", &cfg_ref, &e); Json(json!({"success": false, "error": friendly_ai_error(&e)})) }
@@ -469,11 +573,8 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let cfg_ref = cfg.clone();
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
-        let content = json!([
-            { "type": "text", "text": "读这枚印章：先判朝向（必要时转 180°），裁出印章，沿圆周读字。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}" },
-            { "type": "image_url", "image_url": { "url": image, "detail": "high" } }
-        ]);
-        ai_chat(&cfg, content, 400)
+        let prompt = "读这枚印章。图片里的印章常见倾斜/旋转、可能上下颠倒或横躺，请先定朝向：沿圆周试读文字，必要时把图片旋转 0/90/180/270 到文字正立的角度再读；然后沿圆周读机构名称（从正上方开始顺时针），读下缘的编码（纯数字，常见 8~13 位），并判断印章类型（公司/银行/机关/委员会/事务所/其他）。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}";
+        ai_chat(&cfg, prompt, Some(&image), 400)
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => {
@@ -488,7 +589,10 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                         "raw": text
                     }
                 })),
-                None => Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text})),
+                None => {
+                    log_ai("ocr", &cfg_ref, &format!("no-json raw: {}", text.chars().take(400).collect::<String>()));
+                    Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text}))
+                }
             }
         }
         Err(e) => { log_ai("ocr", &cfg_ref, &e); Json(json!({"success": false, "error": friendly_ai_error(&e)})) }
