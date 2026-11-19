@@ -4498,6 +4498,48 @@ function processStamp(img, target) {
     b.classList.toggle('active', b.dataset.target === target));
   try { if (typeof syncSlidersToTarget === 'function') syncSlidersToTarget(); } catch (e) {}
 
+  // 自动"补一刀"校正：自动提取后若拟合轴比明显偏（<0.90），说明要么是斜拍椭圆、
+  // 要么掩膜混进了正文/签名。这里按拟合参数做**单轮**校正，并只接受"确实变圆"的结果
+  // （≥0.93）；否则保持原样。历史上用户手动点一下颜色后变圆，本质就是走了这条路径。
+  try {
+    setTimeout(() => {
+      try {
+        const st2 = state[target];
+        if (!st2 || !st2.baseExtracted || st2.warpInfo || st2.circleLock) return;
+        const c0 = st2.baseExtracted;
+        const f = fitStampEllipse(c0);
+        if (!f || f.ratio >= 0.90) return;
+        const pick = (typeof chooseWarpParams === 'function' ? chooseWarpParams(c0, f) : null) || {};
+        const ell = Object.assign({}, f, {
+          theta: pick.theta !== undefined ? pick.theta : f.theta,
+          ratio: pick.ratio !== undefined ? pick.ratio : f.ratio,
+        });
+        ell.b = f.a * ell.ratio;
+        // 单轮往往只到 0.94；继续迭代，但保留"最好的那一轮"——
+        // 拟合失败或越拉越差时回退，避免整次校正被丢弃
+        let w = c0, cur = ell, bestW = null, bestR = f.ratio;
+        for (let i = 0; i < 3; i++) {
+          let nw = null;
+          try { nw = dewarpCanvasByEllipse(w, cur); } catch (e) { nw = null; }
+          if (!nw) break;
+          const nf = fitStampEllipse(nw);
+          if (!nf) break;
+          w = nw;
+          if (nf.ratio > bestR + 1e-4) { bestR = nf.ratio; bestW = nw; }
+          if (nf.ratio >= 0.985) break;
+          cur = Object.assign({}, nf, { b: nf.a * nf.ratio });
+        }
+        if (!bestW || bestR < 0.93) return;
+        const f2 = { ratio: bestR };
+        st2.extracted = bestW;
+        st2.warpInfo = { ratio: f.ratio, a: f.a, b: f.b, auto: true };
+        drawExtractedPreview(target, bestW);
+        updateVisibility(); render();
+        showStatus(`已自动校正为圆（轴比 ${f.ratio.toFixed(2)} → ${f2.ratio.toFixed(2)}）`);
+      } catch (e) { /* 自动校正失败不影响主流程 */ }
+    }, 0);
+  } catch (e) { /* ignore */ }
+
   // 绘制提取结果到小画布
   drawExtractedPreview(target, extractedCanvas);
 
