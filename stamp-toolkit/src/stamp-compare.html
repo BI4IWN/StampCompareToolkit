@@ -4490,11 +4490,13 @@ function processStamp(img, target) {
   const extractedCircular = state[target].circular;
   const detection = state[target].candidates;
 
-  // 操作目标固定回到「参考章」：连续粘两枚时，不因为最后粘的是待验章就把手柄抢走
+  // 操作目标始终跟着「刚加载的这枚」：之前的实现只在另一枚为空时才切换，
+  // 于是粘第二枚时目标不跟着走，表现为"操作目标不稳定"
   const other = target === 'ref' ? 'test' : 'ref';
-  state.target = 'ref';
+  state.target = target;
   document.querySelectorAll('#target-group .mode-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.target === 'ref'));
+    b.classList.toggle('active', b.dataset.target === target));
+  try { if (typeof syncSlidersToTarget === 'function') syncSlidersToTarget(); } catch (e) {}
 
   // 绘制提取结果到小画布
   drawExtractedPreview(target, extractedCanvas);
