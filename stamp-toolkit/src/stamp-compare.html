@@ -9736,11 +9736,16 @@ async function runStampOCR(target) {
     try {
       const src = stampState.extracted;
       if (!src) return canvasToBase64(stampState.original);
+      // 长边压到 1024：既降请求体积（base64 过大时后端会 413），也够视觉模型看清笔画
+      const MAX = 1024;
+      const scale = Math.min(1, MAX / Math.max(src.width, src.height));
+      const w = Math.max(64, Math.round(src.width * scale));
+      const h = Math.max(64, Math.round(src.height * scale));
       const c = document.createElement('canvas');
-      c.width = src.width; c.height = src.height;
+      c.width = w; c.height = h;
       const cx = c.getContext('2d');
-      cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, c.width, c.height);
-      cx.drawImage(src, 0, 0);
+      cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, w, h);
+      cx.drawImage(src, 0, 0, w, h);
       return canvasToBase64(c);
     } catch (e) { return canvasToBase64(stampState.original); }
   })();
