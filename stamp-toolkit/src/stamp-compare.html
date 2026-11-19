@@ -9671,7 +9671,25 @@ function cancelStampOCR(target) {
 }
 
 // 主 OCR 流程：发送原图到 Python PaddleOCR 后端（支持中断）
+function ocrBusyEnd(target) {
+  try {
+    state._ocrRunning = state._ocrRunning || {};
+    state._ocrRunning[target] = false;
+    const b = document.getElementById('ai-ocr-' + target);
+    if (b) { b.disabled = false; b.classList.remove('is-busy'); if (b.dataset.label) b.textContent = b.dataset.label; }
+  } catch (e) { /* ignore */ }
+}
+
 async function runStampOCR(target) {
+  const t0 = performance.now();
+  if (state._ocrRunning && state._ocrRunning[target]) return null;   // 防重复点击
+  state._ocrRunning = state._ocrRunning || {};
+  state._ocrRunning[target] = true;
+  {
+    const b0 = document.getElementById('ai-ocr-' + target);
+    if (b0 && !b0.dataset.label) b0.dataset.label = b0.textContent;
+    if (b0) { b0.disabled = true; b0.classList.add('is-busy'); b0.textContent = '⏳ 识别中…'; }
+  }
   const stampState = state[target];
   if (!stampState || !stampState.original) return null;
 
@@ -9693,6 +9711,24 @@ async function runStampOCR(target) {
   fillEl.style.width = '10%';
   statusEl.textContent = '检查 OCR 服务...';
 
+  // 识别中的交互：按钮置灰 + 文案改成"识别中…"，期间再点不发请求（AI 视觉一次要 20~40s）
+  const aiBtn = document.getElementById('ai-ocr-' + target);
+  const aiBtnLabel = aiBtn ? aiBtn.textContent : '';
+  if (aiBtn) { aiBtn.disabled = true; aiBtn.classList.add('is-busy'); aiBtn.textContent = '⏳ 识别中…'; }
+  const aiBusyTimer = setInterval(() => {
+    const b = document.getElementById('ai-ocr-' + target);
+    if (!b || !b.disabled) { clearInterval(aiBusyTimer); return; }   // 已结束：不再覆盖最终文案
+    if (!statusEl) return;
+    const sec = Math.round((performance.now() - t0) / 1000);
+    const w = Math.min(90, 30 + sec);
+    fillEl.style.width = w + '%';
+    if (statusEl.dataset.base) statusEl.textContent = `${statusEl.dataset.base}（已 ${sec}s）`;
+  }, 1000);
+  const restoreAIButton = () => {
+    clearInterval(aiBusyTimer);
+    if (aiBtn) { aiBtn.disabled = false; aiBtn.classList.remove('is-busy'); aiBtn.textContent = aiBtnLabel; }
+  };
+
   // 检查服务是否可用（识别方式为 AI 视觉时仅要求后端在线，无需 PaddleOCR）
   const _aiEarly = window._aiConfig;
   const _aiReady = state.recMode === 'ai' && !!(_aiEarly && _aiEarly.mode === 'vision' && aiCfgReady(_aiEarly));
@@ -9708,7 +9744,8 @@ async function runStampOCR(target) {
       $(`#ocr-${target}-type`).textContent = '—';
       statusEl.textContent = 'AI 识别未配置 — 请先点击「🤖 AI」完善配置';
       showStatus('AI 识别未配置 — 请先点击「🤖 AI」完善配置');
-      return null;
+      ocrBusyEnd(target);
+    return null;
     }
     if (serverState === 'no-ocr') {
       statusEl.textContent = 'OCR 模型未加载（需安装 PaddleOCR 依赖）';
@@ -9716,13 +9753,15 @@ async function runStampOCR(target) {
       $(`#ocr-${target}-code`).textContent = '—';
       $(`#ocr-${target}-type`).textContent = '—';
       showStatus('OCR 模型未加载 — 请安装依赖: pip install paddlepaddle paddleocr opencv-python');
-      return null;
+      ocrBusyEnd(target);
+    return null;
     }
     statusEl.textContent = 'OCR 服务未启动';
     $(`#ocr-${target}-company`).textContent = '需启动服务';
     $(`#ocr-${target}-code`).textContent = '—';
     $(`#ocr-${target}-type`).textContent = '—';
     showStatus('OCR 服务未连接，请运行: python3 stamp_app.py');
+    ocrBusyEnd(target);
     return null;
   }
 
@@ -9755,7 +9794,8 @@ async function runStampOCR(target) {
   const useAI = state.recMode === 'ai' && aiCfgReady(aiCfg);
   if (useAI) {
     fillEl.style.width = '30%';
-    statusEl.textContent = `AI 提取中（${aiCfg.model}，${aiCfg.mode === 'vision' ? '视觉识别' : '本地OCR+AI解析'}）...`;
+    statusEl.dataset.base = `AI 识别中（${aiCfg.model}，${aiCfg.mode === 'vision' ? '视觉识别' : '本地OCR+AI解析'}）`;
+    statusEl.textContent = statusEl.dataset.base + '…';
   } else {
     if (state.recMode === 'ai') {
       // 选择了 AI 但配置不完整：提示并回退本地
@@ -9831,7 +9871,8 @@ async function runStampOCR(target) {
         cancelBtn.classList.remove('visible');
         state._ocrControllers[target] = null;
         showStatus('AI 提取失败: ' + reason);
-        return null;
+        ocrBusyEnd(target);
+    return null;
       }
       const ai = data.ai;
       const company = (ai.company || '').trim();
@@ -9850,6 +9891,7 @@ async function runStampOCR(target) {
       statusEl.textContent = `完成 · ${modeLabel}（${data.model || aiCfg.model}）`;
       cancelBtn.classList.remove('visible');
       state._ocrControllers[target] = null;
+      ocrBusyEnd(target);
       return { company, code, type };
     }
 
@@ -9862,7 +9904,8 @@ async function runStampOCR(target) {
       statusEl.textContent = reason;
       cancelBtn.classList.remove('visible');
       state._ocrControllers[target] = null;
-      return null;
+      ocrBusyEnd(target);
+    return null;
     }
 
     // 合并所有印章的识别结果，去除中文字符间的多余空格
@@ -9901,6 +9944,7 @@ async function runStampOCR(target) {
     statusEl.textContent = `完成 (${data.stamps.length} 个印章)`;
     cancelBtn.classList.remove('visible');
     state._ocrControllers[target] = null;
+    ocrBusyEnd(target);
 
     return { company, code, type };
 
@@ -9910,7 +9954,8 @@ async function runStampOCR(target) {
       statusEl.textContent = '已中断';
       cancelBtn.classList.remove('visible');
       state._ocrControllers[target] = null;
-      return null;
+      ocrBusyEnd(target);
+    return null;
     }
     fillEl.style.width = '100%';
     statusEl.textContent = '识别失败: ' + err.message;
@@ -9918,6 +9963,7 @@ async function runStampOCR(target) {
     state._ocrControllers[target] = null;
     console.error('OCR error:', err);
     showStatus('OCR 请求失败: ' + err.message);
+    ocrBusyEnd(target);
     return null;
   }
 }
