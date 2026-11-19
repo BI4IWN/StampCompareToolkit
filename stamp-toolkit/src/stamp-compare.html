@@ -5605,7 +5605,11 @@ function dewarpExtracted(target, canvasEl) {
   if (first.ratio < 0.62) return null;
   if (!(first.a >= side * 0.12 && first.a <= side * 0.65)) return null;
   if (!(first.b >= first.a * 0.62)) return null;
-  if (inkFillRatio(canvasEl, first) > 0.55) return null;   // 整块内容被当成章：不动
+  const fill = inkFillRatio(canvasEl, first);
+  if (fill > 0.55) return null;   // 整块内容被当成章：不动
+  // 淡墨/残缺章：掩膜本身不完整，按它拉圆只会把章拧变形（历史现象：自动提取不圆，
+  // 点一下"提取"重算回到原样反而变圆）。这类章原图通常就是圆，直接不改几何。
+  if (fill < 0.22) return null;
   // 轴比已经接近 1（≥0.93）：本来就是圆，再拉一次只会因 theta 估计误差把章拧歪
   if (first.ratio >= 0.93) return null;
   // 已经足够圆：只做"居中 + 归一尺寸"，不再变形（保证两枚章同尺度，便于边缘对齐）
