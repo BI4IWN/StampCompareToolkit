@@ -2,7 +2,9 @@
 # 把仓库里的单文件前端同步进 Tauri 的 web 目录，并追加调试钩子（只在预览版生效）
 set -e
 here="$(cd "$(dirname "$0")" && pwd)"
-repo="${STAMP_REPO:-$HOME/Downloads/印章比对/StampCompareToolkit}"
+# 仓库根：优先 STAMP_REPO，其次 git 顶层目录（CI 里 checkout 的即仓库根），最后回落到本机默认路径
+repo="${STAMP_REPO:-$(git -C "$here/../.." rev-parse --show-toplevel 2>/dev/null || true)}"
+[ -n "$repo" ] || repo="$HOME/Downloads/印章比对/StampCompareToolkit"
 src="$repo/stamp-toolkit/src/stamp-compare.html"
 dst="$here/../web/index.html"
 python3 - "$src" "$dst" "$here/../web/desktop-shim.html" "$here/../web/debug-hook.html" <<'PY'
