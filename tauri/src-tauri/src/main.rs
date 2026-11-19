@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.18", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.19", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -378,13 +378,18 @@ fn ai_chat(cfg: &Value, prompt: &str, image: Option<&str>, max_tokens: u32) -> R
     }
     // 关掉"思考模式"：deepseek-flash / glm-5.x 默认先写一大段 reasoning_content，
     // 实测同一张章：开思考 8–60s（还常被 max_tokens 截断），关思考 **0.8s** 直接出 JSON。
+    // 速度/精度开关：fast（默认）关思考，precise 开思考并给更大 token 预算
+    let precise = cfg.get("speed").and_then(|v| v.as_str()) == Some("precise");
+    let budget = if precise { max_tokens.max(4096) } else { max_tokens };
     let mut body = json!({
         "model": model,
         "messages": [{ "role": "user", "content": content }],
-        "max_tokens": max_tokens,
-        "temperature": 0,
-        "thinking": { "type": "disabled" }
+        "max_tokens": budget,
+        "temperature": 0
     });
+    if !precise {
+        body["thinking"] = json!({ "type": "disabled" });
+    }
     let send = |b: &Value| {
         ureq::post(&url)
             .set("Authorization", &format!("Bearer {key}"))
