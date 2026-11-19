@@ -1708,6 +1708,7 @@
     background-color: var(--canvas-bg);
   }
 
+  body.ai-drawer-open #cmp-fab { display: none !important; }
   #cmp-fab,
   #help-fab,
   .manual-box,
@@ -2935,7 +2936,6 @@
       <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
       <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
       <button class="btn" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出</button>
-      <button class="btn" id="btn-verify" title="打开全国印章查询平台">印章核实</button>
       <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码">全部识别</button>
       <button class="btn" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）">🤖 AI</button>
       <button class="btn" id="btn-origin" title="查看原图：放大检查、框选提取区域、直接点选墨色">🖼 原图</button>
@@ -3358,6 +3358,7 @@ function initDewarpToggle() {
 }
 
 function setToolbarAdvanced(open) {
+  document.body.classList.toggle('ai-drawer-open', open);
   toolbarAdvanced.hidden = !open;
   toolbarMore.setAttribute('aria-expanded', String(open));
   toolbarMore.classList.toggle('active', open);
@@ -9327,10 +9328,7 @@ window.addEventListener('resize', () => { render(); });
 
 
 
-// 「印章核实」按钮
-$('#btn-verify').addEventListener('click', () => {
-  window.open('https://dzyz.gat.shandong.gov.cn/v1/menhu/view/sealQuery.html?nav=2', '_blank', 'noopener');
-});
+
 
 
 /* ============================================================
@@ -9382,29 +9380,55 @@ function aiSuggestMode(model) {
   return AI_VISION_HINTS.some(k => m.includes(k)) ? 'vision' : 'parse';
 }
 
-function aiLoadConfig() {
+// 多服务商各自保存：切到 DeepSeek 再存智谱，不会覆盖 DeepSeek 的地址/模型/Key
+const AI_STORAGE_V2 = 'stampAIConfigs_v2';
+const AI_PROVIDER_KEY = 'stampAIProvider';
+function aiLoadAll() {
+  try {
+    const raw = localStorage.getItem(AI_STORAGE_V2);
+    if (raw) { const m = JSON.parse(raw); if (m && typeof m === 'object') return m; }
+  } catch (e) { /* 忽略损坏 */ }
+  // 迁移旧版「单份配置」
   try {
     const raw = localStorage.getItem(AI_STORAGE_KEY);
-    if (!raw) return null;
-    let cfg = JSON.parse(raw);
-    if (cfg && !AI_PRESETS[cfg.provider]) {
-      // 旧版本已下线的 AI 服务商配置自动迁移到豆包视觉
-      cfg = {
-        provider: 'ark-doubao',
-        base_url: AI_PRESETS['ark-doubao'].base_url,
-        model: AI_PRESETS['ark-doubao'].model,
-        mode: AI_PRESETS['ark-doubao'].mode,
-        api_key: cfg.api_key || '',
-      };
-      aiSaveConfig(cfg);
+    if (raw) {
+      let cfg = JSON.parse(raw);
+      if (cfg && !AI_PRESETS[cfg.provider]) {
+        cfg = {
+          provider: 'ark-doubao',
+          base_url: AI_PRESETS['ark-doubao'].base_url,
+          model: AI_PRESETS['ark-doubao'].model,
+          mode: AI_PRESETS['ark-doubao'].mode,
+          api_key: cfg.api_key || '',
+        };
+      }
+      if (cfg && cfg.base_url && cfg.model) {
+        const all = { [cfg.provider || 'custom']: cfg };
+        aiSaveAll(all);
+        return all;
+      }
     }
-    if (cfg && cfg.base_url && cfg.model) return cfg;
-  } catch (e) { /* 忽略损坏的配置 */ }
+  } catch (e) { /* 忽略 */ }
+  return {};
+}
+function aiSaveAll(all) {
+  try { localStorage.setItem(AI_STORAGE_V2, JSON.stringify(all)); } catch (e) { /* 隐私模式等 */ }
+}
+function aiLoadConfig(provider) {
+  const all = aiLoadAll();
+  let want = provider || null;
+  if (!want) { try { want = localStorage.getItem(AI_PROVIDER_KEY); } catch (e) { want = null; } }
+  if (want && all[want]) return Object.assign({ provider: want }, all[want]);
+  const keys = Object.keys(all);
+  if (keys.length) return Object.assign({ provider: keys[0] }, all[keys[0]]);
   return null;
 }
-
 function aiSaveConfig(cfg) {
-  try { localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(cfg)); } catch (e) { /* 隐私模式等 */ }
+  const key = cfg.provider || 'custom';
+  const all = aiLoadAll();
+  all[key] = cfg;
+  aiSaveAll(all);
+  try { localStorage.setItem(AI_PROVIDER_KEY, key); } catch (e) { /* 忽略 */ }
 }
 
 function aiOpenDialog() {
@@ -9511,9 +9535,12 @@ document.querySelectorAll('#ai-providers button').forEach(b => {
     const provider = b.dataset.provider;
     const p = AI_PRESETS[provider];
     if (!p) return;
-    $('#ai-base-url').value = p.base_url;
-    if (p.model) $('#ai-model').value = p.model;
-    if (p.mode) $('#ai-mode').value = p.mode;
+    // 优先回填该服务商上次保存的配置，没有才用预设默认值
+    const saved = aiLoadConfig(provider) || {};
+    $('#ai-base-url').value = saved.base_url || p.base_url || '';
+    $('#ai-model').value = saved.model || p.model || '';
+    $('#ai-mode').value = saved.mode || p.mode || $('#ai-mode').value;
+    $('#ai-key').value = saved.api_key || '';
     $('#ai-test-result').textContent = p.keyHint ? `API Key 获取：${p.keyHint}` : '';
     $('#ai-test-result').className = '';
   });
