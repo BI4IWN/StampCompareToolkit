@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.15", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.16", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -376,24 +376,43 @@ fn ai_chat(cfg: &Value, prompt: &str, image: Option<&str>, max_tokens: u32) -> R
     if let Some(img) = image {
         content.push(json!({"type": "image_url", "image_url": {"url": prepare_image(img)}}));
     }
-    let body = json!({
+    // 关掉"思考模式"：deepseek-flash / glm-5.x 默认先写一大段 reasoning_content，
+    // 实测同一张章：开思考 8–60s（还常被 max_tokens 截断），关思考 **0.8s** 直接出 JSON。
+    let mut body = json!({
         "model": model,
         "messages": [{ "role": "user", "content": content }],
         "max_tokens": max_tokens,
-        "temperature": 0
+        "temperature": 0,
+        "thinking": { "type": "disabled" }
     });
-    let resp = ureq::post(&url)
-        .set("Authorization", &format!("Bearer {key}"))
-        .set("Content-Type", "application/json")
-        .timeout(std::time::Duration::from_secs(90))
-        .send_json(body);
+    let send = |b: &Value| {
+        ureq::post(&url)
+            .set("Authorization", &format!("Bearer {key}"))
+            .set("Content-Type", "application/json")
+            .timeout(std::time::Duration::from_secs(120))
+            .send_json(b.clone())
+    };
+    let resp = match send(&body) {
+        Ok(r) => Ok(r),
+        Err(ureq::Error::Status(code, r)) => {
+            let text = r.into_string().unwrap_or_default();
+            // 不认 thinking 字段的服务商：去掉该字段重试一次
+            if code == 400 && (text.contains("thinking") || text.contains("unknown") || text.contains("Unknown")) {
+                if let Some(o) = body.as_object_mut() { o.remove("thinking"); }
+                send(&body)
+            } else {
+                return Err(format!("HTTP {code}：{}", text.chars().take(180).collect::<String>()));
+            }
+        }
+        Err(e) => Err(e),
+    };
     match resp {
         Ok(r) => r.into_json::<Value>().map_err(|e| format!("响应解析失败：{e}")),
         Err(ureq::Error::Status(code, r)) => {
             let text = r.into_string().unwrap_or_default();
             Err(format!("HTTP {code}：{}", text.chars().take(180).collect::<String>()))
         }
-        Err(e) => Err(format!("网络错误：{e}")),
+        Err(ureq::Error::Transport(e)) => Err(format!("网络错误：{e}")),
     }
 }
 
@@ -586,7 +605,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                 "下面是从印章图片上 OCR 出来的粗文字（可能有错字、乱序、缺字）：\n---\n{}\n---\n请清洗并结构化：机构名称取最完整的一家（去掉零散单字、编号、日期），编码取 8~13 位纯数字（没有就空），类型从 公司/银行/机关/委员会/事务所/其他 里选一个。只返回 JSON：{{\"company\":\"\",\"code\":\"\",\"type\":\"\"}}",
                 body_text
             );
-            ai_chat(&cfg, &prompt, None, 8192)
+            ai_chat(&cfg, &prompt, None, 2048)
         }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
         return match out {
             Ok(v) => {
@@ -614,7 +633,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
         let prompt = "这张图是已经做过预处理的印章章面：背景已去掉（只剩墨迹）、外圈已归一为正方形、方向已尽量摆正。请沿外圈从正上方开始顺时针读机构全称，读下缘的编码（8~13 位纯数字，没有就留空），再判断类型（公司/银行/机关/委员会/事务所/其他）；被遮挡的字按机构命名常识补全。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}（不要输出任何解释）。";
-        ai_chat(&cfg, prompt, Some(&image), 8192)
+        ai_chat(&cfg, prompt, Some(&image), 2048)
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => {
