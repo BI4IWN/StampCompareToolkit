@@ -4490,13 +4490,11 @@ function processStamp(img, target) {
   const extractedCircular = state[target].circular;
   const detection = state[target].candidates;
 
-  // 只加载了一枚时，操作目标自动指向已加载的印章（画布/手柄立即可用）
+  // 操作目标固定回到「参考章」：连续粘两枚时，不因为最后粘的是待验章就把手柄抢走
   const other = target === 'ref' ? 'test' : 'ref';
-  if (!state[other].extracted) {
-    state.target = target;
-    document.querySelectorAll('#target-group .mode-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.target === target));
-  }
+  state.target = 'ref';
+  document.querySelectorAll('#target-group .mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.target === 'ref'));
 
   // 绘制提取结果到小画布
   drawExtractedPreview(target, extractedCanvas);
@@ -5564,6 +5562,8 @@ function dewarpExtracted(target, canvasEl) {
   if (!(first.a >= side * 0.12 && first.a <= side * 0.65)) return null;
   if (!(first.b >= first.a * 0.62)) return null;
   if (inkFillRatio(canvasEl, first) > 0.55) return null;   // 整块内容被当成章：不动
+  // 轴比已经接近 1（≥0.93）：本来就是圆，再拉一次只会因 theta 估计误差把章拧歪
+  if (first.ratio >= 0.93) return null;
   // 已经足够圆：只做"居中 + 归一尺寸"，不再变形（保证两枚章同尺度，便于边缘对齐）
   // 一轮仿射往往校正不彻底（粗边环 + 轻微透视），迭代到轴比 ≥0.988 或 3 轮
   // 先用小图搜索更稳的 (theta, ratio)，避免把章拧歪
@@ -9749,11 +9749,34 @@ async function runStampOCR(target) {
   // 组装请求体：携带当前墨色选择（预设色 + 手工取色 hues）
   const spec = stampState.inkSpec || activeInkSpec(target);
   try {
+    // 「文本解析」模式下，先本地 OCR 出粗文字，再交给 AI 清洗结构：
+    // 文本模型收不到图片（发图会返回 200 但 content 为空），所以这条链路只发 text
+    let localText = '';
+    if (useAI && aiCfg.mode !== 'vision') {
+      try {
+        const lr = await fetch(OCR_SERVER + '/ocr', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: imgB64,
+            color: spec.presets.join(','),
+            hues: spec.hues || [],
+            excludes: spec.excludes || [],
+            exclude_colors: (spec.excludeColors || []).map(c => ({ hue: c.hue, sat: c.sat, val: c.val })),
+          }),
+          signal: controller.signal,
+        });
+        if (lr.ok) {
+          const ld = await lr.json();
+          localText = [ld.raw_text, ld.company, ld.code].filter(Boolean).join('\n').trim();
+        }
+      } catch (e) { /* 本地 OCR 失败就让 AI 自己读图 */ }
+    }
     const resp = await fetch(OCR_SERVER + (useAI ? '/ai-ocr' : '/ocr'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         image: imgB64,
+        text: localText,
         color: spec.presets.join(','),
         hues: spec.hues || [],
         excludes: spec.excludes || [],
