@@ -9986,8 +9986,11 @@ $('#btn-ocr').addEventListener('click', async () => {
 
   showStatus('正在识别印章文字...');
 
-  if (hasRef) await runStampOCR('ref');
-  if (hasTest) await runStampOCR('test');
+  // 两枚章并行识别：AI 单次 1s（关思考）到 8s（开思考）不等，串行会让总时长翻倍
+  await Promise.all([
+    hasRef ? runStampOCR('ref') : Promise.resolve(null),
+    hasTest ? runStampOCR('test') : Promise.resolve(null),
+  ]);
 
   showStatus('文字识别完成');
 });
