@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.13", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.14", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -303,9 +303,9 @@ fn main() {
                     .route("/ocr", post(ocr))
                     .route("/diag", post(diag))
                     .route("/ai/test", post(api_ai_test))
-                    .route("/ai/stamp", post(api_ai_stamp))
-                    .route("/ai-ocr", post(api_ai_ocr))
-                    .route("/ai/ocr", post(api_ai_ocr))
+                    .route("/ai/stamp", post(api_ai_stamp).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
+                    .route("/ai-ocr", post(api_ai_ocr).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
+                    .route("/ai/ocr", post(api_ai_ocr).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)))
                     .route("/diagp", get(diagp))
                     .route("/diagimg", get(diagimg))
                     .route("/settings", get(api_settings_get).post(api_settings_set))
@@ -420,10 +420,14 @@ fn prepare_image_raw(b64: &str) -> (String, String) {
 }
 
 fn text_of(v: &Value) -> String {
-    if let Some(t) = v.get("choices").and_then(|c| c.get(0))
-        .and_then(|c| c.get("message")).and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str()) {
-        return t.to_string();
+    if let Some(m) = v.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("message")) {
+        // 推理型模型（deepseek-flash / glm-5.x）可能把内容全放在 reasoning_content，
+        // 而 content 为空——这时绝不能当成"模型什么都没说"
+        let content = m.get("content").and_then(|c| c.as_str()).unwrap_or("").trim().to_string();
+        if !content.is_empty() { return content; }
+        if let Some(r) = m.get("reasoning_content").and_then(|c| c.as_str()) {
+            if !r.trim().is_empty() { return r.to_string(); }
+        }
     }
     // Anthropic: {"content":[{"type":"text","text":"…"}]}
     if let Some(arr) = v.get("content").and_then(|c| c.as_array()) {
@@ -582,7 +586,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                 "下面是从印章图片上 OCR 出来的粗文字（可能有错字、乱序、缺字）：\n---\n{}\n---\n请清洗并结构化：机构名称取最完整的一家（去掉零散单字、编号、日期），编码取 8~13 位纯数字（没有就空），类型从 公司/银行/机关/委员会/事务所/其他 里选一个。只返回 JSON：{{\"company\":\"\",\"code\":\"\",\"type\":\"\"}}",
                 body_text
             );
-            ai_chat(&cfg, &prompt, None, 400)
+            ai_chat(&cfg, &prompt, None, 4096)
         }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
         return match out {
             Ok(v) => {
@@ -610,7 +614,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
         let prompt = "这张图是已经做过预处理的印章章面：背景已去掉（只剩墨迹）、外圈已归一为正方形、方向已尽量摆正。请沿外圈从正上方开始顺时针读机构全称，读下缘的编码（8~13 位纯数字，没有就留空），再判断类型（公司/银行/机关/委员会/事务所/其他）；被遮挡的字按机构命名常识补全。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}（不要输出任何解释）。";
-        ai_chat(&cfg, prompt, Some(&image), 400)
+        ai_chat(&cfg, prompt, Some(&image), 4096)
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => {
@@ -626,7 +630,8 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                     }
                 })),
                 None => {
-                    log_ai("ocr", &cfg_ref, &format!("no-json raw: {}", text.chars().take(400).collect::<String>()));
+                    let fr = v.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("finish_reason")).and_then(|x| x.as_str()).unwrap_or("");
+                    log_ai("ocr", &cfg_ref, &format!("no-json finish={} raw: {}", fr, text.chars().take(400).collect::<String>()));
                     Json(json!({"success": false, "error": "AI 未返回可解析的 JSON", "raw": text}))
                 }
             }
