@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.14", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.15", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -586,7 +586,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
                 "下面是从印章图片上 OCR 出来的粗文字（可能有错字、乱序、缺字）：\n---\n{}\n---\n请清洗并结构化：机构名称取最完整的一家（去掉零散单字、编号、日期），编码取 8~13 位纯数字（没有就空），类型从 公司/银行/机关/委员会/事务所/其他 里选一个。只返回 JSON：{{\"company\":\"\",\"code\":\"\",\"type\":\"\"}}",
                 body_text
             );
-            ai_chat(&cfg, &prompt, None, 4096)
+            ai_chat(&cfg, &prompt, None, 8192)
         }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
         return match out {
             Ok(v) => {
@@ -614,7 +614,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
         let prompt = "这张图是已经做过预处理的印章章面：背景已去掉（只剩墨迹）、外圈已归一为正方形、方向已尽量摆正。请沿外圈从正上方开始顺时针读机构全称，读下缘的编码（8~13 位纯数字，没有就留空），再判断类型（公司/银行/机关/委员会/事务所/其他）；被遮挡的字按机构命名常识补全。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}（不要输出任何解释）。";
-        ai_chat(&cfg, prompt, Some(&image), 4096)
+        ai_chat(&cfg, prompt, Some(&image), 8192)
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
         Ok(v) => {
