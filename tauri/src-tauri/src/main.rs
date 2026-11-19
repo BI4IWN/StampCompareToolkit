@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.11", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.12", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -609,7 +609,7 @@ async fn api_ai_ocr(Json(body): Json<Value>) -> Json<Value> {
     let cfg_ref = cfg.clone();
     let model_name = cfg.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let out = tokio::task::spawn_blocking(move || {
-        let prompt = "读这枚印章。图片里的印章常见倾斜/旋转、可能上下颠倒或横躺，请先定朝向：沿圆周试读文字，必要时把图片旋转 0/90/180/270 到文字正立的角度再读；然后沿圆周读机构名称（从正上方开始顺时针），读下缘的编码（纯数字，常见 8~13 位），并判断印章类型（公司/银行/机关/委员会/事务所/其他）。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}";
+        let prompt = "这张图是已经做过预处理的印章章面：背景已去掉（只剩墨迹）、外圈已归一为正方形、方向已尽量摆正。请沿外圈从正上方开始顺时针读机构全称，读下缘的编码（8~13 位纯数字，没有就留空），再判断类型（公司/银行/机关/委员会/事务所/其他）；被遮挡的字按机构命名常识补全。只返回 JSON：{\"company\":\"\",\"code\":\"\",\"type\":\"\"}（不要输出任何解释）。";
         ai_chat(&cfg, prompt, Some(&image), 400)
     }).await.unwrap_or_else(|e| Err(format!("线程错误：{e}")));
     match out {
