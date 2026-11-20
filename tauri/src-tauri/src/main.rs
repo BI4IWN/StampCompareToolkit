@@ -214,7 +214,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "0.4.28", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "0.4.29", "ocr": true, "engine": "rust" }))
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {

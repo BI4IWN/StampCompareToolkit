@@ -186,11 +186,35 @@ pub fn lib_save(body: &Value) -> Value {
     json!({ "ok": true, "id": id })
 }
 
+/// 若条目缺 savedAt（老数据/手改坏了），用文件的创建时间兜底；改了就写回索引。
+fn backfill_saved_at(dir: &PathBuf, mut idx: Value) -> Value {
+    let Some(list) = idx["seals"].as_array_mut() else { return idx };
+    let mut changed = false;
+    for seal in list.iter_mut() {
+        let cur = seal.get("savedAt").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let ok = !cur.is_empty() && (cur.chars().all(|c| c.is_ascii_digit()) || cur.contains('T'));
+        if ok { continue; }
+        let file = seal.get("file").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if file.is_empty() { continue; }
+        let path = dir.join(&file);
+        let Ok(meta) = fs::metadata(&path) else { continue };
+        // 优先创建时间（macOS/Windows 有），退回修改时间
+        let when = meta.created().or_else(|_| meta.modified()).ok();
+        if let Some(t) = when {
+            seal["savedAt"] = json!(chrono_like(t));
+            changed = true;
+        }
+    }
+    if changed { let _ = write_index(dir, &idx); }
+    idx
+}
+
 pub fn lib_list() -> Value {
     let dir = PathBuf::from(load_settings().lib_path);
     let _ = fs::create_dir_all(&dir);
     sync_index(&dir);
-    read_index(&dir)["seals"].clone()
+    let idx = backfill_saved_at(&dir, read_index(&dir));
+    idx["seals"].clone()
 }
 
 pub fn lib_search(q: &str) -> Value {

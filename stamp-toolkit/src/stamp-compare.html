@@ -2945,6 +2945,7 @@
       <div class="spacer"></div>
       <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）">⚡ 自动对齐</button>
       <button class="btn" id="btn-opt" title="优化提取（抑制晕染）：开启后按「深×艳」判墨，适合灰底扫描件；淡章建议关闭">优化提取</button>
+      <button class="btn" id="btn-dewarp" title="圆章校正：把拍照/扫描造成的椭圆压扁还原成正圆（自动对齐与比对都基于校正后的印章）">圆章校正</button>
             <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
       <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
       <button class="btn" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出</button>
@@ -2958,9 +2959,6 @@
       <div class="toolbar-engine-row">
         <span class="toolbar-engine-label">本地能力</span>
         <button class="btn" type="button" id="menu-engine">识别引擎…</button>
-        <label class="dt-inline-check" title="把拍照/扫描造成的椭圆压扁还原成正圆（自动对齐与比对都基于校正后的印章）">
-          <input type="checkbox" id="dewarp-toggle"> 圆章校正
-        </label>
       </div>
       <div class="toolbar-row">
         <label>旋转</label>
@@ -3354,18 +3352,30 @@ if (extractedStrip && toolbarAdvanced && extractedStrip.parentNode !== toolbarAd
 }
 
 // 圆章校正开关：默认开启，设置存 localStorage；切换后重算两枚印章
+function dewarpBtnSync() {
+  const b = document.getElementById('btn-dewarp');
+  if (!b) return;
+  const on = dewarpEnabled();
+  b.classList.toggle('active', on);
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.textContent = on ? '圆章校正 · 开' : '圆章校正 · 关';
+}
+
 function initDewarpToggle() {
-  const box = document.getElementById('dewarp-toggle');
-  if (!box) return;
-  box.checked = dewarpEnabled();
-  box.addEventListener('change', () => {
-    try { localStorage.setItem('stamp.dewarp', box.checked ? 'on' : 'off'); } catch (e) {}
+  dewarpBtnSync();
+  const b = document.getElementById('btn-dewarp');
+  if (!b) return;
+  b.addEventListener('click', () => {
+    const next = !dewarpEnabled();
+    try { localStorage.setItem('stamp.dewarp', next ? 'on' : 'off'); } catch (e) {}
+    dewarpBtnSync();
+    // 关掉就把已做的校正退回原始提取；打开就重新校正
     for (const t of ['ref', 'test']) {
       const st = state[t];
-      if (st.original) { st._baseKey = null; recomputeExtracted(t); }
+      if (st && st.original) { st._baseKey = null; recomputeExtracted(t); }
     }
     scheduleRender();
-    showStatus(box.checked ? '已开启圆章校正：椭圆的拍照/扫描变形会先还原成正圆再比对' : '已关闭圆章校正：按原图像素直接比对');
+    showStatus(next ? '已开启圆章校正：椭圆的拍照/扫描变形会先还原成正圆再比对' : '已关闭圆章校正：按原图像素直接比对');
   });
 }
 
