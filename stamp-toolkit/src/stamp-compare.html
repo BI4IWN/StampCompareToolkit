@@ -2019,10 +2019,31 @@
   /* 取色放大镜：跟随鼠标的圆形放大镜，显示光标处 24×24 像素与颜色值 */
   .ov-loupe {
     position: fixed; z-index: 40; width: 132px; pointer-events: none;
-    filter: drop-shadow(0 6px 18px rgba(0,0,0,0.28));
+    /* 不用 filter: drop-shadow —— 每帧移动的元素上跑模糊滤镜在 WebView2 上极贵 */
     transition: opacity .08s linear;
+    will-change: transform;
   }
   .ov-loupe[hidden] { display: none; }
+  /* 放大镜本体：CSS background 走 GPU 合成，每帧只改 background-position，不再 drawImage */
+  .ov-loupe-img {
+    width: 132px; height: 132px; border-radius: 50%; overflow: hidden;
+    border: 2px solid #fff; box-sizing: border-box;
+    background-color: #fff; background-repeat: no-repeat;
+    image-rendering: pixelated;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.18) inset, 0 6px 18px rgba(0,0,0,0.28);
+    position: relative;
+  }
+  .ov-loupe-img::before,
+  .ov-loupe-img::after {
+    content: ''; position: absolute; background: rgba(0,0,0,.45); pointer-events: none;
+  }
+  .ov-loupe-img::before { left: 50%; top: 0; width: 1px; height: 100%; }
+  .ov-loupe-img::after { top: 50%; left: 0; height: 1px; width: 100%; }
+  .ov-loupe-img .loupe-dot {
+    position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    border: 2px solid #c7483a; border-radius: 50%; box-sizing: border-box;
+  }
+  .ov-loupe canvas[hidden] { display: none; }
   .ov-loupe canvas {
     width: 132px; height: 132px; display: block; border-radius: 50%;
     border: 2px solid #fff; background: #fff;
@@ -3141,7 +3162,8 @@
       <button type="button" class="ov-close" id="ov-close" aria-label="关闭">✕</button>
     </div>
     <div class="ov-loupe" id="ov-loupe" hidden>
-      <canvas id="ov-loupe-canvas" width="132" height="132"></canvas>
+      <div class="ov-loupe-img" id="ov-loupe-img"><i class="loupe-dot"></i></div>
+      <canvas id="ov-loupe-canvas" width="132" height="132" hidden></canvas>
       <div class="ov-loupe-meta"><span id="ov-loupe-hex">#------</span><span id="ov-loupe-hint">点击取色</span></div>
     </div>
     <div class="ov-stage" id="ov-stage">
@@ -6923,6 +6945,7 @@ function ovLoupeInit() {
   if (OV_LOUPE.el) return;
   OV_LOUPE.el = document.getElementById('ov-loupe');
   OV_LOUPE.canvas = document.getElementById('ov-loupe-canvas');
+  OV_LOUPE.img = document.getElementById('ov-loupe-img');
   OV_LOUPE.hex = document.getElementById('ov-loupe-hex');
   OV_LOUPE.hint = document.getElementById('ov-loupe-hint');
 }
@@ -6954,6 +6977,21 @@ function ovLoupeTarget(clientX, clientY) {
   return { src, ix, iy, tag: 'original' };
 }
 
+// 放大镜用的原图 dataURL：每张图只生成一次（CSS background 走 GPU）
+const _loupeUrlCache = new WeakMap();
+function loupeImageUrl(src) {
+  try {
+    if (!src) return null;
+    const hit = _loupeUrlCache.get(src);
+    if (hit !== undefined) return hit;
+    let url = null;
+    if (src.tagName === 'IMG' && src.src && src.src.startsWith('data:')) url = src.src;
+    else if (src.toDataURL) url = src.toDataURL('image/png');
+    _loupeUrlCache.set(src, url);
+    return url;
+  } catch (e) { return null; }
+}
+
 function ovLoupeMove(clientX, clientY, exclude) {
   ovLoupeInit();
   if (!OV_LOUPE.el || OV.mode !== 'pick') return;
@@ -6964,7 +7002,20 @@ function ovLoupeMove(clientX, clientY, exclude) {
   const S = OV_LOUPE.size, Z = OV_LOUPE.zoom;
   const span = Math.max(8, Math.round(S / Z));         // 放大镜覆盖的源像素范围
   const half = Math.floor(span / 2);
+  const url = loupeImageUrl(t.src);
+  const box = OV_LOUPE.img;
+  if (url && box) {
+    // 只写 3 个样式：浏览器合成器搬位图，不再每帧 drawImage
+    if (OV_LOUPE._url !== url) {
+      box.style.backgroundImage = `url("${url}")`;
+      OV_LOUPE._url = url;
+      const w = t.src.naturalWidth || t.src.width, h = t.src.naturalHeight || t.src.height;
+      box.style.backgroundSize = `${w * Z}px ${h * Z}px`;
+    }
+    box.style.backgroundPosition = `${-(t.ix * Z - S / 2)}px ${-(t.iy * Z - S / 2)}px`;
+  }
   const c = OV_LOUPE.canvas.getContext('2d');
+  if (!url) {
   c.clearRect(0, 0, S, S);
   c.imageSmoothingEnabled = false;
   c.fillStyle = '#fff';
@@ -6980,6 +7031,7 @@ function ovLoupeMove(clientX, clientY, exclude) {
   c.strokeStyle = '#c7483a';
   c.lineWidth = 2;
   c.beginPath(); c.arc(S / 2, S / 2, Math.max(6, S / (2 * span)), 0, Math.PI * 2); c.stroke();
+  }
   // 读数
   let hex = '—';
   const px = pixelHexAt(t.src, t.ix, t.iy);
@@ -6990,8 +7042,9 @@ function ovLoupeMove(clientX, clientY, exclude) {
   let left = clientX + pad, top = clientY + pad;
   if (left + S + 8 > window.innerWidth) left = clientX - S - pad;
   if (top + S + 26 > window.innerHeight) top = clientY - S - 26;
-  OV_LOUPE.el.style.left = Math.max(8, left) + 'px';
-  OV_LOUPE.el.style.top = Math.max(8, top) + 'px';
+  OV_LOUPE.el.style.left = '0px';
+  OV_LOUPE.el.style.top = '0px';
+  OV_LOUPE.el.style.transform = `translate3d(${Math.round(Math.max(8, left))}px, ${Math.round(Math.max(8, top))}px, 0)`;
   OV_LOUPE.el.hidden = false;
 }
 
