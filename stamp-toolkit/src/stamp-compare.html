@@ -2944,7 +2944,8 @@
       </div>
       <div class="spacer"></div>
       <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）">⚡ 自动对齐</button>
-      <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
+      <button class="tool-btn" id="btn-opt" title="优化提取：用「深×艳」判定墨量，抑制晕染（关闭则用旧的红度判定）">优化提取</button>
+            <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
       <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
       <button class="btn" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出</button>
       <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码">全部识别</button>
@@ -4073,7 +4074,7 @@ function extractStamp(canvas, region, inkSpec) {
     }
   }
   // 红墨分数 (1-V)·S 的全局定标：用于红带 alpha（不依赖是否触发 redGate）
-  let redScoreCut = 0;
+  let redScoreCut = 0, redScoreHi = 0;
   if (extractBands.includes(INK_BANDS.red)) {
     const sc = [];
     for (let y = 0; y < OUT; y += 3) {
@@ -4092,7 +4093,10 @@ function extractStamp(canvas, region, inkSpec) {
     }
     if (sc.length > 128) {
       sc.sort((a, b) => a - b);
-      redScoreCut = Math.max(12, Math.min(80, sc[Math.floor(sc.length * 0.55)]));
+      // 下界按 p50 自适应（淡章整体分数低，硬编码 12 会把笔画判成纸）
+      redScoreCut = Math.max(8, Math.min(60, sc[Math.floor(sc.length * 0.50)]));
+      // 上界按 p90 自适应：淡章的墨也就 20–40 分，用满量程归一化才不会只剩轮廓
+      redScoreHi = Math.max(redScoreCut * 1.9, Math.min(150, sc[Math.floor(sc.length * 0.90)]));
     }
   }
   // 红章晕染治理（0.4.24）：用"深×艳"的墨量分数 (1-V)·S 定 alpha，而不是单纯红度。
@@ -4241,8 +4245,9 @@ function extractStamp(canvas, region, inkSpec) {
             const mx2 = Math.max(rn2, gn2, bn2), mn2 = Math.min(rn2, gn2, bn2);
             const sat2 = mx2 > 0.004 ? (mx2 - mn2) / mx2 : 0;
             const sc2 = (1 - mx2) * sat2 * 255;
-            const conf3 = Math.max(0, Math.min(1, (sc2 - redScoreCut + 6) / Math.max(16, redScoreCut * 1.2)));
-            alpha = Math.round(smoothstep(0.12, 0.60, conf3) * 255);
+            const hi3 = redScoreHi || (redScoreCut * 1.9);
+            const conf3 = Math.max(0, Math.min(1, (sc2 - redScoreCut) / Math.max(12, hi3 - redScoreCut)));
+            if (state.optExtract !== false) alpha = Math.round(smoothstep(0.10, 0.85, conf3) * 255);
           }
           // 触发红度闸门时（灰底扫描件），alpha 跟着红度走：把 40–60 的淡红笔画救回来
           if (redGate && bestBand === INK_BANDS.red) {
@@ -5043,6 +5048,37 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
     if (st && st.bbox && !st._regionLocked) {
       st._regionLocked = true;
       st._lockedBBox = { ...st.bbox };
+    }
+  }
+  // 新加的是"提取"色：先清掉会把它一起剔掉的旧排除色（以最后操作为准）
+  let purgedExclude = 0;
+  if (!exclude) {
+    const tolNow = state.ink[target].pickTol || 0.14;
+    const hueWinNew = Math.min(22, 6 + tolNow * 40);
+    ink.customs = ink.customs.filter(c => {
+      if (!c.exclude || !c.on) return true;
+      const satPick = c.sat || 0;
+      let hit = false;
+      if (satPick > 0.18) {
+        if (s >= 0.15) {
+          let dh = Math.abs(h - (c.hue !== undefined ? c.hue : (c.h || 0)));
+          if (dh > 180) dh = 360 - dh;
+          if (dh <= hueWinNew) {
+            hit = satPick < 0.35
+              ? (!(s > satPick + 0.18) && Math.abs(v - (c.val || 0)) <= 0.30)
+              : true;
+          }
+        }
+      } else {
+        hit = Math.abs(v - (c.val || 0)) <= tolNow && s <= 0.28;
+      }
+      if (hit) purgedExclude++;
+      return !hit;
+    });
+    if (purgedExclude) {
+      renderInkPanel(target);
+      try { ovRenderColors(); } catch (e) {}
+      _lastInkNotice = `已用新提取色替换掉 ${purgedExclude} 个会把它剔除的旧排除色`;
     }
   }
   const crossIdx = ink.customs.findIndex(c => c.exclude !== !!exclude && c.set && c.set.some(q => (q[0]-r)**2 + (q[1]-g)**2 + (q[2]-b)**2 <= 10*10));
@@ -5862,9 +5898,10 @@ function recomputeExtracted(target) {
                 if (Math.abs(vNow - (c.val || 0)) > 0.30) continue;
               }
             } else {
-              // 灰色剔除：仍按亮度窗口（纸底/阴影这类只能靠亮度区分）
+              // 灰色剔除：按亮度窗口，但只对"接近中性"的像素生效
+              // （V 相近的深红笔画不该被灰剔除带走——"剔除后再提取彩色加不上"就出在这里）
               if (Math.abs(vNow - (c.val || 0)) > tolV) continue;
-              if (sNow > 0.45) continue;
+              if (sNow > 0.28) continue;
             }
             hit = true;
             break;
@@ -9033,6 +9070,25 @@ $('#btn-diff').addEventListener('click', () => {
   render();
 });
 
+document.getElementById('btn-opt').classList.toggle('active', !!state.optExtract);
+
+$('#btn-opt').addEventListener('click', async () => {
+  state.optExtract = !state.optExtract;
+  try { localStorage.setItem('stamp.optExtract', state.optExtract ? '1' : '0'); } catch (e) { /* ignore */ }
+  $('#btn-opt').classList.toggle('active', state.optExtract);
+  showStatus(state.optExtract ? '已开启优化提取（抑制晕染）' : '已关闭优化提取（旧红度判定）');
+  // 已加载的章立刻按新策略重算，不用重新粘贴
+  for (const t of ['ref', 'test']) {
+    const st = state[t];
+    if (!st || !st.original) continue;
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = st.original.toDataURL('image/png'); });
+      processStamp(img, t);
+    } catch (e) { /* ignore */ }
+  }
+});
+
 $('#btn-magnifier').addEventListener('click', () => {
   state.magnifierActive = !state.magnifierActive;
   $('#btn-magnifier').classList.toggle('active', state.magnifierActive);
@@ -9625,6 +9681,15 @@ state.recMode = (() => {
     const v = localStorage.getItem('stamp.recMode');
     return v === 'ai' || v === 'local' ? v : 'local';
   } catch (e) { return 'local'; }
+})();
+
+// 「优化提取」：用「深×艳」判墨量抑制晕染（默认开）。关掉则回到旧的红度判定，
+// 适合"扫描件本身颜色就淡、又被判定过严"的章。
+state.optExtract = (() => {
+  try {
+    const v = localStorage.getItem('stamp.optExtract');
+    return v === '1';      // 默认关：旧红度判定对淡章更稳；遇到晕染再手动开
+  } catch (e) { return false; }
 })();
 
 // AI 配置是否完整可用（地址、模型与密钥齐全）
