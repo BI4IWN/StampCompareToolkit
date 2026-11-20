@@ -2944,7 +2944,7 @@
       </div>
       <div class="spacer"></div>
       <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）">⚡ 自动对齐</button>
-      <button class="tool-btn" id="btn-opt" title="优化提取：用「深×艳」判定墨量，抑制晕染（关闭则用旧的红度判定）">优化提取</button>
+      <button class="btn" id="btn-opt" title="优化提取（抑制晕染）：开启后按「深×艳」判墨，适合灰底扫描件；淡章建议关闭">优化提取</button>
             <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
       <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
       <button class="btn" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出</button>
@@ -9070,12 +9070,20 @@ $('#btn-diff').addEventListener('click', () => {
   render();
 });
 
-document.getElementById('btn-opt').classList.toggle('active', !!state.optExtract);
+(() => {
+  const b = document.getElementById('btn-opt');
+  if (!b) return;
+  b.classList.toggle('active', !!state.optExtract);
+  b.setAttribute('aria-pressed', state.optExtract ? 'true' : 'false');
+  b.textContent = state.optExtract ? '优化提取 · 开' : '优化提取 · 关';
+})();
 
 $('#btn-opt').addEventListener('click', async () => {
   state.optExtract = !state.optExtract;
   try { localStorage.setItem('stamp.optExtract', state.optExtract ? '1' : '0'); } catch (e) { /* ignore */ }
   $('#btn-opt').classList.toggle('active', state.optExtract);
+  $('#btn-opt').setAttribute('aria-pressed', state.optExtract ? 'true' : 'false');
+  $('#btn-opt').textContent = state.optExtract ? '优化提取 · 开' : '优化提取 · 关';
   showStatus(state.optExtract ? '已开启优化提取（抑制晕染）' : '已关闭优化提取（旧红度判定）');
   // 已加载的章立刻按新策略重算，不用重新粘贴
   for (const t of ['ref', 'test']) {
