@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.17</title>
+<title>印章对比工具 v3.6.18</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -153,26 +153,26 @@
     overflow: hidden;
   }
 
-  /* ---- Header ---- */
+  /* ---- Header（U64：压到 52px，与工具栏同一节奏） ---- */
   header {
     position: relative;
-    text-align: center;
-    height: 64px;
-    min-height: 64px;
-    flex: 0 0 64px;
+    text-align: left;
+    height: 52px;
+    min-height: 52px;
+    flex: 0 0 52px;
     margin-bottom: 8px;
-    padding: 4px 0 2px;
+    padding: 0 2px;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    align-items: center;
   }
 
   header h1 {
-    font-size: 19px;
+    font-size: 15px;
     font-weight: 700;
-    letter-spacing: -0.2px;
+    letter-spacing: -0.1px;
     color: var(--text);
     line-height: 1.25;
+    white-space: nowrap;
   }
 
   #toolbar-save { flex: 0 0 auto; }
@@ -186,25 +186,22 @@
     border-radius: 7px;
   }
 
-  .hero-ver {
-    font-size: 11px;
-    font-weight: 400;
-    letter-spacing: 0.2px;
-    color: var(--text-secondary);
-    margin-left: 6px;
-    vertical-align: 2px;
+  @media (max-width: 1320px) {
+    #toolbar-save { gap: 2px; }
+    #toolbar-save .dt-btn { padding: 0 6px; font-size: 11.5px; }
   }
 
-  header p {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-top: 1px;
+  .hero-ver {
+    font-size: 10.5px;
+    font-weight: 400;
     letter-spacing: 0.2px;
-    line-height: 1.35;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    color: var(--text-tertiary);
+    margin-left: 6px;
+    vertical-align: 1px;
   }
+
+  /* 常驻提示已移入画布空态/状态栏，header 不再占第二行 */
+  header p { display: none; }
 
   .appearance-switch {
     position: static;
@@ -846,12 +843,12 @@
     margin-right: 6px;
   }
 
-  /* ---- Toolbar ---- */
+  /* ---- Toolbar（U64：目标 / 模式 / 查看 / 开关 / 识别 / 收尾 分组） ---- */
   .toolbar {
     background: var(--surface);
     backdrop-filter: var(--backdrop);
     -webkit-backdrop-filter: var(--backdrop);
-    border-radius: 12px;
+    border-radius: 10px;
     box-shadow: var(--shadow);
     border: 1px solid var(--border);
     height: 52px;
@@ -868,60 +865,166 @@
   .toolbar.visible {
     display: flex;
     align-items: center;
-    gap: 6px;
     flex-wrap: nowrap;
     overflow: visible;
   }
 
-  /* 按钮条单独横向滚动：浮层（⋯ 更多 / 墨色面板）不能被滚动容器裁掉 */
-  #toolbar-scroll {
+  .toolbar-main {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 8px;
     flex: 1 1 auto;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+    width: 100%;
   }
-  #toolbar-scroll::-webkit-scrollbar { display: none; }
-  #toolbar-scroll > * { flex: 0 0 auto; }
-  /* 「⋯ 更多」在窄窗口固定贴右，其余按钮从它下面滚过 */
-  #toolbar-more { flex: 0 0 auto; margin-left: 6px; }
-  .toolbar.visible.fade-right { mask-image: none; -webkit-mask-image: none; }
-  .toolbar.visible.fade-left { mask-image: linear-gradient(to left, #000 calc(100% - 26px), rgba(0,0,0,0.15)); -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 26px), rgba(0,0,0,0.15)); }
-  .toolbar.visible.fade-left.fade-right { mask-image: linear-gradient(to right, rgba(0,0,0,0.15), #000 26px, #000 calc(100% - 26px), rgba(0,0,0,0.15)); -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,0.15), #000 26px, #000 calc(100% - 26px), rgba(0,0,0,0.15)); }
-  #toolbar-scroll .mode-group,
-  #toolbar-scroll .btn,
-  #toolbar-scroll .mode-btn,
-  #toolbar-scroll label { flex: 0 0 auto; }
-  /* 开关类按钮紧凑一点，保证 1280 宽度下所有按钮（含「清空」）都在可视区内 */
-  #toolbar-scroll .btn { padding: 0 8px; }
-  #toolbar-scroll .btn-toggle { padding: 0 7px; font-size: 12px; }
-  /* 窄窗口（Windows 常见 1280）再压一档，确保「清空」不被挤出可视区 */
-  @media (max-width: 1360px) {
-    #toolbar-scroll { gap: 2px; }
-    #toolbar-scroll .btn { padding: 0 6px; font-size: 12px; }
-    #toolbar-scroll .mode-btn { padding: 0 8px; font-size: 12px; }
+
+  .tb-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 0;
   }
+
+  .tb-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    letter-spacing: 0.4px;
+    flex: 0 0 auto;
+  }
+
+  .tb-sep {
+    width: 1px;
+    height: 18px;
+    flex: 0 0 auto;
+    margin: 0 2px;
+    background: var(--border-strong);
+  }
+
+  .tb-spacer { flex: 1 1 auto; min-width: 8px; }
+
+  /* 开关类按钮：正式 switch（轨道 + 圆点），开启态用中性色，不用描边红 */
+  .tb-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 2px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  .tb-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .tb-switch-track {
+    position: relative;
+    width: 28px;
+    height: 16px;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface-muted);
+    background: color-mix(in srgb, var(--text) 9%, transparent);
+    transition: background .16s ease, border-color .16s ease;
+  }
+  .tb-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    transition: transform .16s ease, background .16s ease;
+  }
+  .tb-switch input:checked + .tb-switch-track {
+    background: var(--text);
+    border-color: var(--text);
+  }
+  .tb-switch input:checked + .tb-switch-track::after {
+    transform: translateX(12px);
+    background: var(--surface-solid);
+  }
+  .tb-switch input:checked ~ .tb-switch-label { color: var(--text); }
+  .tb-switch input:focus-visible + .tb-switch-track {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .toolbar .mode-group { height: 28px; }
+
+  .toolbar .btn,
+  .toolbar .mode-btn {
+    height: 28px;
+    line-height: 26px;
+    white-space: nowrap;
+  }
+
+  .toolbar .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
+
+  .toolbar .mode-btn {
+    height: 26px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .toolbar-main .btn-icon {
+    width: 28px;
+    padding: 0;
+    font-size: 14px;
+  }
+  .toolbar-advanced #btn-reset {
+    width: 28px;
+    padding: 0;
+    font-size: 14px;
+  }
+  .toolbar .btn-ico {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    line-height: 1;
+    opacity: .85;
+  }
+  .toolbar .btn-label { white-space: nowrap; }
+
+  /* 工具条内的状态按钮（差异高亮 / 放大镜等）用中性浅底，不抢红色 */
+  .toolbar .btn.active {
+    background: var(--surface-muted);
+    border-color: var(--border-strong);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
   .toolbar.visible .mode-btn { white-space: nowrap; }
 
-  .toolbar-row {
-    display: contents;
-  }
-
-  #toolbar > .toolbar-row {
-    min-width: max-content;
-  }
+  .toolbar-row { display: contents; }
 
   .toolbar label {
     font-size: 11px;
     font-weight: 600;
     color: var(--text-secondary);
     white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.4px;
     flex: none;
   }
 
@@ -929,7 +1032,7 @@
     display: flex;
     gap: 0;
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
+    border-radius: 8px;
     overflow: hidden;
     background: rgba(0,0,0,0.015);
   }
@@ -958,15 +1061,6 @@
   .mode-btn:hover:not(.active) {
     background: rgba(0,0,0,0.03);
     color: var(--text);
-  }
-
-  #target-group .mode-btn.active[data-target="ref"] {
-    background: #3d5468;
-    box-shadow: 0 1px 4px rgba(61,84,104,0.25);
-  }
-
-  #target-group .mode-btn.active[data-target="test"] {
-    background: var(--accent);
   }
 
   #axis-group .mode-btn {
@@ -1006,7 +1100,7 @@
     padding: 6px 12px;
     font-size: 12.5px;
     border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm);
+    border-radius: 7px;
     background: var(--surface-solid);
     color: var(--text);
     cursor: pointer;
@@ -1017,7 +1111,7 @@
 
   .btn:hover {
     background: var(--surface-hover);
-    border-color: rgba(0,0,0,0.14);
+    border-color: var(--border-strong);
     box-shadow: 0 2px 6px rgba(45,41,38,0.06);
   }
 
@@ -1034,16 +1128,23 @@
 
   .spacer { flex: 1 1 0; min-width: 0; }
 
-  .toolbar .btn,
-  .toolbar .mode-btn {
-    height: 34px;
-    line-height: 20px;
-    white-space: nowrap;
+  #toolbar-more { margin-left: 0; flex: 0 0 auto; }
+
+  @media (max-width: 1360px) {
+    .toolbar-main { gap: 6px; }
+    .tb-group { gap: 4px; }
+    .toolbar .btn { padding: 0 8px; }
+    .toolbar .mode-btn { padding: 0 9px; }
+    .tb-sep { margin: 0 1px; }
   }
 
-  #toolbar-more {
-    margin-left: 2px;
-    flex: none;
+  @media (max-width: 1240px) {
+    .tb-label { display: none; }
+  }
+
+  @media (max-width: 1100px) {
+    .toolbar .btn-label { display: none; }
+    .toolbar .btn { padding: 0 8px; }
   }
 
   .toolbar-advanced {
@@ -1056,7 +1157,7 @@
     overflow-y: auto;
     padding: 10px 12px;
     border: 1px solid var(--border-strong);
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--surface-solid);
     box-shadow: var(--shadow-dialog);
   }
@@ -1213,7 +1314,7 @@
     margin-bottom: 10px;
     padding: 12px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--surface);
     color: var(--text);
   }
@@ -1230,6 +1331,51 @@
     font-size: 12px;
     font-weight: 600;
     letter-spacing: .02em;
+  }
+
+  .inspector-verdict-empty {
+    margin: 2px 0 2px;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+
+  .inspector-verdict-body[hidden] { display: none; }
+
+  .inspector-formula {
+    margin-top: 9px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .inspector-formula summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+  }
+  .inspector-formula summary::-webkit-details-marker { display: none; }
+  .inspector-help-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    font-size: 9px;
+    line-height: 1;
+    color: var(--text-secondary);
+  }
+  .inspector-formula-body {
+    margin-top: 6px;
+    color: var(--text-tertiary);
+    font-size: 10.5px;
+    line-height: 1.55;
   }
 
   .inspector-score {
@@ -1291,6 +1437,8 @@
     background: var(--surface-muted);
     color: var(--text-secondary);
   }
+
+  .inspector-badge[hidden] { display: none; }
 
   .inspector-metric + .inspector-metric { margin-top: 7px; }
 
@@ -1449,8 +1597,11 @@
     padding-top: 8px;
     border-top: 1px solid var(--border);
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .inspector-engine-note[hidden] { display: none; }
@@ -1474,9 +1625,9 @@
   }
 
   #btn-inspector[aria-expanded="true"] {
-    border-color: var(--accent);
-    background: var(--accent-bg);
-    color: var(--accent-text);
+    border-color: var(--border-strong);
+    background: var(--surface-muted);
+    color: var(--text);
   }
 
   :root[data-theme="dark"] .inspector-badge.is-match {
@@ -1651,15 +1802,13 @@
     .paste-zone { min-height: 150px; }
     .toolbar.visible { gap: 6px; }
     .slider-group input[type="range"] { width: 80px; }
-    header { height: 92px; min-height: 92px; flex-basis: 92px; }
+    header { height: 52px; min-height: 52px; flex-basis: 52px; }
     .appearance-switch { margin-left: 0; }
     .comparison > .paste-row { grid-template-columns: 1fr; }
     .comparison > .paste-row .paste-zone { height: 128px; min-height: 128px; }
   }
 
   @media (max-width: 1100px) {
-    #toolbar > .toolbar-row > label { display: none; }
-    .toolbar .btn { padding-left: 9px; padding-right: 9px; }
     .mode-btn { padding-left: 9px; padding-right: 9px; }
   }
 
@@ -1680,6 +1829,7 @@
     }
 
     #btn-inspector { display: inline-flex; }
+    .app > header .header-row { padding-left: 52px; }
 
     #inspector {
       position: fixed;
@@ -1770,8 +1920,26 @@
   .header-row {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 10px;
+    width: 100%;
+    min-width: 0;
+  }
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .header-actions .dt-btn {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 9px;
+    font-size: 12px;
+    border-radius: 7px;
+    white-space: nowrap;
   }
   .product-mark {
     flex-shrink: 0;
@@ -1788,32 +1956,37 @@
     display: flex;
     align-items: center;
     gap: 0;
-    margin-left: 18px;
-    border: 1px solid var(--border-strong, #d8d4cf);
+    margin-left: 14px;
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
     overflow: hidden;
-    background: rgba(255,255,255,0.75);
+    background: var(--surface-solid);
+    flex: 0 0 auto;
   }
 
   .header-rec-label {
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-secondary, #666);
-    padding: 5px 8px 5px 10px;
-    letter-spacing: 0.5px;
-    background: rgba(0,0,0,0.03);
-    border-right: 1px solid var(--border, #e5e2de);
+    color: var(--text-secondary);
+    padding: 0 8px 0 10px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    letter-spacing: 0.4px;
+    background: var(--surface-muted);
+    border-right: 1px solid var(--border);
   }
 
   .header-rec-mode .mode-btn {
-    padding: 5px 14px;
+    height: 26px;
+    padding: 0 12px;
     font-size: 12px;
     font-weight: 600;
     border: none;
     background: transparent;
-    color: var(--text-secondary, #666);
+    color: var(--text-secondary);
     cursor: pointer;
-    border-right: 1px solid var(--border, #e5e2de);
+    border-right: 1px solid var(--border);
     transition: all 0.15s;
   }
 
@@ -1822,10 +1995,6 @@
   .header-rec-mode .mode-btn.active {
     background: var(--accent);
     color: #fff;
-  }
-
-  .header-rec-mode .mode-btn.active[data-rec="ai"] {
-    background: #3d5468;
   }
 
   /* 每枚印章的 AI 识别按钮（仅识别方式为 AI 时显示） */
@@ -1990,14 +2159,31 @@
   /* ---- 本地识别引擎 ---- */
   .dt-inline-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none; }
   .dt-inline-check input { width: 14px; height: 14px; accent-color: var(--accent-solid); }
+  .toolbar-advanced-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 8px;
+  }
+  .toolbar-advanced-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .toolbar-advanced-hint {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
   .toolbar-engine-row {
     display: flex !important;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
     margin: 0 0 10px;
     padding: 0 0 10px;
     border-bottom: 1px solid var(--border);
   }
+  .toolbar-engine-row .btn { height: 28px; padding: 0 10px; font-size: 12px; }
 
   .toolbar-engine-label {
     color: var(--text-secondary);
@@ -2071,7 +2257,7 @@
     display: flex; flex-direction: column;
     background: var(--surface-solid);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 10px;
     box-shadow: 0 24px 68px rgba(0,0,0,.28);
     overflow: hidden;
   }
@@ -2128,21 +2314,90 @@
     border: 1px solid var(--border); border-radius: 999px; padding: 3px 12px; white-space: nowrap;
     pointer-events: none;
   }
-  .ov-foot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
-  .ov-colors.has { flex: 1 0 100%; }
-  .ov-info { font-size: 11.5px; color: var(--text-secondary); flex: 1 1 auto; }
-  .ov-actions { display: none; gap: 8px; align-items: center; }
-  .ov-pickmode { display: none; gap: 2px; padding: 2px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); margin-right: 4px; }
-  .ov-pickmode button { border: 0; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 6px; cursor: pointer; }
-  .ov-pickmode button.active { background: var(--accent-solid); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
-  .origin-viewer[data-mode="pick"] .ov-pickmode { display: flex; }
-  .ov-tol { display: none; align-items: center; gap: 6px; margin-right: 4px; font-size: 11px; color: var(--text-secondary); }
-  .ov-tol input[type="range"] { width: 84px; accent-color: var(--accent); }
-  .ov-tol b { font-weight: 600; min-width: 30px; }
-  .ov-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .ov-foot {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .ov-foot-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-height: 28px;
+  }
+  .ov-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 64px; overflow-y: auto; scrollbar-width: thin; }
   .ov-colors:empty { display: none; }
-  .ov-colors { max-height: 92px; overflow-y: auto; scrollbar-width: thin; }
-  .ov-count { margin-left: auto; font: 10px/1 -apple-system, "SF Pro Text", "PingFang SC", sans-serif; color: var(--text-tertiary, #9aa0a6); font-variant-numeric: tabular-nums; }
+  .ov-info {
+    flex: 0 0 auto;
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ov-actions {
+    display: none;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .ov-group { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .ov-vsep { width: 1px; height: 18px; flex: 0 0 auto; background: var(--border-strong); }
+  .ov-spacer { flex: 1 1 12px; min-width: 4px; }
+  .ov-pickmode {
+    display: none;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 7px;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+  }
+  .ov-pickmode button {
+    height: 22px;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 0 11px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .ov-pickmode button.active {
+    background: var(--text);
+    color: var(--surface-solid);
+    box-shadow: none;
+  }
+  .origin-viewer[data-mode="pick"] .ov-pickmode { display: flex; }
+  .ov-tol {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .ov-tol select {
+    height: 26px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font: inherit;
+    font-size: 11px;
+    padding: 0 5px;
+  }
+  .ov-tol input[type="range"] { width: 84px; accent-color: var(--text-secondary); }
+  .ov-tol b { font-weight: 600; min-width: 30px; font-variant-numeric: tabular-nums; }
+  .ov-colors .ov-count { margin-left: auto; font: 10px/1 -apple-system, "SF Pro Text", "PingFang SC", sans-serif; color: var(--text-tertiary, #9aa0a6); font-variant-numeric: tabular-nums; }
   .ov-chip {
     display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px 0 5px;
     border: 1px solid var(--border); border-radius: 7px; background: var(--surface-solid);
@@ -2159,13 +2414,22 @@
   .ov-chip .del:hover { color: #c0392b; }
   .ov-colors .empty { font-size: 11px; color: var(--text-secondary); }
   .origin-viewer[data-mode="pick"] .ov-tol { display: flex; }
-  .ov-enh input[type="checkbox"] { accent-color: var(--accent); }
+  .ov-enh input[type="checkbox"] { accent-color: var(--text-secondary); }
   .ov-enh input[type="range"] { width: 74px; }
   .ov-enh b { min-width: 44px; text-align: right; }
 
   .origin-viewer[data-mode="crop"] .ov-actions,
-  .origin-viewer[data-mode="circle"] .ov-actions { display: flex; }
+  .origin-viewer[data-mode="circle"] .ov-actions,
   .origin-viewer[data-mode="pick"] .ov-actions { display: flex; }
+  .origin-viewer:not([data-mode="pick"]) .ov-mode-group,
+  .origin-viewer:not([data-mode="pick"]) .ov-params-group,
+  .origin-viewer:not([data-mode="pick"]) .ov-vsep { display: none; }
+  .origin-viewer .ov-actions .btn {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
   .origin-viewer .btn-primary {
     background: var(--accent-solid); border-color: var(--accent-solid); color: #fff;
   }
@@ -2743,20 +3007,19 @@
 <div class="app">
   <header>
     <div class="header-row">
-      <svg class="product-mark" width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具">
+      <svg class="product-mark" width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具">
         <circle cx="50" cy="50" r="46" fill="none" stroke="#c0392b" stroke-width="4"/>
         <circle cx="50" cy="50" r="38" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="4 3"/>
         <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
         <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.17">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.17</span></h1>
-      <div class="header-rec-mode" id="rec-mode-group" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
+      <h1 title="印章对比工具 v3.6.18">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.18</span></h1>
+      <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
-        <button class="mode-btn active" data-rec="local">本地</button>
-        <button class="mode-btn" data-rec="ai">AI</button>
+        <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
+        <button class="mode-btn" data-rec="ai" aria-pressed="false">AI</button>
       </div>
     </div>
-    <p>粘贴、选择或拖入两张印章图片，自动提取并对比</p>
     <button type="button" id="btn-inspector" aria-controls="inspector" aria-expanded="true">判定</button>
   </header>
 
@@ -2845,7 +3108,7 @@
       </div>
 
       <div class="ai-note" style="margin-top:4px">
-        保存配置后，在工具栏「识别」中选择 <b>AI</b> 即可使用 AI 提取；选择「本地」则始终使用 PaddleOCR（默认）。<br>
+        保存配置后，在顶部「识别」中选择 <b>AI</b> 即可使用 AI 提取；选择「本地」则始终使用 PaddleOCR（默认）。<br>
         <b>火山方舟（豆包视觉）</b>：约 3 秒返回，适合清晰印章；严重旋转或低质量图片建议更换更高能力的视觉模型。
       </div>
       <div id="ai-test-result"></div>
@@ -2961,36 +3224,64 @@
   </div>
 
   <div class="toolbar" id="toolbar">
-    <div class="toolbar-row">
-      <label>操作目标</label>
-      <div class="mode-group" id="target-group">
-        <button class="mode-btn" data-target="ref">参考章</button>
-        <button class="mode-btn active" data-target="test">待验章</button>
+    <div class="toolbar-main">
+      <div class="tb-group tb-target">
+        <span class="tb-label">操作目标</span>
+        <div class="mode-group" id="target-group" role="group" aria-label="操作目标">
+          <button class="mode-btn" data-target="ref">参考章</button>
+          <button class="mode-btn active" data-target="test">待验章</button>
+        </div>
       </div>
-      <div class="spacer"></div>
-      <label>对比模式</label>
-      <div class="mode-group">
-        <button class="mode-btn active" data-mode="overlay">叠加</button>
-        <button class="mode-btn" data-mode="slider">滑块</button>
-        <button class="mode-btn" data-mode="sidebyside">并排</button>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-group tb-mode">
+        <span class="tb-label">对比模式</span>
+        <div class="mode-group" id="compare-mode-group" role="group" aria-label="对比模式">
+          <button class="mode-btn active" data-mode="overlay">叠加</button>
+          <button class="mode-btn" data-mode="slider">滑块</button>
+          <button class="mode-btn" data-mode="sidebyside">并排</button>
+        </div>
       </div>
-      <div class="spacer"></div>
-      <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）">⚡ 自动对齐</button>
-      <button class="btn btn-toggle" id="btn-opt" title="优化提取（抑制晕染）：开启后按「深×艳」判墨，适合灰底扫描件；淡章建议关闭">优化提取</button>
-      <button class="btn btn-toggle" id="btn-dewarp" title="圆章校正：把拍照/扫描造成的椭圆压扁还原成正圆（自动对齐与比对都基于校正后的印章）">圆章校正</button>
-            <button class="btn" id="btn-diff" title="高亮差异区域">差异高亮</button>
-      <button class="btn" id="btn-magnifier" title="放大镜">🔍</button>
-      <button class="btn" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出</button>
-      <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码">全部识别</button>
-      <button class="btn" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）">🤖 AI</button>
-      <button class="btn" id="btn-origin" title="查看原图：放大检查、框选提取区域、直接点选墨色">🖼 原图</button>
-      <button class="btn" id="btn-clear" title="清空两枚印章与所有调整，开始新的比对（⌘⇧⌫）">🗑 清空</button>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-group tb-view">
+        <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）" aria-label="自动对齐"><span class="btn-ico" aria-hidden="true">⚡</span><span class="btn-label">自动对齐</span></button>
+        <button class="btn" id="btn-diff" title="高亮差异区域（快捷键 D）" aria-label="差异高亮"><span class="btn-ico" aria-hidden="true">◐</span><span class="btn-label">差异高亮</span></button>
+        <button class="btn btn-icon" id="btn-magnifier" aria-pressed="false" title="放大镜：悬停画布时放大细节；再次点击关闭" aria-label="放大镜"><span aria-hidden="true">⌕</span></button>
+        <button class="btn" id="btn-origin" title="查看原图：放大检查、框选提取区域、直接点选墨色" aria-label="原图"><span class="btn-ico" aria-hidden="true">▣</span><span class="btn-label">原图</span></button>
+      </div>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-group tb-switches">
+        <label class="tb-switch" title="优化提取（抑制晕染）：开启后按「深×艳」判墨，适合灰底扫描件；淡章建议关闭">
+          <input type="checkbox" id="btn-opt" role="switch" aria-label="优化提取">
+          <span class="tb-switch-track" aria-hidden="true"></span>
+          <span class="tb-switch-label">优化提取</span>
+        </label>
+        <label class="tb-switch" title="圆章校正：把拍照/扫描造成的椭圆压扁还原成正圆（自动对齐与比对都基于校正后的印章）">
+          <input type="checkbox" id="btn-dewarp" role="switch" aria-label="圆章校正">
+          <span class="tb-switch-track" aria-hidden="true"></span>
+          <span class="tb-switch-label">圆章校正</span>
+        </label>
+      </div>
+      <span class="tb-spacer" aria-hidden="true"></span>
+      <div class="tb-group tb-identify">
+        <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码" aria-label="全部识别"><span class="btn-ico" aria-hidden="true">◎</span><span class="btn-label">全部识别</span></button>
+      </div>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-group tb-end">
+        <button class="btn" id="btn-clear" title="清空两枚印章与所有调整，开始新的比对（⌘⇧⌫）" aria-label="清空"><span class="btn-ico" aria-hidden="true">🗑</span><span class="btn-label">清空</span></button>
+        <!-- 桌面版「存参考章/待验章」按钮由脚本注入到这里 -->
+        <button class="btn" type="button" id="toolbar-more" aria-expanded="false" aria-controls="toolbar-advanced">⋯ 更多</button>
+      </div>
     </div>
-    <button class="btn" type="button" id="toolbar-more" aria-expanded="false" aria-controls="toolbar-advanced">⋯ 更多</button>
     <div class="toolbar-advanced" id="toolbar-advanced" hidden>
+      <div class="toolbar-advanced-head">
+        <span class="toolbar-advanced-title">更多</span>
+        <span class="toolbar-advanced-hint">查看、导出与精细调整</span>
+      </div>
       <div class="toolbar-engine-row">
-        <span class="toolbar-engine-label">本地能力</span>
+        <span class="toolbar-engine-label">工具</span>
         <button class="btn" type="button" id="menu-engine">识别引擎…</button>
+        <button class="btn" type="button" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出 PNG</button>
+        <button class="btn" type="button" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）">AI 识别设置…</button>
       </div>
       <div class="toolbar-row">
         <label>旋转</label>
@@ -3046,29 +3337,35 @@
       <section class="inspector-card" aria-labelledby="inspector-verdict-title">
         <div class="inspector-card-title">
           <span id="inspector-verdict-title">判定</span>
-          <span class="inspector-badge is-neutral" id="inspector-grade">—</span>
+          <span class="inspector-badge is-neutral" id="inspector-grade" hidden>—</span>
         </div>
-        <div class="inspector-score">
-          <span>相似度</span>
-          <strong id="inspector-match">—</strong>
+        <p class="inspector-verdict-empty" id="inspector-verdict-empty">加载两枚印章并完成提取后，在这里显示判定</p>
+        <div class="inspector-verdict-body" id="inspector-verdict-body" hidden>
+          <div class="inspector-score">
+            <span>相似度</span>
+            <strong id="inspector-match">—</strong>
+          </div>
+          <div class="inspector-metric">
+            <div class="inspector-metric-label"><span>墨迹重合度</span><span id="inspector-match-caption">—</span></div>
+            <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-match-fill"></div></div>
+          </div>
+          <div class="inspector-metric">
+            <div class="inspector-metric-label"><span>文字指标</span><span id="inspector-text-val">—</span></div>
+            <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-text-fill"></div></div>
+          </div>
+          <div class="inspector-metric">
+            <div class="inspector-metric-label"><span>几何指标</span><span id="inspector-geom-val">—</span></div>
+            <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-geom-fill"></div></div>
+          </div>
+          <div class="inspector-metric">
+            <div class="inspector-metric-label"><span>编码指标</span><span id="inspector-code-val">—</span></div>
+            <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-code-fill"></div></div>
+          </div>
         </div>
-        <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>墨迹重合度</span><span id="inspector-match-caption">—</span></div>
-          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-match-fill"></div></div>
-        </div>
-        <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>文字指标</span><span id="inspector-text-val">—</span></div>
-          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-text-fill"></div></div>
-        </div>
-        <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>几何指标</span><span id="inspector-geom-val">—</span></div>
-          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-geom-fill"></div></div>
-        </div>
-        <div class="inspector-metric">
-          <div class="inspector-metric-label"><span>编码指标</span><span id="inspector-code-val">—</span></div>
-          <div class="inspector-metric-track"><div class="inspector-metric-fill" id="inspector-code-fill"></div></div>
-        </div>
-        <div class="inspector-footnote" id="inspector-metric-note">文字＝机构名相似度；几何＝椭圆轴比一致性；编码＝防伪码一致度（有一项缺数据时显示 —）</div>
+        <details class="inspector-formula">
+          <summary><span class="inspector-help-dot" aria-hidden="true">?</span>指标说明</summary>
+          <div class="inspector-formula-body">文字＝机构名相似度；几何＝椭圆轴比一致性；编码＝防伪码一致度（有一项缺数据时显示 —）。</div>
+        </details>
       </section>
 
       <section class="inspector-card" aria-labelledby="inspector-recognition-title">
@@ -3181,33 +3478,43 @@
     </div>
     <div class="ov-foot">
       <div class="ov-colors" id="ov-colors"></div>
-      <div class="ov-info" id="ov-info">滚轮缩放 · 拖动平移</div>
-      <div class="ov-actions" id="ov-actions">
-        <div class="ov-pickmode" id="ov-pickmode">
-          <button type="button" class="active" data-pick="add">提取</button>
-          <button type="button" data-pick="exclude">排除</button>
+      <div class="ov-foot-bar">
+        <div class="ov-info" id="ov-info">滚轮缩放 · 拖动平移</div>
+        <div class="ov-actions" id="ov-actions">
+          <div class="ov-group ov-mode-group">
+            <div class="ov-pickmode" id="ov-pickmode">
+              <button type="button" class="active" data-pick="add">提取</button>
+              <button type="button" data-pick="exclude">排除</button>
+            </div>
+            <label class="ov-tol" id="ov-match-wrap" title="匹配方式：色相＝按色相+彩度抓相邻深浅；精确RGB＝只认和所选颜色相近的像素">
+              <span>匹配</span>
+              <select id="ov-match">
+                <option value="hue">色相</option>
+                <option value="rgb">精确RGB</option>
+              </select>
+            </label>
+          </div>
+          <span class="ov-vsep" aria-hidden="true"></span>
+          <div class="ov-group ov-params-group">
+            <label class="ov-tol" id="ov-tol-wrap" title="剔除容差：越大越能把相邻的深浅笔画一起去掉">
+              <span>剔除容差</span>
+              <input type="range" id="ov-tol" min="4" max="40" step="1" value="14">
+              <b id="ov-tol-val">14%</b>
+            </label>
+            <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
+              <span>颜色加深</span>
+              <input type="checkbox" id="ov-enh-auto" checked>
+              <input type="range" id="ov-enh-thr" min="1" max="3" step="0.1" value="1" disabled>
+              <b id="ov-enh-val">自动</b>
+            </label>
+          </div>
+          <span class="ov-spacer" aria-hidden="true"></span>
+          <div class="ov-group ov-end-group">
+            <button type="button" class="btn" id="ov-reset" title="清除当前框选/取色标记，恢复自动定位">重置</button>
+            <button type="button" class="btn" id="ov-cancel">取消</button>
+            <button type="button" class="btn btn-primary" id="ov-apply">应用框选</button>
+          </div>
         </div>
-        <label class="ov-tol" id="ov-match-wrap" title="匹配方式：色相＝按色相+彩度抓相邻深浅；精确RGB＝只认和所选颜色相近的像素">
-          <span>匹配</span>
-          <select id="ov-match">
-            <option value="hue">色相</option>
-            <option value="rgb">精确RGB</option>
-          </select>
-        </label>
-        <label class="ov-tol" id="ov-tol-wrap" title="剔除容差：越大越能把相邻的深浅笔画一起去掉">
-          <span>剔除容差</span>
-          <input type="range" id="ov-tol" min="4" max="40" step="1" value="14">
-          <b id="ov-tol-val">14%</b>
-        </label>
-        <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
-          <span>颜色加深</span>
-          <input type="checkbox" id="ov-enh-auto" checked>
-          <input type="range" id="ov-enh-thr" min="1" max="3" step="0.1" value="1" disabled>
-          <b id="ov-enh-val">自动</b>
-        </label>
-        <button type="button" class="btn" id="ov-reset">重置框</button>
-        <button type="button" class="btn" id="ov-cancel">取消</button>
-        <button type="button" class="btn btn-primary" id="ov-apply">应用框选</button>
       </div>
     </div>
   </div>
@@ -3288,7 +3595,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.17';
+const APP_VERSION = '3.6.18';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -3360,22 +3667,6 @@ const magnifier = $('#magnifier');
 const magCanvas = $('#mag-canvas');
 const magCtx = magCanvas.getContext('2d');
 const statusBar = $('#status-bar');
-// 工具栏按钮移进独立滚动条容器，保持「更多」浮层不被横向滚动裁切
-(function wrapToolbarScroll() {
-  const tb = document.querySelector('#toolbar');
-  if (!tb || document.getElementById('toolbar-scroll')) return;
-  const sc = document.createElement('div');
-  sc.id = 'toolbar-scroll';
-  const keep = ['toolbar-more', 'toolbar-advanced'];
-  [...tb.children].forEach((el) => {
-    if (kit_keep(el)) return;
-    sc.appendChild(el);
-  });
-  function kit_keep(el) {
-    return keep.includes(el.id) || el.classList.contains('toolbar-advanced');
-  }
-  tb.insertBefore(sc, tb.firstChild);
-})();
 
 const kbdHints = $('#kbd-hints');
 const pasteRow = document.querySelector('.paste-row');
@@ -3396,17 +3687,16 @@ function dewarpBtnSync() {
   const b = document.getElementById('btn-dewarp');
   if (!b) return;
   const on = dewarpEnabled();
-  b.classList.toggle('active', on);
-  b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  b.textContent = on ? '圆章校正·开' : '圆章校正·关';
+  b.checked = on;
+  b.setAttribute('aria-checked', on ? 'true' : 'false');
 }
 
 function initDewarpToggle() {
   dewarpBtnSync();
   const b = document.getElementById('btn-dewarp');
   if (!b) return;
-  b.addEventListener('click', () => {
-    const next = !dewarpEnabled();
+  b.addEventListener('change', () => {
+    const next = b.checked;
     try { localStorage.setItem('stamp.dewarp', next ? 'on' : 'off'); } catch (e) {}
     dewarpBtnSync();
     // 关掉就把已做的校正退回原始提取；打开就重新校正
@@ -6267,11 +6557,11 @@ async function runAIStampExtract(target) {
   }
   const cfg = window._aiConfig;
   if (!aiReady()) {
-    showStatus('AI 未配置 — 请先点击「🤖 AI」完成配置（提取印章需要视觉模型）');
+    showStatus('AI 未配置 — 请在「更多 → AI 识别设置…」完成配置（提取印章需要视觉模型）');
     return;
   }
   if (cfg.mode !== 'vision') {
-    showStatus('AI 提取印章需要视觉模型（当前为文本解析模式）— 请在「🤖 AI」设置中切换为视觉识别模式');
+    showStatus('AI 提取印章需要视觉模型（当前为文本解析模式）— 请在「更多 → AI 识别设置…」中切换为视觉识别模式');
     return;
   }
 
@@ -7875,8 +8165,10 @@ function clearAllComparison() {
   state.pickTarget = null;
   state.pickingTarget = null;
   // 保留识别方式（本地 / AI），只把 UI 同步回去，避免"看起来是 AI、实际跑本地"
-  document.querySelectorAll('#rec-mode-group .mode-btn').forEach((x) =>
-    x.classList.toggle('active', x.dataset.rec === state.recMode));
+  document.querySelectorAll('#rec-mode-group .mode-btn').forEach((x) => {
+    x.classList.toggle('active', x.dataset.rec === state.recMode);
+    x.setAttribute('aria-pressed', x.dataset.rec === state.recMode ? 'true' : 'false');
+  });
   if (typeof updateAIButtonVisibility === 'function') updateAIButtonVisibility();
   ['ref', 'test'].forEach((t) => {
     const c = document.getElementById('ocr-' + t + '-company');
@@ -8147,7 +8439,12 @@ function updateInspector() {
   const matchEl = $('#inspector-match');
   const captionEl = $('#inspector-match-caption');
   const fillEl = $('#inspector-match-fill');
+  const verdictEmptyEl = $('#inspector-verdict-empty');
+  const verdictBodyEl = $('#inspector-verdict-body');
   if (!diff || !Number.isFinite(diff.matchPct)) {
+    if (verdictEmptyEl) verdictEmptyEl.hidden = false;
+    if (verdictBodyEl) verdictBodyEl.hidden = true;
+    gradeEl.hidden = true;
     gradeEl.textContent = '—';
     gradeEl.className = 'inspector-badge is-neutral';
     gradeEl.title = '';
@@ -8156,6 +8453,10 @@ function updateInspector() {
     fillEl.style.width = '0%';
     return;
   }
+
+  if (verdictEmptyEl) verdictEmptyEl.hidden = true;
+  if (verdictBodyEl) verdictBodyEl.hidden = false;
+  gradeEl.hidden = false;
 
   const pct = Math.max(0, Math.min(100, diff.matchPct));
   let grade = '不一致';
@@ -9300,23 +9601,24 @@ $('#sl-offset-y').addEventListener('input', (e) => {
 $('#btn-diff').addEventListener('click', () => {
   state.diffMode = !state.diffMode;
   $('#btn-diff').classList.toggle('active', state.diffMode);
+  $('#btn-diff').setAttribute('aria-pressed', state.diffMode ? 'true' : 'false');
   render();
 });
 
-(() => {
+function syncOptSwitch() {
   const b = document.getElementById('btn-opt');
   if (!b) return;
-  b.classList.toggle('active', !!state.optExtract);
-  b.setAttribute('aria-pressed', state.optExtract ? 'true' : 'false');
-  b.textContent = state.optExtract ? '优化提取·开' : '优化提取·关';
-})();
+  b.checked = !!state.optExtract;
+  b.setAttribute('aria-checked', state.optExtract ? 'true' : 'false');
+}
 
-$('#btn-opt').addEventListener('click', async () => {
-  state.optExtract = !state.optExtract;
+syncOptSwitch();
+
+$('#btn-opt').addEventListener('change', async () => {
+  const b = document.getElementById('btn-opt');
+  state.optExtract = b.checked;
   try { localStorage.setItem('stamp.optExtract', state.optExtract ? '1' : '0'); } catch (e) { /* ignore */ }
-  $('#btn-opt').classList.toggle('active', state.optExtract);
-  $('#btn-opt').setAttribute('aria-pressed', state.optExtract ? 'true' : 'false');
-  $('#btn-opt').textContent = state.optExtract ? '优化提取·开' : '优化提取·关';
+  syncOptSwitch();
   showStatus(state.optExtract ? '已开启优化提取（抑制晕染）' : '已关闭优化提取（旧红度判定）');
   // 已加载的章立刻按新策略重算，不用重新粘贴
   for (const t of ['ref', 'test']) {
@@ -9333,6 +9635,7 @@ $('#btn-opt').addEventListener('click', async () => {
 $('#btn-magnifier').addEventListener('click', () => {
   state.magnifierActive = !state.magnifierActive;
   $('#btn-magnifier').classList.toggle('active', state.magnifierActive);
+  $('#btn-magnifier').setAttribute('aria-pressed', state.magnifierActive ? 'true' : 'false');
   if (!state.magnifierActive) magnifier.style.display = 'none';
 });
 
@@ -9932,6 +10235,7 @@ state.optExtract = (() => {
     return v === '1';      // 默认关：旧红度判定对淡章更稳；遇到晕染再手动开
   } catch (e) { return false; }
 })();
+syncOptSwitch();
 
 // AI 配置是否完整可用（地址、模型与密钥齐全）
 function aiCfgReady(c) {
@@ -10046,8 +10350,14 @@ function aiUpdateButton() {
   // 识别方式按钮状态联动
   const aiBtn = document.querySelector('#rec-mode-group [data-rec="ai"]');
   const localBtn = document.querySelector('#rec-mode-group [data-rec="local"]');
-  if (aiBtn) aiBtn.classList.toggle('active', state.recMode === 'ai');
-  if (localBtn) localBtn.classList.toggle('active', state.recMode === 'local');
+  if (aiBtn) {
+    aiBtn.classList.toggle('active', state.recMode === 'ai');
+    aiBtn.setAttribute('aria-pressed', state.recMode === 'ai' ? 'true' : 'false');
+  }
+  if (localBtn) {
+    localBtn.classList.toggle('active', state.recMode === 'local');
+    localBtn.setAttribute('aria-pressed', state.recMode === 'local' ? 'true' : 'false');
+  }
   updateAIButtonVisibility();
 }
 
@@ -10074,8 +10384,10 @@ document.querySelectorAll('#rec-mode-group .mode-btn').forEach(b => {
     const rec = b.dataset.rec;
     state.recMode = rec;
     try { localStorage.setItem('stamp.recMode', rec); } catch (e) { /* ignore */ }
-    document.querySelectorAll('#rec-mode-group .mode-btn').forEach(x =>
-      x.classList.toggle('active', x === b));
+    document.querySelectorAll('#rec-mode-group .mode-btn').forEach(x => {
+      x.classList.toggle('active', x === b);
+      x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+    });
     updateAIButtonVisibility();
     if (rec === 'ai' && !aiReady()) {
       // 没配置也允许先切到 AI：直接打开配置面板，避免点了没反应
@@ -10171,7 +10483,7 @@ $('#ai-save-btn').addEventListener('click', () => {
   aiUpdateButton();
   $('#ai-dialog-overlay').classList.remove('visible');
   const label = (AI_PRESETS[cfg.provider] || {}).name || '自定义';
-  showStatus(`AI 配置已保存：${label} · ${cfg.model || ''} — 在工具栏「识别」中选择 AI 即可使用`);
+  showStatus(`AI 配置已保存：${label} · ${cfg.model || ''} — 在顶部「识别」中选择 AI 即可使用`);
   // AI 状态变化后重检服务（PaddleOCR 缺失时视觉模式可恢复识别按钮可用）
   if (window._retryOCRConnection) window._retryOCRConnection();
 });
@@ -10337,8 +10649,8 @@ async function runStampOCR(target) {
       $(`#ocr-${target}-company`).textContent = '未配置 AI';
       $(`#ocr-${target}-code`).textContent = '—';
       $(`#ocr-${target}-type`).textContent = '—';
-      statusEl.textContent = 'AI 识别未配置 — 请先点击「🤖 AI」完善配置';
-      showStatus('AI 识别未配置 — 请先点击「🤖 AI」完善配置');
+      statusEl.textContent = 'AI 识别未配置 — 请在「更多 → AI 识别设置…」完善配置';
+      showStatus('AI 识别未配置 — 请在「更多 → AI 识别设置…」完善配置');
       ocrBusyEnd(target);
     return null;
     }
@@ -10395,7 +10707,7 @@ async function runStampOCR(target) {
     if (state.recMode === 'ai') {
       // 选择了 AI 但配置不完整：提示并回退本地
       statusEl.textContent = 'AI 未配置完整，已回退本地 OCR...';
-      showStatus('AI 识别未配置完整 — 请点击「🤖 AI」完成配置，本次回退使用本地 PaddleOCR');
+      showStatus('AI 识别未配置完整 — 请在「更多 → AI 识别设置…」完成配置，本次回退使用本地 PaddleOCR');
     }
     fillEl.style.width = '30%';
     statusEl.textContent = 'PaddleOCR 识别中...';
@@ -11294,17 +11606,20 @@ statusBar.classList.add('visible');
     const active = ui.active;
     const state = ui.engine && ui.engine.state;
     if (active === 'rapidocr' && state === 'absent') {
-      recognitionNote.textContent = '本地视觉未安装 · 仅用 RapidOCR + 印章库匹配';
+      recognitionNote.textContent = '本地视觉未安装 · 已用 RapidOCR 兜底';
+      recognitionNote.title = '本地视觉模型未安装，识别回退到 RapidOCR + 印章库匹配；可在「更多 → 识别引擎…」或设置中安装。';
       recognitionNote.hidden = false;
       return;
     }
     if (active === ENGINE_ID && ui.fallback) {
       const reason = String(ui.fallback.vlmError || '').trim().slice(0, 60) || '未返回详细原因';
-      recognitionNote.textContent = `本地视觉降级 · 原因：${reason}`;
+      recognitionNote.textContent = `本地视觉降级 · ${reason}`;
+      recognitionNote.title = `本地视觉降级：${reason}`;
       recognitionNote.hidden = false;
       return;
     }
     recognitionNote.textContent = '';
+    recognitionNote.title = '';
     recognitionNote.hidden = true;
   }
 
@@ -11602,12 +11917,12 @@ statusBar.classList.add('visible');
       <table>
         <tr><th>你的情况</th><th>用这个</th><th>说明</th></tr>
         <tr><td>红章、白底、印得清楚</td><td>什么都不用点</td><td>自动提取已够用；直接「自动对齐」比对</td></tr>
-        <tr><td>灰底扫描件，字边一圈深、字心发灰（晕染）</td><td>工具栏「优化提取·开」</td><td>按「深×艳」判墨抑制边缘环；比完记得关回去</td></tr>
-        <tr><td>淡章/残缺章，笔画细、提出来断断续续</td><td>「优化提取·关」+ 取色</td><td>默认关就为这种章；开反而会把淡笔画切碎</td></tr>
+        <tr><td>灰底扫描件，字边一圈深、字心发灰（晕染）</td><td>工具栏「优化提取」开关（开）</td><td>按「深×艳」判墨抑制边缘环；比完记得关回去</td></tr>
+        <tr><td>淡章/残缺章，笔画细、提出来断断续续</td><td>「优化提取」开关（关）+ 取色</td><td>默认关就为这种章；开反而会把淡笔画切碎</td></tr>
         <tr><td>蓝/紫/黑灰/多色混盖</td><td>「原图 → 💧点选取色」</td><td>点几处不同深浅的笔画，多色叠加提取</td></tr>
         <tr><td>背景/表格线/签名被一起提取进来</td><td>取色面板切「⊘ 排除」再点掉</td><td>排除优先于提取；「剔除容差」调小更精准</td></tr>
         <tr><td>要与具体色值完全一致（专色/防伪油墨）</td><td>查看器底部「匹配 → 精确RGB」</td><td>只认容差内的欧氏距离；色相模式会连深浅一起抓</td></tr>
-        <tr><td>盖章压扁/拍歪，章呈椭圆</td><td>工具栏「圆章校正·开」（默认开）</td><td>拟合长轴拉回正圆；淡墨/残缺自动跳过，不会拧出波纹</td></tr>
+        <tr><td>盖章压扁/拍歪，章呈椭圆</td><td>工具栏「圆章校正」开关（默认开）</td><td>拟合长轴拉回正圆；淡墨/残缺自动跳过，不会拧出波纹</td></tr>
         <tr><td>只要章的某一块（避开正文压字）</td><td>「原图 → ⭕圆形裁切」</td><td>拖圆心 + 4 个轴端手柄贴合边缘，应用后归一为正圆</td></tr>
         <tr><td>差一点点对不上</td><td>滚轮旋转 + 滑块微调 + 「差异高亮」</td><td>画布内滚轮＝旋转，Ctrl/⌘+滚轮＝缩放</td></tr>
         <tr><td>想确认公司名/编码/类型</td><td>「🤖 AI 识别」或「全部识别」</td><td>本地 OCR 先出结果、AI 复核；AI 失败保留本地并写原因</td></tr>
@@ -11665,7 +11980,7 @@ statusBar.classList.add('visible');
       </table>
 
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.17</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.18</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
@@ -11962,7 +12277,7 @@ statusBar.classList.add('visible');
   // ---------- header 与印章卡片入口 ----------
   const headerRow = document.querySelector('.header-row');
   const dtNav = document.createElement('div');
-  dtNav.style.cssText = 'margin-left:auto; display:flex; gap:8px; align-items:center';
+  dtNav.className = 'header-actions';
   dtNav.innerHTML = [
     '<button class="dt-btn" id="dt-nav-capture" title="截图（快捷键可在设置中修改）">📷 截图</button>',
     '<button class="dt-btn" id="dt-nav-lib">📚 印章库</button>',
@@ -11992,12 +12307,16 @@ statusBar.classList.add('visible');
   const toolbarEl = document.querySelector('#toolbar');
   const toolbarSave = document.createElement('div');
   toolbarSave.id = 'toolbar-save';
-  toolbarSave.style.cssText = 'display:none; gap:6px; align-items:center; margin-left:6px';
+  toolbarSave.style.cssText = 'display:none; gap:4px; align-items:center; flex:0 0 auto';
   toolbarSave.innerHTML = '<button class="dt-btn" type="button" data-save="ref">💾 存参考章</button>'
     + '<button class="dt-btn" type="button" data-save="test">💾 存待验章</button>';
   if (toolbarEl) {
+    const endGroup = toolbarEl.querySelector('.tb-end');
     const more = toolbarEl.querySelector('#toolbar-more');
-    if (more) toolbarEl.insertBefore(toolbarSave, more); else toolbarEl.appendChild(toolbarSave);
+    if (endGroup && more) endGroup.insertBefore(toolbarSave, more);
+    else if (endGroup) endGroup.appendChild(toolbarSave);
+    else if (more) toolbarEl.insertBefore(toolbarSave, more);
+    else toolbarEl.appendChild(toolbarSave);
   }
   toolbarSave.querySelectorAll('button').forEach((b) => {
     b.addEventListener('click', () => saveToLib(b.dataset.save));
@@ -12006,7 +12325,7 @@ statusBar.classList.add('visible');
     const has = (t) => !!(state[t] && state[t].extracted);
     toolbarSave.style.display = (has('ref') || has('test')) ? 'flex' : 'none';
     // 窄窗口用图标按钮（Apple 风格：空间不足先收文字，不换行不截断）
-    const compact = window.innerWidth < 1180;
+    const compact = window.innerWidth < 1120;
     toolbarSave.querySelectorAll('button').forEach((b) => {
       const t = b.dataset.save;
       b.textContent = compact ? '💾' : (t === 'ref' ? '💾 存参考章' : '💾 存待验章');
@@ -12021,23 +12340,7 @@ statusBar.classList.add('visible');
   }
   window.__syncToolbarSave = syncToolbarSave;
   syncToolbarSave();
-  function updateToolbarFade() {
-    const tb = document.getElementById('toolbar-scroll');
-    if (!tb) return;
-    const max = tb.scrollWidth - tb.clientWidth;
-    tb.classList.toggle('fade-right', max > 2 && tb.scrollLeft < max - 2);
-    tb.classList.toggle('fade-left', tb.scrollLeft > 2);
-  }
-  window.__updateToolbarFade = updateToolbarFade;
-  const tbEl = document.querySelector('#toolbar');
-  if (tbEl) tbEl.addEventListener('scroll', updateToolbarFade, { passive: true });
-  window.addEventListener('resize', () => {
-    syncToolbarSave();
-    const tb = document.querySelector('#toolbar');
-    if (tb) tb.scrollLeft = 0;
-    updateToolbarFade();
-  });
-  updateToolbarFade();
+  window.addEventListener('resize', syncToolbarSave);
 
   // ---------- 印章库 ----------
   let libItems = [];
