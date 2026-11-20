@@ -5804,6 +5804,8 @@ function dewarpExtracted(target, canvasEl) {
 //   排除色 → 当前结果中匹配的像素 alpha 置 0
 // 返回 { added, removed } 像素计数
 function recomputeExtracted(target) {
+  // 提取结果变了 → 像素缓存作废（下次取色重新采样）
+  try { const st0 = state[target]; if (st0 && st0.extracted) invalidatePixels(st0.extracted); } catch (e) {}
   const st = state[target];
   if (st.circleCanvas) {            // 手动椭圆已归一：直接用它，不再自动提取
     st.extracted = st.circleCanvas;
@@ -6937,6 +6939,8 @@ function ovLoupeMove(clientX, clientY, exclude) {
   if (!OV_LOUPE.el || OV.mode !== 'pick') return;
   const t = ovLoupeTarget(clientX, clientY);
   if (!t) { ovLoupeHide(); return; }
+  if (OV_LOUPE._last && OV_LOUPE._last.src === t.src && OV_LOUPE._last.ix === t.ix && OV_LOUPE._last.iy === t.iy) return;
+  OV_LOUPE._last = { src: t.src, ix: t.ix, iy: t.iy };
   const S = OV_LOUPE.size, Z = OV_LOUPE.zoom;
   const span = Math.max(8, Math.round(S / Z));         // 放大镜覆盖的源像素范围
   const half = Math.floor(span / 2);
@@ -6958,10 +6962,8 @@ function ovLoupeMove(clientX, clientY, exclude) {
   c.beginPath(); c.arc(S / 2, S / 2, Math.max(6, S / (2 * span)), 0, Math.PI * 2); c.stroke();
   // 读数
   let hex = '—';
-  try {
-    const d = t.src.getContext('2d').getImageData(t.ix, t.iy, 1, 1).data;
-    hex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
-  } catch (e) { /* 跨域/未就绪 */ }
+  const px = pixelHexAt(t.src, t.ix, t.iy);
+  if (px) hex = '#' + [px.r, px.g, px.b].map(v => v.toString(16).padStart(2, '0')).join('');
   OV_LOUPE.hex.textContent = hex;
   OV_LOUPE.hint.textContent = exclude ? '点击剔除该颜色' : '点击提取该颜色';
   const pad = 18;
@@ -7432,24 +7434,55 @@ function previewCursorPos(zone, e) {
 // 提取色：在 7×7 邻域内取"最像墨迹"的像素（饱和度最高，排除白底/黑字），
 //         避免点击笔画间隙或抗锯齿边缘取到过浅的颜色导致"像没反应"
 // 排除色：取点击处 3×3 平均，保证取到用户指向的精确颜色
+// 像素缓存：同一个 <img>/<canvas> 只做一次 getImageData，之后直接读数组。
+// （取色时鼠标每动一下都读一次 GPU 回传，Windows 上会明显掉帧）
+const _PIXEL_CACHE = new WeakMap();
+function pixelsOf(el) {
+  if (!el) return null;
+  let rec = _PIXEL_CACHE.get(el);
+  const ver = el._pixVer || 0;
+  if (rec && rec.ver === ver && rec.w === el.naturalWidth || rec && rec.ver === ver && rec.w === el.width) return rec;
+  try {
+    const w = el.naturalWidth || el.width, h = el.naturalHeight || el.height;
+    if (!w || !h) return null;
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(el, 0, 0, w, h);
+    rec = { w, h, data: cx.getImageData(0, 0, w, h).data, ver };
+    _PIXEL_CACHE.set(el, rec);
+    return rec;
+  } catch (e) { return null; }
+}
+function pixelHexAt(el, x, y) {
+  const rec = pixelsOf(el);
+  if (!rec) return null;
+  if (x < 0 || y < 0 || x >= rec.w || y >= rec.h) return null;
+  const i = (y * rec.w + x) * 4;
+  return { r: rec.data[i], g: rec.data[i + 1], b: rec.data[i + 2], a: rec.data[i + 3] };
+}
+function invalidatePixels(el) { if (el) { el._pixVer = (el._pixVer || 0) + 1; _PIXEL_CACHE.delete(el); } }
+
 function samplePreviewColor(zone, e, wantSet) {
   const pos = previewCursorPos(zone, e);
   if (!pos) return null;
   const { img, nx, ny } = pos;
 
   const R = 3; // 7×7 邻域
+  const IW = img.naturalWidth, IH = img.naturalHeight;
   const sx = Math.max(0, nx - R), sy = Math.max(0, ny - R);
-  const ex = Math.min(img.naturalWidth - 1, nx + R), ey = Math.min(img.naturalHeight - 1, ny + R);
+  const ex = Math.min(IW - 1, nx + R), ey = Math.min(IH - 1, ny + R);
   const w = ex - sx + 1, h = ey - sy + 1;
-  _pickCanvas.width = w; _pickCanvas.height = h;
-  _pickCtx.drawImage(img, sx, sy, w, h, 0, 0, w, h);
-  const d = _pickCtx.getImageData(0, 0, w, h).data;
+  const rec = pixelsOf(img);
+  if (!rec) return null;
+  const d = rec.data;
+  const stride = rec.w;   // 缓存按整图宽度排布，邻域内用 stride 跳行
   // 基准色：点击处 3×3 均值（跳过近黑/近白像素，抗噪）
   let br = 0, bg = 0, bb = 0, bn = 0;
   const near = [];
   for (let yy = 0; yy < h; yy++) {
     for (let xx = 0; xx < w; xx++) {
-      const i = (yy * w + xx) * 4;
+      const i = ((sy + yy) * stride + (sx + xx)) * 4;
       const r = d[i], g = d[i + 1], b = d[i + 2];
       const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
       const v = mx / 255, s = mx > 0 ? (mx - mn) / mx : 0;
@@ -7542,21 +7575,30 @@ function renderCanvasZoom(canvas, e) {
 // 在原图预览上取色：hover 显示放大镜，click 取色（点击时实时采样，避免颜色未选中的问题）
 [zoneRef, zoneTest].forEach(zone => {
   const target = zone === zoneRef ? 'ref' : 'test';
+  let _pickRaf = 0, _pickPt = null;
   zone.addEventListener('mousemove', (e) => {
     if (state.pickingTarget !== target) return;
-    const rgb = samplePreviewColor(zone, e);
-    if (!rgb) return;
-    const [r, g, b] = rgb;
-    const { h, s } = rgbToHsv(r, g, b);
-    const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-    pickSwatch.style.background = hex;
-    pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 精确匹配该颜色`;
-    renderPickZoom(zone, e);
-    pickLoupe.style.display = 'block';
-    const lx = Math.min(window.innerWidth - 150, e.clientX + 16);
-    const ly = Math.max(8, e.clientY - 170);
-    pickLoupe.style.left = lx + 'px';
-    pickLoupe.style.top = ly + 'px';
+    // 每帧最多算一次：Windows 上逐事件重采样会把鼠标拖慢
+    _pickPt = { x: e.clientX, y: e.clientY };
+    if (_pickRaf) return;
+    _pickRaf = requestAnimationFrame(() => {
+      _pickRaf = 0;
+      const pt = _pickPt;
+      if (!pt || state.pickingTarget !== target) return;
+      const ev = { clientX: pt.x, clientY: pt.y };
+      const rgb = samplePreviewColor(zone, ev);
+      if (!rgb) return;
+      const [r, g, b] = rgb;
+      const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+      pickSwatch.style.background = hex;
+      pickInfo.textContent = `${state.pickExclude ? '排除' : '提取'} ${hex} · 精确匹配该颜色`;
+      renderPickZoom(zone, ev);
+      pickLoupe.style.display = 'block';
+      const lx = Math.min(window.innerWidth - 150, ev.clientX + 16);
+      const ly = Math.max(8, ev.clientY - 170);
+      pickLoupe.style.left = lx + 'px';
+      pickLoupe.style.top = ly + 'px';
+    });
   });
   zone.addEventListener('mouseleave', () => {
     if (state.pickingTarget === target) pickLoupe.style.display = 'none';
