@@ -4072,6 +4072,83 @@ function extractStamp(canvas, region, inkSpec) {
       blockGate[i] = Math.max(5, Math.min(darkGate, arr[Math.floor(arr.length * 0.5)]));
     }
   }
+  // 红墨分数 (1-V)·S 的全局定标：用于红带 alpha（不依赖是否触发 redGate）
+  let redScoreCut = 0;
+  if (extractBands.includes(INK_BANDS.red)) {
+    const sc = [];
+    for (let y = 0; y < OUT; y += 3) {
+      for (let x = 0; x < OUT; x += 3) {
+        const o = (y * OUT + x) * 4;
+        if (td.data[o + 3] === 0) continue;
+        const r0 = td.data[o], g0 = td.data[o + 1], b0 = td.data[o + 2];
+        const rn0 = r0 / 255, gn0 = g0 / 255, bn0 = b0 / 255;
+        const mx0 = Math.max(rn0, gn0, bn0), mn0 = Math.min(rn0, gn0, bn0);
+        if (mx0 <= 0.004) continue;
+        const sat0 = (mx0 - mn0) / mx0;
+        if (sat0 < 0.05) continue;
+        const rv = Math.round((1 - mx0) * sat0 * 255);
+        if (rv > 6) sc.push(rv);
+      }
+    }
+    if (sc.length > 128) {
+      sc.sort((a, b) => a - b);
+      redScoreCut = Math.max(12, Math.min(80, sc[Math.floor(sc.length * 0.55)]));
+    }
+  }
+  // 红章晕染治理（0.4.24）：用"深×艳"的墨量分数 (1-V)·S 定 alpha，而不是单纯红度。
+  // 单纯红度在扫描件上会峰值落在"笔画边缘与纸的过渡带"——那里混了纸的亮红，
+  // 结果是笔画中心被掏空、外圈加深，看起来就是晕染/浮雕。
+  // (1-V)·S 对"实心墨"给高分、对"亮纸+淡红过渡"给低分，配合分块 Otsu 自适应。
+  const inkScoreAt = (r, g, b) => {
+    const rn = r / 255, gn = g / 255, bn = b / 255;
+    const mx = Math.max(rn, gn, bn), mn = Math.min(rn, gn, bn);
+    const sat = mx > 0.004 ? (mx - mn) / mx : 0;
+    return (1 - mx) * sat;   // 0..~0.5
+  };
+  let redBlockCut = null, redCutGlobal = 0;
+  if (redGate) {
+    const NB = 6;
+    const buckets = Array.from({ length: NB * NB }, () => []);
+    const all = [];
+    for (let y = 0; y < OUT; y += 2) {
+      for (let x = 0; x < OUT; x += 2) {
+        const o = (y * OUT + x) * 4;
+        if (td.data[o + 3] === 0) continue;
+        const sc = inkScoreAt(td.data[o], td.data[o + 1], td.data[o + 2]);
+        if (sc <= 0.004) continue;
+        const v = Math.round(sc * 255);
+        const bi = Math.min(NB - 1, Math.floor((y / OUT) * NB)) * NB + Math.min(NB - 1, Math.floor((x / OUT) * NB));
+        buckets[bi].push(v);
+        all.push(v);
+      }
+    }
+    const otsu = (arr) => {
+      if (arr.length < 24) return 0;
+      const hist = new Float64Array(128);
+      for (const v of arr) hist[Math.min(127, v)]++;
+      const total = arr.length;
+      let sum = 0;
+      for (let i = 0; i < 128; i++) sum += i * hist[i];
+      let sumB = 0, wB = 0, best = -1, bestT = 0;
+      for (let t = 0; t < 128; t++) {
+        wB += hist[t];
+        if (!wB) continue;
+        const wF = total - wB;
+        if (!wF) break;
+        sumB += t * hist[t];
+        const mB = sumB / wB, mF = (sum - sumB) / wF;
+        const between = wB * wF * (mB - mF) * (mB - mF);
+        if (between > best) { best = between; bestT = t; }
+      }
+      return bestT;
+    };
+    redCutGlobal = Math.max(10, Math.min(90, otsu(all) || 28));
+    redBlockCut = new Float32Array(NB * NB);
+    for (let i2 = 0; i2 < NB * NB; i2++) {
+      const t = otsu(buckets[i2]);
+      redBlockCut[i2] = t > 0 ? Math.max(redCutGlobal * 0.72, Math.min(redCutGlobal * 1.4, t)) : redCutGlobal;
+    }
+  }
   const customHues = hues.slice();
   const excludeColors = ((inkSpec && inkSpec.excludeColors) || []).slice();
   const CUSTOM_EDGE = INK_CUSTOM_TOL + 5; // 边缘扩展，保留褪色边界
@@ -4146,7 +4223,11 @@ function extractStamp(canvas, region, inkSpec) {
             const bi = Math.min(NB - 1, Math.floor((y / OUT) * NB)) * NB + Math.min(NB - 1, Math.floor((x / OUT) * NB));
             gateHere = blockGate[bi];
           }
-          if (red < redGate && !(localDark >= gateHere && sat >= 0.05)) bestBand = null;   // 灰底纸纹：不算墨
+          const NBg = 6;
+          const big = Math.min(NBg - 1, Math.floor((y / OUT) * NBg)) * NBg + Math.min(NBg - 1, Math.floor((x / OUT) * NBg));
+          const cutHere = redBlockCut ? redBlockCut[big] : redCutGlobal;
+          const score = inkScoreAt(r, g, b) * 255;
+          if (score < cutHere) bestBand = null;   // 亮纸与淡红过渡带不算墨
         }
         if (bestBand && sat >= 0.03) {
           const satFactor = Math.min(1, (sat - 0.03) / 0.30);
@@ -4154,16 +4235,23 @@ function extractStamp(canvas, region, inkSpec) {
           const confidence = 0.1 + 0.9 * (satFactor * 0.5 + hueFactor * 0.5);
           // 晕染抑制：低置信度的边缘半透明像素过去会留成灰雾，这里压掉
           alpha = Math.round(smoothstep(0.16, 0.62, Math.min(1, confidence)) * 255);
+          // 红章：alpha 改由「深×艳」(1-V)·S 决定，实心墨不透明、亮纸与淡红过渡自然淡出
+          if (bestBand === INK_BANDS.red && redScoreCut) {
+            const rn2 = r / 255, gn2 = g / 255, bn2 = b / 255;
+            const mx2 = Math.max(rn2, gn2, bn2), mn2 = Math.min(rn2, gn2, bn2);
+            const sat2 = mx2 > 0.004 ? (mx2 - mn2) / mx2 : 0;
+            const sc2 = (1 - mx2) * sat2 * 255;
+            const conf3 = Math.max(0, Math.min(1, (sc2 - redScoreCut + 6) / Math.max(16, redScoreCut * 1.2)));
+            alpha = Math.round(smoothstep(0.12, 0.60, conf3) * 255);
+          }
           // 触发红度闸门时（灰底扫描件），alpha 跟着红度走：把 40–60 的淡红笔画救回来
           if (redGate && bestBand === INK_BANDS.red) {
-            const red = r - Math.max(g, b);
-            let conf2 = Math.max(0, Math.min(1, (red - redGate + 6) / Math.max(26, redSpan)));
-            if (bgLum) {
-              const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-              const localDark = bgLum[y * OUT + x] - lum;
-              if (localDark > darkGate * 0.6) conf2 = Math.max(conf2, Math.min(1, localDark / (darkGate * 2.6)));
-            }
-            alpha = Math.round(smoothstep(0.05, 0.55, conf2) * 255);
+            const NB2 = 6;
+            const bi2 = Math.min(NB2 - 1, Math.floor((y / OUT) * NB2)) * NB2 + Math.min(NB2 - 1, Math.floor((x / OUT) * NB2));
+            const cutHere2 = redBlockCut ? redBlockCut[bi2] : redCutGlobal;
+            const score2 = inkScoreAt(r, g, b) * 255;
+            const conf2 = Math.max(0, Math.min(1, (score2 - cutHere2 + 6) / Math.max(14, cutHere2 * 1.15)));
+            alpha = Math.round(smoothstep(0.10, 0.60, conf2) * 255);
             if (!alpha) { td.data[idx + 3] = 0; alphaMap[y * OUT + x] = 0; continue; }
           }
 
@@ -5745,6 +5833,9 @@ function recomputeExtracted(target) {
         const ox = Math.min(ow - 1, Math.max(0, Math.round(map.sx + (x - map.dx) / map.ratio)));
         const oi = (rowO + ox) * 4;
         const r = orig.data[oi], g = orig.data[oi + 1], b = orig.data[oi + 2];
+        // 同一像素的颜色只算一次 HSV（此前每个手工色都重算一遍，颜色多时 Windows 上明显卡）
+        let _hsv = null;
+        const HSV = () => (_hsv || (_hsv = rgbToHsv(r, g, b)));
 
         // —— 排除：先减后加，排除优先于新增，避免"刚加进来又被剔掉"的抖动 ——
         if (excludeColors.length) {
@@ -5794,13 +5885,13 @@ function recomputeExtracted(target) {
             // 否则纸底、阴影、正文底色会整片被当成墨（用户看到的"晕染/糊成一片"）
             const lum = r * 0.299 + g * 0.587 + b * 0.114;
             if (lum > bgMeanAt(ox, oy) - 8) continue;
-            const hsv2 = rgbToHsv(r, g, b);
+            const hsv2 = HSV();
             if (Math.abs(hsv2.s - (c.sat || 0)) > 0.10) continue;
             if (Math.abs(hsv2.v - (c.val || 0)) > 0.12) continue;
             if (hsv2.s < 0.05 && (c.sat || 0) >= 0.06) continue;
           }
           if (c.dark) {
-            const hsv2 = rgbToHsv(r, g, b);
+            const hsv2 = HSV();
             if (hsv2.v > (c.val || 0) + 0.10) continue;
             const satPick = c.sat || 0;
             if (satPick >= 0.25) {
@@ -6602,6 +6693,33 @@ function applyEnhFromViewer() {
 window.__ovSyncEnh = function () { try { syncEnh(); } catch (e) {} };
 
 // 查看器底部：已选颜色列表（可开关、可删除）
+  // 取色标记：在图上画出每次取样的位置（提取=实心圆，排除=空心圆 + 斜杠）
+  try {
+    const st2 = state[OV.target];
+    const marks = (st2 && st2.marks) || [];
+    if (marks.length) {
+      const c = OV.ctx;
+      for (const m of marks) {
+        const p = ovImageToScreen(m.x, m.y);
+        c.save();
+        // 白描边 + 本色圆心：在深红笔画上也看得见
+        c.lineWidth = 3;
+        c.strokeStyle = 'rgba(255,255,255,.95)';
+        c.beginPath(); c.arc(p.x, p.y, 7, 0, Math.PI * 2); c.stroke();
+        c.lineWidth = 2;
+        c.strokeStyle = m.exclude ? 'rgba(20,20,20,.9)' : m.hex;
+        c.beginPath(); c.arc(p.x, p.y, 7, 0, Math.PI * 2); c.stroke();
+        c.fillStyle = m.hex;
+        c.beginPath(); c.arc(p.x, p.y, 3, 0, Math.PI * 2); c.fill();
+        if (m.exclude) {   // 排除：加一道斜杠
+          c.lineWidth = 2; c.strokeStyle = 'rgba(20,20,20,.9)';
+          c.beginPath(); c.moveTo(p.x - 5, p.y + 5); c.lineTo(p.x + 5, p.y - 5); c.stroke();
+        }
+        c.restore();
+      }
+    }
+  } catch (e) { /* 未初始化时忽略 */ }
+
 function ovRenderColors() {
   const box = document.getElementById('ov-colors');
   if (!box) return;
@@ -6823,6 +6941,14 @@ function ovPickAt(clientX, clientY, exclude) {
   if (!best) { showStatus('这里没有可提取的颜色，请点印章笔画上'); return; }
   const set = collectColorSet(best, near);
   const ok = addCustomInk(OV.target, best[0], best[1], best[2], exclude, set);
+  if (ok) {
+    // 标记这次取色的位置（原图坐标），让用户看得见"我点了哪儿"，也方便回看/复现
+    const hexM = '#' + best.map(v => v.toString(16).padStart(2, '0')).join('');
+    st.marks = st.marks || [];
+    st.marks.push({ x: nx, y: ny, hex: hexM, exclude: !!exclude });
+    if (st.marks.length > 60) st.marks.splice(0, st.marks.length - 60);
+    try { ovDraw(); } catch (e) {}
+  }
   if (!ok) document.getElementById('ov-info').textContent = inkNotice() || '没有可添加的颜色';
   if (ok && !exclude) {
     // 取到纸底/灰底这类大面积颜色时，提示改用「排除」，否则右栏会整片糊掉
