@@ -9248,10 +9248,16 @@ document.addEventListener('wheel', (e) => {
   e.preventDefault();
 
   if (rotateIntent) {
-    // 旋转（精细 0.1°/步）：横向滚动用 deltaX（右滑=顺时针），Shift+纵向用 deltaY
-    const d = horizontal ? e.deltaX : e.deltaY;
-    if (Math.abs(d) < WHEEL_NOISE_DEADZONE) return;
+    // 旋转（0.1°/步）：纵向滚轮、横向滚轮（触控板两指左右滑 / 倾斜滚轮）、Shift+滚轮、Alt+滚轮都能转。
+    // 取"主分量"：横向位移更大就用 deltaX，否则用 deltaY；不做死区提前返回，
+    // 这样触控板单次 deltaX 只有 1~2 的小步也能累积到阈值（0.4.23 修横向滚轮失效）。
+    const dx = Number.isFinite(e.deltaX) ? e.deltaX : 0;
+    const dy = Number.isFinite(e.deltaY) ? e.deltaY : 0;
+    const useX = Math.abs(dx) > Math.abs(dy) + 0.01;
+    const d = useX ? dx : dy;
+    if (!d) return;
     rotAccum += d;
+    if (state.shiftHeld) rotAccum += d * 1.5;   // Shift 加速，便于大角度调整
     state._lastRotateWheelAt = now;
     if (Math.abs(rotAccum) >= WHEEL_ROT_THRESH) {
       const steps = Math.floor(Math.abs(rotAccum) / WHEEL_ROT_THRESH);
@@ -9261,8 +9267,8 @@ document.addEventListener('wheel', (e) => {
       changed = true;
     }
   } else {
-    // Ctrl/⌘ + 滚轮 → 缩放（0.2%/步）；Shift+滚轮也缩放，方便触控板用户
-    if (Math.abs(e.deltaY) < WHEEL_NOISE_DEADZONE) return;
+    // Ctrl/⌘ + 滚轮 / 触控板双指捏合 → 缩放（0.2%/步）
+    if (!e.deltaY) return;
     zoomAccum += e.deltaY;
     if (Math.abs(zoomAccum) >= WHEEL_ZOOM_THRESH) {
       const steps = Math.floor(Math.abs(zoomAccum) / WHEEL_ZOOM_THRESH);
@@ -11144,7 +11150,7 @@ statusBar.classList.add('visible');
   <div class="fab-sep"></div>
   <button class="fab-btn" data-fab="align" title="自动对齐两枚印章（A）" style="color:#c0392b">⚡</button>
   <button class="fab-btn" data-fab="reset" title="重置当前印章调整（R）">⟲</button>
-  <div class="fab-tip">滚轮在此区域：纵向缩放 · 横向旋转</div>
+  <div class="fab-tip">滚轮旋转（纵向/横向都可）· Ctrl⌘+滚轮缩放</div>
 </div>
 
 <div id="manual-overlay" role="dialog" aria-modal="true" aria-labelledby="manual-title" aria-hidden="true">
