@@ -11772,6 +11772,22 @@ statusBar.classList.add('visible');
     libItems = kw ? await DT.libSearch(kw) : await DT.libList();
     renderLib();
   }
+  // 库条目的时间字段：Rust 侧存的是「秒」字符串（如 "1763500000"），
+  // Electron 老数据是 ISO 串，手工改过的可能是毫秒 → 统一在这里兼容，解析不了就给 '—'
+  function libDateText(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    let ms = NaN;
+    if (typeof v === 'number') ms = v < 1e12 ? v * 1000 : v;
+    else {
+      const str = String(v).trim();
+      if (/^\d+$/.test(str)) { const n = Number(str); ms = n < 1e12 ? n * 1000 : n; }
+      else ms = Date.parse(str);
+    }
+    const d = new Date(ms);
+    if (!isFinite(d.getTime())) return '—';
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   function renderLib() {
     const grid = $('#dt-lib-grid');
     grid.innerHTML = '';
@@ -11779,8 +11795,7 @@ statusBar.classList.add('visible');
     libItems.forEach((item) => {
       const cell = document.createElement('div');
       cell.className = 'dt-lib-item';
-      const t = new Date(item.savedAt);
-      const time = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+      const time = libDateText(item.savedAt);
       cell.innerHTML = [
         '<img alt="">',
         '<div class="dt-lib-name"></div>',
