@@ -5089,7 +5089,12 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
           }
         }
       } else {
-        hit = Math.abs(v - (c.val || 0)) <= tolNow && s <= 0.28;
+        const p0 = (c.set && c.set[0]) || null;
+        const pr = p0 ? p0[0] : Math.round(255 * (c.val || 0));
+        const pg = p0 ? p0[1] : pr;
+        const pb = p0 ? p0[2] : pr;
+        const dPix = Math.sqrt((r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2);
+        hit = dPix <= Math.max(14, tolNow * 150);
       }
       if (hit) purgedExclude++;
       return !hit;
@@ -5921,12 +5926,20 @@ function recomputeExtracted(target) {
                 // 点的是"淡粉边"这类低彩度色：只清同样淡的，别把浓墨一起吃光
                 if (sNow > satPick + 0.18) continue;
                 if (Math.abs(vNow - (c.val || 0)) > 0.30) continue;
+              } else if (Math.abs(vNow - (c.val || 0)) > 0.62) {
+                // 高饱和：色相相同但深/浅差得太远的（极深描边、极浅边缘）不一起清
+                continue;
               }
             } else {
-              // 灰色剔除：按亮度窗口，但只对"接近中性"的像素生效
-              // （V 相近的深红笔画不该被灰剔除带走——"剔除后再提取彩色加不上"就出在这里）
-              if (Math.abs(vNow - (c.val || 0)) > tolV) continue;
-              if (sNow > 0.28) continue;
+              // 灰色/低彩剔除：按"与被剔颜色的 RGB 距离"判定，而不是只看亮度区间
+              // （只看 V 会把同一亮度带里的淡红笔画一起带走 → 表现为"剔一个色、别的色也没了"）
+              const p0 = (c.set && c.set[0]) || null;
+              const pr = p0 ? p0[0] : Math.round(255 * (c.val || 0));
+              const pg = p0 ? p0[1] : pr;
+              const pb = p0 ? p0[2] : pr;
+              const dPix = Math.sqrt((r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2);
+              const dTol = Math.max(14, tolV * 150);   // 18% 容差 → 约 27
+              if (dPix > dTol) continue;
             }
             hit = true;
             break;
