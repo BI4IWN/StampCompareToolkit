@@ -6426,6 +6426,13 @@ function ovResize() {
   ovDraw();
 }
 
+// 拖动时每帧最多重绘一次（直接调 ovDraw 会被 mousemove 的 100+ Hz 拖垮）
+let _ovDrawRaf = 0;
+function ovDrawSoon() {
+  if (_ovDrawRaf) return;
+  _ovDrawRaf = requestAnimationFrame(() => { _ovDrawRaf = 0; try { ovDraw(); } catch (e) {} });
+}
+
 function ovDraw() {
   ovEls();
   const ctx = OV.ctx;
@@ -7256,13 +7263,15 @@ function ovPickAt(clientX, clientY, exclude) {
       stage.style.cursor = hit === 'move' ? 'move' : (hit ? ovCursorFor(hit) : 'crosshair');
     }
     const d = OV.drag;
-    if (!d) { if (OV.mode === 'pick') ovDraw(); return; }
+    // 悬停不需要重绘画布：放大镜是独立 DOM，十字光标交给 cursor 样式。
+    // （此前这里每条 mousemove 都 ovDraw() 一次，Windows/WebView2 上会明显掉帧）
+    if (!d) return;
     if (d.kind === 'ellnew') {
       const p = ovScreenToImage(e.clientX, e.clientY);
       const r = Math.hypot(p.x - d.cx, p.y - d.cy);
       if (r * ovScale() < 6) return;   // 还没拖出 6px：不动已有椭圆
       OV.ell = { cx: d.cx, cy: d.cy, rx: r, ry: r };
-      ovDraw();
+      ovDrawSoon();
       return;
     }
     if (d.kind === 'ell') {
@@ -7277,19 +7286,19 @@ function ovPickAt(clientX, clientY, exclude) {
       if (d.axis.includes('s')) { e2.ry = Math.max(4, (p.y - top) / 2); e2.cy = top + e2.ry; }
       if (d.axis.includes('n')) { e2.ry = Math.max(4, (bottom - p.y) / 2); e2.cy = bottom - e2.ry; }
       OV.ell = e2;
-      ovDraw();
+      ovDrawSoon();
       return;
     }
     if (d.kind === 'ellmove') {
       const p = ovScreenToImage(e.clientX, e.clientY);
       OV.ell = { ...d.orig, cx: d.orig.cx + (p.x - d.ax), cy: d.orig.cy + (p.y - d.ay) };
-      ovDraw();
+      ovDrawSoon();
       return;
     }
     if (d.kind === 'pan') {
       OV.panX = d.px + (e.clientX - d.sx);
       OV.panY = d.py + (e.clientY - d.sy);
-      ovDraw();
+      ovDrawSoon();
     } else if (d.kind === 'new') {
       // 拖到图外用图内坐标夹住：否则框比图大时，圆形裁切的圆心/半径都会跑偏
       const p = ovScreenToImage(e.clientX, e.clientY);
@@ -7306,12 +7315,12 @@ function ovPickAt(clientX, clientY, exclude) {
         OV.crop.w = Math.min(OV.imgW - OV.crop.x, Math.abs(px - x0));
         OV.crop.h = Math.min(OV.imgH - OV.crop.y, Math.abs(py - y0));
       }
-      ovDraw();
+      ovDrawSoon();
     } else if (d.kind === 'move') {
       const s = ovScale();
       OV.crop.x = clamp(d.orig.x + (e.clientX - d.sx) / s, 0, OV.imgW - OV.crop.w);
       OV.crop.y = clamp(d.orig.y + (e.clientY - d.sy) / s, 0, OV.imgH - OV.crop.h);
-      ovDraw();
+      ovDrawSoon();
     } else if (d.kind === 'resize') {
       const p = ovScreenToImage(e.clientX, e.clientY);
       const o = d.orig;
@@ -7321,7 +7330,7 @@ function ovPickAt(clientX, clientY, exclude) {
       if (d.handle.includes('n')) y1 = clamp(p.y, 0, y2 - 8);
       if (d.handle.includes('s')) y2 = clamp(p.y, y1 + 8, OV.imgH);
       OV.crop = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
-      ovDraw();
+      ovDrawSoon();
     }
   });
 
@@ -7353,9 +7362,17 @@ function ovPickAt(clientX, clientY, exclude) {
       else ovPickAt(e.clientX, e.clientY, OV.exclude);
     }
   });
+  // 放大镜也按帧合并：高频 mousemove 下每帧画一次足够了
+  let _loupePt = null, _loupeRaf = 0;
   stage.addEventListener('mousemove', (e) => {
     if (OV.mode !== 'pick') return;
-    ovLoupeMove(e.clientX, e.clientY, OV.exclude);
+    _loupePt = { x: e.clientX, y: e.clientY };
+    if (_loupeRaf) return;
+    _loupeRaf = requestAnimationFrame(() => {
+      _loupeRaf = 0;
+      const pt = _loupePt;
+      if (pt && OV.mode === 'pick') ovLoupeMove(pt.x, pt.y, OV.exclude);
+    });
   });
   stage.addEventListener('mouseleave', () => { OV.cursor = null; ovLoupeHide(); if (!OV.drag) ovDraw(); });
 
