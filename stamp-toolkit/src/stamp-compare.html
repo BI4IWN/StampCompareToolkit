@@ -5889,7 +5889,11 @@ function recomputeExtracted(target) {
               const hueWin = Math.min(22, 6 + tolV * 40);
               if (sNow < 0.15) continue;   // 有彩的像素才参与色相判定
               const hNow = hueOf(r, g, b);
-              let dh = Math.abs(hNow - c.h);
+              // 颜色条目存的字段是 hue（老代码这里读 c.h，恒为 undefined →
+              // NaN 比较永远为 false，等于"任何彩色排除色都能命中所有彩色像素"，
+              // 这就是"多次剔除后整枚章被清空、再加颜色也回不来"的真凶）
+              const cHue = (c.hue !== undefined ? c.hue : (c.h || 0));
+              let dh = Math.abs(hNow - cHue);
               if (dh > 180) dh = 360 - dh;
               if (dh > hueWin) continue;
               if (satPick < 0.35) {
