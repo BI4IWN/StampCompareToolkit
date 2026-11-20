@@ -9,7 +9,7 @@
   "app": {
     "windows": [
       {
-        "title": "印章比对工具 0.4.35（Rust 预览）",
+        "title": "印章比对工具 0.4.36（Rust 预览）",
         "width": 1440,
         "height": 900,
         "resizable": true,
