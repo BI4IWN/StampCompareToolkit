@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.18</title>
+<title>印章对比工具 v3.6.19</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -16,40 +16,43 @@
 
   :root {
     color-scheme: light;
-    --bg: #f8f6f3;
-    --bg-dot: rgba(45,41,38,0.025);
-    --surface: rgba(255,255,255,0.82);
+    --bg: #f5f5f7;
+    --bg-dot: rgba(0,0,0,0.028);
+    --surface: rgba(255,255,255,0.86);
     --surface-solid: #ffffff;
-    --surface-muted: rgba(0,0,0,0.03);
-    --surface-hover: #faf8f6;
-    --overlay: rgba(45,41,38,0.25);
+    --surface-muted: rgba(0,0,0,0.045);
+    --surface-hover: #f2f2f4;
+    --overlay: rgba(0,0,0,0.26);
     --canvas-bg: #ffffff;
-    --checker-a: #f0eeeb;
+    --checker-a: #f0f0f2;
     --checker-b: #ffffff;
-    --border: rgba(0,0,0,0.06);
-    --border-strong: rgba(0,0,0,0.10);
-    --text: #2d2926;
-    --text-secondary: #68686d;
-    --text-tertiary: #77747a;
+    --border: rgba(0,0,0,0.08);
+    --border-strong: rgba(0,0,0,0.12);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #8e8e93;
     --accent: #c44133;
     --accent-solid: #c44133;
-    --accent-light: #e05a4d;
-    --accent-text: #c44133;
-    --accent-bg: rgba(196,65,51,0.06);
+    --accent-light: #d9584b;
+    --accent-text: #b03a2e;
+    --accent-bg: rgba(196,65,51,0.07);
     --accent-pressed: #a93428;
-    --ok: #0b6e4f;
-    --ok-bg: rgba(11,110,79,0.10);
-    --danger: #a33227;
-    --danger-bg: rgba(163,50,39,0.08);
-    --warm-glow: rgba(196,65,51,0.08);
-    --radius: 16px;
-    --radius-sm: 10px;
-    --shadow: 0 1px 3px rgba(45,41,38,0.04), 0 4px 16px rgba(45,41,38,0.03);
-    --shadow-1: 0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
-    --shadow-hover: 0 2px 8px rgba(45,41,38,0.06), 0 8px 24px rgba(45,41,38,0.05);
-    --shadow-dialog: 0 8px 32px rgba(45,41,38,0.12), 0 2px 8px rgba(45,41,38,0.06);
-    --backdrop: blur(12px) saturate(1.4);
-    --focus-ring: rgba(196,65,51,0.6);
+    --ok: #248a3d;
+    --ok-bg: rgba(52,199,89,0.14);
+    --switch-on: #34c759;
+    --danger: #b03a2e;
+    --danger-bg: rgba(196,65,51,0.08);
+    --warm-glow: rgba(196,65,51,0.05);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-container: 10px;
+    --radius-control: 8px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.035);
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.05), 0 6px 18px rgba(0,0,0,0.04);
+    --shadow-hover: 0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.045);
+    --shadow-dialog: 0 16px 48px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.05);
+    --backdrop: blur(18px) saturate(1.25);
+    --focus-ring: rgba(10,132,255,0.55);
   }
 
   :root[data-theme="dark"] {
@@ -125,10 +128,11 @@
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", "Helvetica Neue", sans-serif;
+    font-size: 13px;
     background: var(--bg);
     background-image: radial-gradient(circle, var(--bg-dot) 1px, transparent 1px);
-    background-size: 24px 24px;
+    background-size: 32px 32px;
     color: var(--text);
     line-height: 1.5;
     display: flex;
@@ -136,6 +140,7 @@
     min-height: 0;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     transition: background-color .18s ease, color .18s ease;
   }
 
@@ -2991,10 +2996,1403 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
   }
+
+  /* ============================================================
+     U66 · 视觉设计第二期（对齐 2026 Apple / Golden Gate）
+     只覆盖界面表现，不触碰提取、对齐、识别、比对与存储逻辑。
+     ============================================================ */
+
+  :root {
+    --info: #0a84ff;
+    --info-bg: rgba(10,132,255,0.10);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #1c1c1e;
+    --bg-dot: rgba(255,255,255,0.03);
+    --surface: rgba(44,44,46,0.86);
+    --surface-solid: #2c2c2e;
+    --surface-muted: rgba(255,255,255,0.07);
+    --surface-hover: #3a3a3c;
+    --overlay: rgba(0,0,0,0.54);
+    --canvas-bg: #fbfbfa;
+    --checker-a: #2b2b2e;
+    --checker-b: #3a3a3d;
+    --border: rgba(255,255,255,0.12);
+    --border-strong: rgba(255,255,255,0.17);
+    --text: #f2f2f7;
+    --text-secondary: #b8b8c0;
+    --text-tertiary: #9d9da5;
+    --accent: #c44133;
+    --accent-solid: #c7483a;
+    --accent-light: #ef786d;
+    --accent-text: #ff9a90;
+    --accent-bg: rgba(224,90,77,0.13);
+    --accent-pressed: #c44133;
+    --ok: #30d158;
+    --ok-bg: rgba(48,209,88,0.15);
+    --switch-on: #30d158;
+    --danger: #ff9c8f;
+    --danger-bg: rgba(255,156,143,0.12);
+    --warm-glow: rgba(224,90,77,0.10);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(0,0,0,0.28);
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.36), 0 8px 24px rgba(0,0,0,0.28);
+    --shadow-hover: 0 2px 8px rgba(0,0,0,0.34), 0 8px 24px rgba(0,0,0,0.24);
+    --shadow-dialog: 0 20px 56px rgba(0,0,0,0.58), 0 2px 8px rgba(0,0,0,0.4);
+    --backdrop: blur(18px) saturate(1.2);
+    --focus-ring: rgba(100,181,255,0.68);
+    --info: #64b5ff;
+    --info-bg: rgba(100,181,255,0.13);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #1c1c1e;
+      --bg-dot: rgba(255,255,255,0.03);
+      --surface: rgba(44,44,46,0.86);
+      --surface-solid: #2c2c2e;
+      --surface-muted: rgba(255,255,255,0.07);
+      --surface-hover: #3a3a3c;
+      --overlay: rgba(0,0,0,0.54);
+      --canvas-bg: #fbfbfa;
+      --checker-a: #2b2b2e;
+      --checker-b: #3a3a3d;
+      --border: rgba(255,255,255,0.12);
+      --border-strong: rgba(255,255,255,0.17);
+      --text: #f2f2f7;
+      --text-secondary: #b8b8c0;
+      --text-tertiary: #9d9da5;
+      --accent: #c44133;
+      --accent-solid: #c7483a;
+      --accent-light: #ef786d;
+      --accent-text: #ff9a90;
+      --accent-bg: rgba(224,90,77,0.13);
+      --accent-pressed: #c44133;
+      --ok: #30d158;
+      --ok-bg: rgba(48,209,88,0.15);
+      --switch-on: #30d158;
+      --danger: #ff9c8f;
+      --danger-bg: rgba(255,156,143,0.12);
+      --warm-glow: rgba(224,90,77,0.10);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 1px 2px rgba(0,0,0,0.28);
+      --shadow-1: 0 1px 2px rgba(0,0,0,0.36), 0 8px 24px rgba(0,0,0,0.28);
+      --shadow-hover: 0 2px 8px rgba(0,0,0,0.34), 0 8px 24px rgba(0,0,0,0.24);
+      --shadow-dialog: 0 20px 56px rgba(0,0,0,0.58), 0 2px 8px rgba(0,0,0,0.4);
+      --backdrop: blur(18px) saturate(1.2);
+      --focus-ring: rgba(100,181,255,0.68);
+      --info: #64b5ff;
+      --info-bg: rgba(100,181,255,0.13);
+    }
+  }
+
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  .dt-btn,
+  .dt-input,
+  .manual-box,
+  .dt-modal,
+  .ai-dialog {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", "Helvetica Neue", sans-serif;
+  }
+
+  h1, h2, h3, .ov-title, .dt-modal-head h3, .manual-head h3, .ai-dialog h3 {
+    font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+  }
+
+  .ui-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: -3px;
+    pointer-events: none;
+  }
+
+  .ui-icon-lg { width: 18px; height: 18px; }
+  #ui-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  /* ---- 窗口骨架：顶栏贴顶，右栏贴右 ---- */
+  .app {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    grid-template-columns: minmax(0, 1fr) 312px;
+    grid-template-rows: 52px auto minmax(0, 1fr) auto;
+    column-gap: 10px;
+  }
+
+  header {
+    height: 52px;
+    min-height: 52px;
+    flex-basis: 52px;
+    margin: 0;
+    padding: 0 16px;
+    background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+    -webkit-backdrop-filter: var(--backdrop);
+    backdrop-filter: var(--backdrop);
+    border-bottom: 1px solid var(--border);
+    z-index: 900;
+  }
+
+  header h1 {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .hero-ver {
+    margin-left: 6px;
+    vertical-align: 1px;
+    font-size: 11px;
+    font-weight: 450;
+    letter-spacing: 0;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .product-mark {
+    color: var(--accent);
+    opacity: 1;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+  .product-mark:hover { transform: scale(1.03); opacity: 1; }
+
+  .header-row { gap: 10px; }
+
+  .header-rec-mode {
+    margin-left: 16px;
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: var(--surface-muted);
+    overflow: visible;
+  }
+
+  .header-rec-label {
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text-secondary);
+  }
+
+  .header-rec-mode .mode-btn {
+    height: 24px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 560;
+  }
+
+  .header-rec-mode .mode-btn.active {
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 0 0 .5px rgba(0,0,0,.05);
+  }
+
+  .header-actions { gap: 2px; }
+
+  .header-actions .dt-btn {
+    height: 28px;
+    padding: 0 8px;
+    gap: 6px;
+    border-color: transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 520;
+    box-shadow: none;
+  }
+
+  .header-actions .dt-btn:hover {
+    background: var(--surface-muted);
+    border-color: transparent;
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  /* ---- 工具条：一条统一的控件条 ---- */
+  .app > #toolbar {
+    height: 48px;
+    min-height: 48px;
+    margin: 8px 12px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-solid);
+    box-shadow: 0 1px 2px rgba(0,0,0,.035);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    z-index: 800;
+  }
+
+  .toolbar.visible { height: 48px; min-height: 48px; }
+
+  .toolbar-main { gap: 4px; }
+  .tb-group { gap: 5px; }
+
+  .tb-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text-tertiary);
+    margin-right: 1px;
+  }
+
+  .tb-sep {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    background: var(--border);
+  }
+
+  .tb-spacer { min-width: 4px; }
+
+  .toolbar-main .btn {
+    height: 28px;
+    padding: 0 7px;
+    gap: 5px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 540;
+    line-height: 1;
+    letter-spacing: 0;
+    box-shadow: none;
+  }
+
+  .toolbar-main .btn:hover {
+    background: var(--surface-muted);
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .toolbar-main .btn.active {
+    background: var(--surface-muted);
+    border-color: var(--border);
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  #btn-diff.active {
+    background: rgba(94,92,230,.10);
+    border-color: transparent;
+    color: #4c4ab5;
+  }
+
+  :root[data-theme="dark"] #btn-diff.active {
+    background: rgba(124,122,255,.16);
+    color: #b9b7ff;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) #btn-diff.active {
+      background: rgba(124,122,255,.16);
+      color: #b9b7ff;
+    }
+  }
+
+  .toolbar-main .btn-icon { width: 28px; padding: 0; }
+
+  .toolbar-main .btn-label { letter-spacing: 0; }
+
+  .toolbar-main .btn .ui-icon { color: var(--text-secondary); }
+
+  .toolbar-main .btn:hover .ui-icon,
+  .toolbar-main .btn.active .ui-icon { color: var(--text); }
+
+  .toolbar-main .mode-group {
+    height: 30px;
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: var(--surface-muted);
+    overflow: visible;
+  }
+
+  .mode-group .mode-btn {
+    height: 26px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 540;
+    letter-spacing: 0;
+    transition: background .14s ease, color .14s ease, box-shadow .14s ease;
+  }
+
+  .mode-group .mode-btn:hover:not(.active) {
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+    color: var(--text);
+  }
+
+  .mode-group .mode-btn.active,
+  #axis-group .mode-btn.active {
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 0 0 .5px rgba(0,0,0,.05);
+  }
+
+  :root[data-theme="dark"] .mode-group .mode-btn.active,
+  :root[data-theme="dark"] #axis-group .mode-btn.active {
+    box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 0 0 .5px rgba(255,255,255,.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .mode-group .mode-btn.active,
+    :root:not([data-theme="light"]) #axis-group .mode-btn.active {
+      box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 0 0 .5px rgba(255,255,255,.06);
+    }
+  }
+
+  #axis-group .mode-btn { font-size: 11px; padding: 0 8px; }
+
+  .tb-switch {
+    height: 28px;
+    gap: 7px;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 510;
+    color: var(--text);
+  }
+
+  .tb-switch-track {
+    width: 30px;
+    height: 18px;
+    border: 0;
+    background: color-mix(in srgb, var(--text) 15%, transparent);
+    box-shadow: inset 0 0 0 .5px rgba(0,0,0,.08);
+  }
+
+  .tb-switch-track::after {
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.22);
+  }
+
+  .tb-switch input:checked + .tb-switch-track {
+    background: var(--switch-on);
+    border-color: transparent;
+    box-shadow: inset 0 0 0 .5px rgba(0,0,0,.06);
+  }
+
+  .tb-switch input:checked + .tb-switch-track::after { transform: translateX(12px); }
+  .tb-switch input:checked ~ .tb-switch-label { color: var(--text); }
+
+  #toolbar-save { gap: 1px; margin-left: 4px; }
+
+  .toolbar-main .dt-btn {
+    height: 28px;
+    padding: 0 7px;
+    gap: 5px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 540;
+    box-shadow: none;
+    white-space: nowrap;
+  }
+
+  .toolbar-main .dt-btn:hover {
+    background: var(--surface-muted);
+    border-color: transparent;
+    color: var(--text);
+  }
+
+  .toolbar-main .dt-btn .ui-icon { color: var(--text-secondary); }
+
+  #toolbar-save .dt-btn {
+    height: 28px;
+    padding: 0 6px;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 540;
+    letter-spacing: 0;
+    border-color: transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  #toolbar-save .dt-btn:hover { background: var(--surface-muted); border-color: transparent; color: var(--text); }
+
+  @media (max-width: 1360px) {
+    #toolbar-save .dt-btn { padding: 0 5px; font-size: 13px; }
+  }
+
+  #toolbar-more { font-weight: 540; }
+
+  #btn-clear { color: var(--text-secondary); }
+  #btn-clear:hover { color: var(--danger); background: var(--danger-bg); }
+  #btn-clear .ui-icon { color: currentColor; }
+
+  /* 1280 仍显示组名，仅压缩间距；不横向滚动 */
+  @media (max-width: 1360px) {
+    .toolbar-main { gap: 2px; }
+    .tb-group { gap: 4px; }
+    .tb-sep { margin: 0 3px; }
+    .toolbar-main .btn { padding: 0 6px; gap: 4px; font-size: 13px; }
+    .mode-group .mode-btn { padding: 0 8px; font-size: 13px; }
+    .tb-switch { gap: 6px; font-size: 13px; }
+    .toolbar-main .dt-btn { padding: 0 6px; font-size: 13px; }
+  }
+
+  @media (max-width: 1239px) {
+    .tb-label { display: none; }
+  }
+
+  @media (max-width: 1100px) {
+    .toolbar-main .btn-label { display: none; }
+    .toolbar-main .btn { padding: 0 6px; }
+  }
+
+  /* ---- 画布与右栏：内容实底，边栏贴边 ---- */
+  .app > .comparison {
+    margin: 0 0 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-solid);
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  .comparison canvas { background: var(--canvas-bg); }
+
+  .app > #inspector {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--surface-solid);
+    box-shadow: none;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent;
+  }
+
+  .inspector-empty {
+    padding: 34px 22px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .inspector-empty-icon {
+    display: block;
+    margin-bottom: 12px;
+    color: var(--text-tertiary);
+    font-size: 20px;
+    opacity: 1;
+  }
+
+  .inspector-empty-icon .ui-icon {
+    width: 44px;
+    height: 44px;
+    stroke-width: 1.25;
+  }
+
+  .inspector-card {
+    margin: 0;
+    padding: 16px 18px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .inspector-card:first-child { border-top: 0; }
+  .inspector-card:last-child { margin-bottom: 0; }
+
+  .inspector-card-title {
+    margin-bottom: 9px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .inspector-verdict-empty {
+    margin: 4px 0 2px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .inspector-formula { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .inspector-formula summary { gap: 6px; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+  .inspector-help-dot { width: 14px; height: 14px; border-color: var(--border-strong); font-size: 10px; }
+  .inspector-formula-body { font-size: 11px; line-height: 1.55; color: var(--text-tertiary); }
+
+  .inspector-score { margin-bottom: 10px; font-size: 11px; }
+  .inspector-score strong { font-size: 17px; font-weight: 620; letter-spacing: -0.02em; }
+
+  .inspector-badge {
+    min-height: 18px;
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 520;
+  }
+  .inspector-badge[hidden] { display: none; }
+
+  .inspector-metric + .inspector-metric { margin-top: 8px; }
+  .inspector-metric-label { margin-bottom: 4px; color: var(--text-secondary); font-size: 11px; }
+  .inspector-metric-track { height: 4px; background: var(--surface-muted); }
+  .inspector-metric-fill { background: var(--info); }
+
+  .inspector-footnote { margin-top: 10px; padding-top: 9px; font-size: 11px; }
+  .inspector-warning {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: -1px 0 10px;
+    padding: 5px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .inspector-warning[hidden] { display: none; }
+
+  .inspector-stamp { padding: 10px 0; }
+  .inspector-stamp-head { margin-bottom: 4px; }
+  .inspector-stamp-label { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+  .inspector-company { font-size: 13px; font-weight: 560; line-height: 1.45; letter-spacing: -0.01em; }
+  .inspector-stamp-meta { margin-top: 4px; font-size: 11px; line-height: 1.5; }
+
+  .inspector-candidate-group + .inspector-candidate-group { margin-top: 10px; padding-top: 10px; }
+  .inspector-candidate-label { margin-bottom: 6px; font-size: 11px; font-weight: 500; }
+  .inspector-candidate { min-height: 28px; padding: 4px 0; gap: 7px; }
+  .inspector-candidate-name { font-size: 13px; line-height: 1.4; }
+  .inspector-candidate-score { font-size: 11px; }
+  .inspector-adopt {
+    min-height: 22px;
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 520;
+  }
+  .inspector-adopt:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+  .inspector-candidates-empty { font-size: 11px; }
+  .inspector-engine-note { margin-top: 10px; padding-top: 9px; font-size: 11px; }
+
+  /* ---- 空态 / 粘贴区：内容实底，不用红色主按钮 ---- */
+  .paste-zone {
+    background: var(--surface-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px dashed var(--border-strong);
+    border-radius: 10px;
+    min-height: 210px;
+    height: 280px;
+    max-height: 280px;
+  }
+
+  .paste-zone::before { display: none; }
+
+  .paste-zone:hover,
+  .paste-zone.dragover {
+    border-color: var(--text-tertiary);
+    background: var(--surface-hover);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .paste-zone.has-image { border-color: var(--border); border-style: solid; }
+  .paste-zone.has-image:hover { box-shadow: none; }
+
+  .paste-zone .placeholder { padding: 24px 28px; }
+  .paste-zone .placeholder .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    color: var(--text-tertiary);
+    font-size: 0;
+    opacity: 1;
+    filter: none;
+  }
+
+  .empty-seal {
+    width: 76px;
+    height: 76px;
+    color: var(--text-tertiary);
+    opacity: .78;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .paste-zone .placeholder .label {
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 590;
+    letter-spacing: -0.02em;
+  }
+
+  .paste-zone .placeholder .hint {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .paste-zone .choose-btn {
+    min-height: 28px;
+    margin-top: 14px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 520;
+    box-shadow: 0 1px 1px rgba(0,0,0,.03);
+  }
+
+  .paste-zone .choose-btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+  .paste-zone .zone-badge {
+    top: 12px;
+    left: 12px;
+    padding: 2px 9px;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px;
+    background: rgba(29,29,31,.58);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .paste-zone:first-child .zone-badge,
+  .paste-zone:last-child .zone-badge { background: rgba(29,29,31,.58); color: #fff; }
+
+  /* ---- 状态栏 / 帮助：安静、不抢画布 ---- */
+  .status-bar {
+    min-height: 30px;
+    padding: 3px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 450;
+  }
+
+  #help-fab {
+    min-height: 24px;
+    padding: 2px 8px;
+    border-color: transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    box-shadow: none;
+    gap: 5px;
+  }
+
+  #help-fab:hover { background: var(--surface-muted); color: var(--text); }
+
+  #kbd-toggle {
+    width: 26px;
+    height: 24px;
+    border-color: transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 22px;
+  }
+
+  #kbd-toggle:hover { background: var(--surface-muted); }
+
+  .kbd-hints,
+  .toolbar-advanced {
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-dialog);
+  }
+
+  .kbd-hints { font-size: 11px; color: var(--text-secondary); }
+
+  kbd {
+    border-color: var(--border-strong);
+    border-radius: 5px;
+    background: var(--surface-muted);
+    font-size: 11px;
+    font-weight: 520;
+    box-shadow: none;
+  }
+
+  /* ---- 更多浮层 ---- */
+  .toolbar-advanced { top: calc(100% + 6px); padding: 12px 14px; }
+  .toolbar-advanced-head { margin-bottom: 10px; gap: 8px; }
+  .toolbar-advanced-title { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+  .toolbar-advanced-hint { font-size: 11px; color: var(--text-tertiary); }
+  .toolbar-engine-row { gap: 6px; margin-bottom: 12px; padding-bottom: 12px; }
+  .toolbar-engine-label { font-size: 11px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); }
+
+  .toolbar-advanced .btn {
+    height: 28px;
+    padding: 0 9px;
+    gap: 5px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 520;
+    box-shadow: none;
+  }
+  .toolbar-advanced .btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+  .toolbar-advanced .btn-icon { width: auto; padding: 0 9px; }
+
+  .toolbar-advanced label { font-size: 11px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); }
+  .toolbar-advanced .slider-group .val { font-size: 11px; }
+
+  .toolbar-advanced .extracted-strip.visible {
+    margin: 12px 0 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--border);
+    gap: 14px;
+  }
+
+  .stamp-color-panel {
+    background: var(--surface-muted);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .stamp-color-panel .scp-title { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; }
+  .stamp-color-panel .scp-presets .mode-btn { font-size: 11px; padding: 0 8px; height: 24px; }
+  .stamp-color-panel .scp-row .btn { width: auto; font-size: 11px; height: 26px; padding: 0 8px; border: 1px solid var(--border); background: var(--surface-solid); }
+  .stamp-color-panel .scp-row .btn:hover { background: var(--surface-hover); }
+  .stamp-color-panel .scp-hint { font-size: 11px; color: var(--text-tertiary); }
+
+  /* ---- 原图查看器：保持内容实底，不加大面积模糊 ---- */
+  .origin-viewer { background: rgba(0,0,0,.34); }
+  :root[data-theme="dark"] .origin-viewer { background: rgba(0,0,0,.58); }
+
+  .ov-panel {
+    border-radius: 12px;
+    border-color: var(--border);
+    background: var(--surface-solid);
+    box-shadow: 0 28px 72px rgba(0,0,0,.30);
+  }
+
+  .ov-head {
+    min-height: 48px;
+    padding: 8px 12px;
+    gap: 8px;
+    border-bottom-color: var(--border);
+  }
+
+  .ov-title { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+
+  .ov-targets,
+  .ov-modes {
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: var(--surface-muted);
+  }
+
+  .ov-targets button,
+  .ov-modes button {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 540;
+  }
+
+  .ov-targets button.active,
+  .ov-modes button.active {
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 0 0 .5px rgba(0,0,0,.05);
+  }
+
+  .ov-zoom { gap: 2px; }
+  .ov-zoom button {
+    min-width: 26px;
+    height: 26px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 540;
+  }
+  .ov-zoom button:hover { background: var(--surface-muted); color: var(--text); }
+  #ov-zoom-val { font-size: 11px; color: var(--text-secondary); }
+  .ov-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 26px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .ov-close:hover { background: var(--surface-muted); color: var(--text); }
+
+  .ov-pane + .ov-pane { border-left-color: var(--border); }
+  .ov-tag {
+    font-size: 11px;
+    font-weight: 500;
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
+    color: var(--text-secondary);
+  }
+
+  .ov-stage { background: repeating-conic-gradient(#00000006 0% 25%, transparent 0% 50%) 50% / 16px 16px, var(--bg); }
+  .ov-hint { font-size: 11px; color: var(--text-secondary); border-color: var(--border); }
+
+  .ov-foot {
+    gap: 7px;
+    padding: 9px 12px 10px;
+    border-top-color: var(--border);
+    background: var(--surface-solid);
+  }
+
+  .ov-foot-bar { gap: 7px; min-height: 28px; }
+  .ov-colors { gap: 5px; max-height: 34px; }
+  .ov-info { font-size: 11px; color: var(--text-secondary); }
+  .ov-actions { gap: 6px; flex-wrap: nowrap; }
+  .ov-group { gap: 6px; }
+  .ov-vsep { height: 18px; background: var(--border); }
+
+  .ov-pickmode {
+    padding: 2px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: var(--surface-muted);
+    gap: 2px;
+  }
+
+  .ov-pickmode button {
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 540;
+    color: var(--text-secondary);
+  }
+
+  .ov-pickmode button.active {
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 0 0 .5px rgba(0,0,0,.05);
+  }
+
+  .ov-tol { font-size: 11px; gap: 5px; color: var(--text-secondary); }
+  .ov-tol select {
+    height: 26px;
+    border-color: var(--border);
+    border-radius: 6px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 11px;
+  }
+
+  .ov-tol input[type="range"] { accent-color: var(--text-tertiary); }
+  .origin-viewer .ov-actions .btn {
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 520;
+    box-shadow: none;
+  }
+  .origin-viewer .ov-actions .btn:hover { background: var(--surface-hover); }
+  .origin-viewer .btn-primary,
+  .origin-viewer .btn-primary:hover {
+    border-color: var(--accent-solid);
+    background: var(--accent-solid);
+    color: #fff;
+  }
+  .origin-viewer .btn-primary:hover { filter: brightness(1.05); }
+
+  .ov-chip { height: 24px; font-size: 11px; border-color: var(--border); border-radius: 6px; }
+  .ov-chip .tag { font-size: 11px; font-weight: 500; }
+  .ov-colors .ov-count { font-size: 11px; }
+
+  /* ---- 弹层统一字体与材料 ---- */
+  .paste-dialog-overlay,
+  .dt-overlay,
+  .engine-overlay {
+    background: rgba(0,0,0,.28);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  :root[data-theme="dark"] .paste-dialog-overlay,
+  :root[data-theme="dark"] .dt-overlay,
+  :root[data-theme="dark"] .engine-overlay { background: rgba(0,0,0,.55); }
+
+  .paste-dialog,
+  .ai-dialog,
+  .dt-modal,
+  .manual-box,
+  .engine-sheet-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-solid);
+    box-shadow: var(--shadow-dialog);
+    color: var(--text);
+  }
+
+  .paste-dialog { min-width: 340px; padding: 26px 28px 20px; }
+  .paste-dialog-title { font-family: "SF Pro Display", -apple-system, "PingFang SC", sans-serif; font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+  .paste-dialog-btn { padding: 11px 16px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 520; }
+  .paste-dialog-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); box-shadow: none; transform: none; }
+  .paste-dialog-cancel { font-size: 13px; }
+
+  .ai-dialog { width: min(460px, calc(100vw - 40px)); padding: 22px 24px 20px; }
+  .ai-dialog h3 { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+  .ai-dialog .sub { font-size: 11px; color: var(--text-secondary); line-height: 1.55; }
+  .ai-field label { font-size: 11px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); text-transform: none; }
+  .ai-field input,
+  .ai-field select {
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .ai-field input:focus, .ai-field select:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 18%, transparent); }
+  .ai-providers { gap: 4px; }
+  .ai-providers button { height: 28px; padding: 0 6px; border-color: var(--border); border-radius: 7px; background: var(--surface-solid); font-size: 11px; font-weight: 520; color: var(--text-secondary); }
+  .ai-providers button.active { background: var(--surface-muted); border-color: var(--border-strong); color: var(--text); }
+  .ai-actions button { height: 28px; border-radius: 7px; font-size: 13px; font-weight: 520; }
+  .ai-actions button.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+
+  .dt-btn {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 520;
+    box-shadow: none;
+  }
+  .dt-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+  .dt-btn.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+  .dt-btn.primary:hover { background: var(--accent-pressed); border-color: var(--accent-pressed); }
+  .dt-modal-head { padding: 12px 16px; border-bottom: 1px solid var(--border); gap: 8px; }
+  .dt-modal-head h3 { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+  .dt-modal-body { padding: 14px 16px 16px; }
+  .dt-row label { font-size: 11px; color: var(--text-secondary); letter-spacing: 0; }
+  .dt-input {
+    height: 30px;
+    padding: 0 9px;
+    border-color: var(--border);
+    border-radius: 7px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .dt-input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .dt-hint { font-size: 11px; color: var(--text-tertiary); }
+  .dt-lib-grid { gap: 10px; }
+  .dt-lib-item { border-color: var(--border); border-radius: 8px; background: transparent; }
+  .dt-lib-item:hover { border-color: var(--border-strong); }
+  .dt-lib-item img { background: var(--surface-muted); border-radius: 6px; }
+  .dt-lib-name { font-size: 13px; color: var(--text); }
+  .dt-lib-time { font-size: 11px; color: var(--text-tertiary); }
+  .dt-lib-ops button { height: 26px; border-color: var(--border); border-radius: 6px; background: var(--surface-muted); color: var(--text-secondary); font-size: 11px; }
+  .dt-lib-ops button:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+  .dt-drag-dots { color: var(--text-tertiary); }
+
+  .manual-box { font-size: 13px; line-height: 1.65; }
+  .manual-head { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .manual-head h3 { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+  .manual-body { padding: 16px 20px 22px; font-size: 13px; }
+  .manual-body h4 { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .manual-body table { font-size: 11px; }
+  .manual-body td { border-color: var(--border); }
+
+  .appearance-switch { padding: 2px; border: 1px solid transparent; border-radius: 9px; background: var(--surface-muted); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .appearance-switch button { min-height: 24px; height: 24px; border-radius: 6px; font-size: 11px; font-weight: 500; }
+  .appearance-switch button.active { background: var(--surface-solid); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+
+  .toolbar-engine-label,
+  .engine-sheet-sub,
+  .engine-foot-note { color: var(--text-secondary); }
+
+  .fab-tip { font-size: 11px; }
+
+  @media (prefers-reduced-transparency: reduce) {
+    header,
+    .toolbar,
+    .kbd-hints,
+    .toolbar-advanced {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: var(--surface-solid);
+    }
+  }
+
+  @media (max-width: 1199px) {
+    .app {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: 52px auto minmax(0, 1fr) auto;
+      padding: 0;
+    }
+
+    .app > header,
+    .app > #toolbar,
+    .app > .comparison,
+    .app > .status-bar { grid-column: 1; }
+
+    .app > .comparison { margin-left: 12px; margin-right: 12px; }
+    .app > #inspector {
+      width: 312px;
+      max-width: calc(100vw - 24px);
+      padding: 0;
+      border-left: 1px solid var(--border);
+      background: var(--surface-solid);
+      box-shadow: var(--shadow-dialog);
+    }
+
+    #btn-inspector {
+      top: 50%;
+      left: 12px;
+      transform: translateY(-50%);
+      height: 28px;
+      border-color: var(--border);
+      background: var(--surface-muted);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+      gap: 4px;
+    }
+
+    .app > header .header-row { padding-left: 58px; }
+  }
+
+  @media (max-width: 640px) {
+    header { padding: 0 12px; }
+    .header-rec-mode { margin-left: 6px; }
+    .header-rec-label { display: none; }
+    .header-actions .dt-btn span { display: none; }
+    .header-actions .dt-btn { width: 28px; padding: 0; justify-content: center; }
+    .app > .comparison { margin-left: 8px; margin-right: 8px; }
+  }
+
+  /* 朱红只留给品牌、印章内容与「应用框选」 */
+  .slider-handle { background: var(--info); }
+  .slider-handle::after {
+    background: var(--info);
+    border-color: #fff;
+    box-shadow: 0 2px 10px rgba(10,132,255,.28);
+  }
+  .slider-handle:hover::after { box-shadow: 0 3px 14px rgba(10,132,255,.36); }
+  .slider-handle::before { color: #fff; font-size: 11px; }
+
+  .cand-btn.active {
+    border-color: var(--border);
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+
+  .scp-pick.active {
+    background: var(--surface-muted);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .scp-pick.scp-pick-exclude.active {
+    background: var(--danger-bg);
+    color: var(--danger);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 22%, transparent);
+  }
+
+  #ocr-status-bar .ocr-slaunch {
+    background: var(--text);
+    color: var(--surface-solid);
+    border-radius: 6px;
+    font-size: 11px;
+  }
+  #ocr-status-bar .ocr-slaunch:hover { background: var(--text); opacity: .86; }
+
+  .ocr-cancel-btn {
+    border-color: color-mix(in srgb, var(--danger) 24%, transparent);
+    background: var(--danger-bg);
+    color: var(--danger);
+    font-size: 11px;
+    border-radius: 6px;
+  }
+  .ocr-cancel-btn:hover { background: var(--danger); color: #fff; }
+
+  .engine-switch[aria-checked="true"] { background: var(--switch-on); border-color: transparent; }
+  .engine-btn.primary,
+  .engine-btn.primary:hover,
+  .ai-actions button.primary,
+  .ai-actions button.primary:hover,
+  .dt-btn.primary,
+  .dt-btn.primary:hover {
+    border-color: var(--text);
+    background: var(--text);
+    color: var(--surface-solid);
+  }
+
+  #cmp-fab .fab-chip.active {
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-weight: 520;
+  }
+
+  /* 弹层字阶回到 11 / 13 / 15 */
+  .manual-body h4,
+  #manual-overlay h4 { color: var(--text); font-size: 13px; font-weight: 650; }
+  #manual-overlay th,
+  #manual-overlay td { font-size: 11px; line-height: 1.6; }
+  #manual-overlay th { font-weight: 520; color: var(--text-secondary); }
+  #manual-overlay td { color: var(--text-secondary); }
+  #manual-overlay td b { color: var(--text); }
+
+  .stamp-color-panel .scp-custom-tag,
+  .stamp-color-panel .scp-custom .scp-empty,
+  .stamp-color-panel .scp-hint,
+  .stamp-color-panel .ink-custom .ink-mode,
+  .ocr-inline-label,
+  .ocr-inline-status,
+  .ov-chip .tag,
+  .ov-colors .ov-count { font-size: 11px; }
+
+  .ocr-inline-val { font-size: 13px; }
+  .manual-meta, .manual-foot { font-size: 11px; color: var(--text-tertiary); }
+
+  input[type="range"] { accent-color: var(--info); }
+
+  .stamp-color-panel .scp-presets .mode-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 7px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    box-shadow: none;
+  }
+
+  .stamp-color-panel .scp-presets .mode-btn.active {
+    border-color: var(--border);
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+
+  .stamp-color-panel .scp-presets .mode-btn[data-color="red"]::before,
+  .stamp-color-panel .scp-presets .mode-btn[data-color="blue"]::before,
+  .stamp-color-panel .scp-presets .mode-btn[data-color="purple"]::before,
+  .stamp-color-panel .scp-presets .mode-btn[data-color="gray"]::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #c44133;
+  }
+  .stamp-color-panel .scp-presets .mode-btn[data-color="blue"]::before { background: #3d6fa8; }
+  .stamp-color-panel .scp-presets .mode-btn[data-color="purple"]::before { background: #7550a8; }
+  .stamp-color-panel .scp-presets .mode-btn[data-color="gray"]::before { background: #77777c; }
 </style>
 </head>
 <body>
 
+<!-- U66 · 同一套 SF Symbols 风格线条图标（24px 画布 / 1.5 描边 / currentColor） -->
+<svg id="ui-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <symbol id="i-align" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="4.25"/>
+    <path d="M12 2.75v3.1M12 18.15v3.1M2.75 12h3.1M18.15 12h3.1"/>
+    <path d="M5.7 5.7l2.1 2.1M16.2 16.2l2.1 2.1M18.3 5.7l-2.1 2.1M7.8 16.2l-2.1 2.1" opacity=".55"/>
+  </symbol>
+  <symbol id="i-diff" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.25"/>
+    <path d="M12 3.75v16.5"/>
+    <path d="M12 4.35a7.65 7.65 0 0 1 0 15.3z" fill="currentColor" stroke="none" opacity=".18"/>
+  </symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24">
+    <circle cx="10.4" cy="10.4" r="6.5"/>
+    <path d="M15.2 15.2L21 21"/>
+    <path d="M7.6 10.4h5.6M10.4 7.6v5.6" opacity=".65"/>
+  </symbol>
+  <symbol id="i-original" viewBox="0 0 24 24">
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/>
+    <circle cx="8.3" cy="9.4" r="1.35"/>
+    <path d="M4.8 17.2l4.4-4.1 3 2.7 2.5-2.2 4.5 4.1"/>
+  </symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24">
+    <path d="M4 8V5.7A1.7 1.7 0 0 1 5.7 4H8M16 4h2.3A1.7 1.7 0 0 1 20 5.7V8M20 16v2.3a1.7 1.7 0 0 1-1.7 1.7H16M8 20H5.7A1.7 1.7 0 0 1 4 18.3V16"/>
+    <path d="M8 8.7h8M8 12h8M8 15.3h5" opacity=".8"/>
+  </symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24">
+    <path d="M5.2 7.2h13.6M9.2 7.2V5.4h5.6v1.8"/>
+    <path d="M6.7 7.2l.8 11.1a1.8 1.8 0 0 0 1.8 1.7h5.4a1.8 1.8 0 0 0 1.8-1.7l.8-11.1"/>
+    <path d="M10 10.5v5.8M14 10.5v5.8" opacity=".6"/>
+  </symbol>
+  <symbol id="i-save" viewBox="0 0 24 24">
+    <path d="M4.5 7.5V6.3A1.8 1.8 0 0 1 6.3 4.5h8.1l4.1 4.1v9.1a1.8 1.8 0 0 1-1.8 1.8H6.3a1.8 1.8 0 0 1-1.8-1.8V15"/>
+    <path d="M14.4 4.8v4.4H9.8"/>
+    <path d="M12 12.2v7.3M9.2 16.6L12 19.4l2.8-2.8" opacity=".85"/>
+  </symbol>
+  <symbol id="i-more" viewBox="0 0 24 24">
+    <circle cx="5.5" cy="12" r="1.25" fill="currentColor" stroke="none"/>
+    <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none"/>
+    <circle cx="18.5" cy="12" r="1.25" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24">
+    <path d="M4.2 8.6h3.1l1.4-2.1h6.6l1.4 2.1h3.1a1.7 1.7 0 0 1 1.7 1.7v7.1a1.7 1.7 0 0 1-1.7 1.7H4.2a1.7 1.7 0 0 1-1.7-1.7v-7.1a1.7 1.7 0 0 1 1.7-1.7z"/>
+    <circle cx="12" cy="13.5" r="3.35"/>
+    <path d="M18.9 10.1h.1"/>
+  </symbol>
+  <symbol id="i-library" viewBox="0 0 24 24">
+    <path d="M4.5 5.4h4.1v14.1H4.5zM10.2 5.4h4.1v14.1h-4.1z" opacity=".9"/>
+    <path d="M16.2 5.9l3.2-.7 2.2 13.5-3.2.7z" opacity=".7"/>
+    <path d="M6.9 9.1h.1M12.6 9.1h.1" opacity=".55"/>
+  </symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24">
+    <path d="M4 7.2h16M4 12h16M4 16.8h16" opacity=".7"/>
+    <circle cx="8.2" cy="7.2" r="2.1" fill="var(--surface-solid)"/>
+    <circle cx="15.6" cy="12" r="2.1" fill="var(--surface-solid)"/>
+    <circle cx="10.2" cy="16.8" r="2.1" fill="var(--surface-solid)"/>
+  </symbol>
+  <symbol id="i-help" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.4"/>
+    <path d="M9.7 9.2a2.35 2.35 0 1 1 3.4 2.1c-.7.4-1.1.95-1.1 1.7v.35"/>
+    <circle cx="12" cy="16.5" r=".85" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-close" viewBox="0 0 24 24">
+    <path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>
+  </symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24">
+    <path d="M4.7 9.1A8.25 8.25 0 1 1 4.4 14"/>
+    <path d="M4.3 4.4v5h5"/>
+  </symbol>
+  <symbol id="i-crop" viewBox="0 0 24 24">
+    <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/>
+    <path d="M8 8h8v8H8z" opacity=".55"/>
+  </symbol>
+  <symbol id="i-extract" viewBox="0 0 24 24">
+    <path d="M12 3.6c2.5 3.2 5.6 6.3 5.6 9.7a5.6 5.6 0 0 1-11.2 0c0-3.4 3.1-6.5 5.6-9.7z"/>
+    <path d="M9.4 13.7a2.7 2.7 0 0 0 2.7 2.7" opacity=".55"/>
+  </symbol>
+  <symbol id="i-exclude" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.2"/>
+    <path d="M6.3 6.3l11.4 11.4"/>
+  </symbol>
+  <symbol id="i-check" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.2"/>
+    <path d="M8.2 12.2l2.6 2.6 5-5.4"/>
+  </symbol>
+  <symbol id="i-warning" viewBox="0 0 24 24">
+    <path d="M10.3 4.6L3.5 17a1.8 1.8 0 0 0 1.6 2.6h13.8a1.8 1.8 0 0 0 1.6-2.6L13.7 4.6a1.9 1.9 0 0 0-3.4 0z"/>
+    <path d="M12 9v4.1"/>
+    <circle cx="12" cy="16.7" r=".85" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24">
+    <path d="M8 10l4 4 4-4"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24">
+    <circle cx="10.5" cy="10.5" r="6"/>
+    <path d="M15 15l5 5"/>
+  </symbol>
+  <symbol id="i-export" viewBox="0 0 24 24">
+    <path d="M12 15.2V4.4M8.6 7.8L12 4.4l3.4 3.4"/>
+    <path d="M5 13.8v4.4a1.8 1.8 0 0 0 1.8 1.8h10.4a1.8 1.8 0 0 0 1.8-1.8v-4.4"/>
+  </symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24">
+    <path d="M11.2 4.2l1.45 4.1 4.1 1.45-4.1 1.45-1.45 4.1-1.45-4.1-4.1-1.45 4.1-1.45z"/>
+    <path d="M17.6 13.4l.75 2.1 2.1.75-2.1.75-.75 2.1-.75-2.1-2.1-.75 2.1-.75z" opacity=".7"/>
+  </symbol>
+  <symbol id="i-engine" viewBox="0 0 24 24">
+    <rect x="6" y="6" width="12" height="12" rx="2.5"/>
+    <rect x="9.3" y="9.3" width="5.4" height="5.4" rx="1" opacity=".45"/>
+    <path d="M9.2 3.2v2.8M14.8 3.2v2.8M9.2 18v2.8M14.8 18v2.8M3.2 9.2H6M3.2 14.8H6M18 9.2h2.8M18 14.8h2.8"/>
+  </symbol>
+  <symbol id="i-info" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8.4"/>
+    <path d="M12 10.8v5"/>
+    <circle cx="12" cy="7.8" r=".85" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-empty-seal" viewBox="0 0 80 80">
+    <circle cx="40" cy="40" r="29" opacity=".55"/>
+    <circle cx="40" cy="40" r="23" opacity=".36"/>
+    <path d="M40 27.4l2.65 8.15h8.57l-6.93 5.03 2.65 8.15L40 43.7l-6.94 5.03 2.65-8.15-6.93-5.03h8.57z" opacity=".42"/>
+    <path d="M18 40h5M57 40h5M40 18v5M40 57v5" opacity=".22"/>
+  </symbol>
+</svg>
+
+<script>
+  window.uiIcon = function (name, cls) {
+    return '<svg class="ui-icon' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+  };
+</script>
 
 <!-- OCR 服务状态指示条 (非阻断，其他功能正常使用) -->
 <div id="ocr-status-bar">
@@ -3007,13 +4405,12 @@
 <div class="app">
   <header>
     <div class="header-row">
-      <svg class="product-mark" width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具">
-        <circle cx="50" cy="50" r="46" fill="none" stroke="#c0392b" stroke-width="4"/>
-        <circle cx="50" cy="50" r="38" fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="4 3"/>
-        <polygon points="50,22 55,36 70,36 58,45 62,59 50,50 38,59 42,45 30,36 45,36" fill="#c0392b"/>
-        <path d="M35,68 L45,78 L68,55" fill="none" stroke="#c0392b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg class="product-mark" width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具">
+        <circle cx="13" cy="13" r="11.1" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
+        <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.18">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.18</span></h1>
+      <h1 title="印章对比工具 v3.6.19">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.19</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -3028,7 +4425,7 @@
       <span class="zone-badge">参考章</span>
       <button class="remove-btn" type="button" title="清除参考章" aria-label="清除参考章">×</button>
       <div class="placeholder">
-        <div class="icon">📋</div>
+        <div class="icon"><svg class="empty-seal" viewBox="0 0 80 80" aria-hidden="true"><use href="#i-empty-seal"/></svg></div>
         <div class="label">点击或拖入印章图片</div>
         <div class="hint">合同印章作为参考基准 · 也可按 ⌘V 粘贴</div>
         <button class="choose-btn" type="button" data-choose-target="ref">选择文件…</button>
@@ -3039,7 +4436,7 @@
       <span class="zone-badge">待验章</span>
       <button class="remove-btn" type="button" title="清除待验章" aria-label="清除待验章">×</button>
       <div class="placeholder">
-        <div class="icon">📋</div>
+        <div class="icon"><svg class="empty-seal" viewBox="0 0 80 80" aria-hidden="true"><use href="#i-empty-seal"/></svg></div>
         <div class="label">点击或拖入印章图片</div>
         <div class="hint">待对比单据上的印章 · 也可按 ⌘V 粘贴</div>
         <button class="choose-btn" type="button" data-choose-target="test">选择文件…</button>
@@ -3063,7 +4460,7 @@
   <!-- AI 文字提取设置面板（OpenAI 兼容模型） -->
   <div class="paste-dialog-overlay" id="ai-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="ai-dialog-title" aria-hidden="true">
     <div class="ai-dialog" tabindex="-1">
-      <h3 id="ai-dialog-title">🤖 AI 文字提取</h3>
+      <h3 id="ai-dialog-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 文字提取</h3>
       <div class="sub">配置 OpenAI 兼容的视觉/语言模型，支持 DeepSeek、智谱、火山方舟豆包视觉，也可连接任意兼容接口</div>
 
       <div class="ai-field">
@@ -3102,8 +4499,8 @@
       <div class="ai-field">
         <label for="ai-speed">速度 / 精度</label>
         <select id="ai-speed">
-          <option value="fast">⚡ 快速 — 关闭思考，约 1 秒/枚（推荐）</option>
-          <option value="precise">🎯 精确 — 开启思考，约 8~25 秒/枚，复杂章更准</option>
+          <option value="fast">快速 — 关闭思考，约 1 秒/枚（推荐）</option>
+          <option value="precise">精确 — 开启思考，约 8~25 秒/枚，复杂章更准</option>
         </select>
       </div>
 
@@ -3150,19 +4547,19 @@
           <div class="scp-custom" id="scp-exclude-ref"></div>
         </div>
         <div class="scp-row">
-          <button class="btn btn-icon scp-crop" id="crop-ref" data-target="ref" title="框选印章区域：在预览图上拖出印章范围，只提取框内内容（适合黑白扫描件/正文压章）">▣ 框选</button>
-          <button class="btn btn-icon scp-pick" id="pick-ref" data-target="ref" data-exclude="0" title="提取取色：点击后在参考章原图预览上点选要保留的印章墨水颜色">💧 提取</button>
-          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-ref" data-target="ref" data-exclude="1" title="排除取色：点击后在参考章原图预览上点选要从印章中排除的颜色">⊘ 排除</button>
-          <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-ref" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）">🤖 AI 提取</button>
+          <button class="btn btn-icon scp-crop" id="crop-ref" data-target="ref" title="框选印章区域：在预览图上拖出印章范围，只提取框内内容（适合黑白扫描件/正文压章）"><svg class="ui-icon" aria-hidden="true"><use href="#i-crop"/></svg> 框选</button>
+          <button class="btn btn-icon scp-pick" id="pick-ref" data-target="ref" data-exclude="0" title="提取取色：点击后在参考章原图预览上点选要保留的印章墨水颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-extract"/></svg> 提取</button>
+          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-ref" data-target="ref" data-exclude="1" title="排除取色：点击后在参考章原图预览上点选要从印章中排除的颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-exclude"/></svg> 排除</button>
+          <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-ref" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 提取</button>
         </div>
-        <div class="scp-hint">💧 提取＝保留所选颜色作印章墨迹　·　⊘ 排除＝从结果中去除所选颜色</div>
+        <div class="scp-hint">提取＝保留所选颜色作印章墨迹　·　排除＝从结果中去除所选颜色</div>
       </div>
       <canvas id="ext-ref" width="160" height="160"></canvas>
       <div class="ext-label">参考章提取</div>
       <div class="stamp-candidates" id="cand-ref"></div>
       <div class="ocr-inline" id="ocr-ref">
         <div class="ocr-inline-row ai-ocr-row" id="ai-ocr-row-ref" style="display:none">
-          <button class="ai-ocr-btn" id="ai-ocr-ref" title="用 AI 识别本枚印章文字">🤖 AI 识别</button>
+          <button class="ai-ocr-btn" id="ai-ocr-ref" title="用 AI 识别本枚印章文字"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 识别</button>
         </div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-ref-company">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-ref-code">—</span></div>
@@ -3197,19 +4594,19 @@
           <div class="scp-custom" id="scp-exclude-test"></div>
         </div>
         <div class="scp-row">
-          <button class="btn btn-icon scp-crop" id="crop-test" data-target="test" title="框选印章区域：在预览图上拖出印章范围，只提取框内内容（适合黑白扫描件/正文压章）">▣ 框选</button>
-          <button class="btn btn-icon scp-pick" id="pick-test" data-target="test" data-exclude="0" title="提取取色：点击后在待验章原图预览上点选要保留的印章墨水颜色">💧 提取</button>
-          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-test" data-target="test" data-exclude="1" title="排除取色：点击后在待验章原图预览上点选要从印章中排除的颜色">⊘ 排除</button>
-          <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-test" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）">🤖 AI 提取</button>
+          <button class="btn btn-icon scp-crop" id="crop-test" data-target="test" title="框选印章区域：在预览图上拖出印章范围，只提取框内内容（适合黑白扫描件/正文压章）"><svg class="ui-icon" aria-hidden="true"><use href="#i-crop"/></svg> 框选</button>
+          <button class="btn btn-icon scp-pick" id="pick-test" data-target="test" data-exclude="0" title="提取取色：点击后在待验章原图预览上点选要保留的印章墨水颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-extract"/></svg> 提取</button>
+          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-test" data-target="test" data-exclude="1" title="排除取色：点击后在待验章原图预览上点选要从印章中排除的颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-exclude"/></svg> 排除</button>
+          <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-test" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 提取</button>
         </div>
-        <div class="scp-hint">💧 提取＝保留所选颜色作印章墨迹　·　⊘ 排除＝从结果中去除所选颜色</div>
+        <div class="scp-hint">提取＝保留所选颜色作印章墨迹　·　排除＝从结果中去除所选颜色</div>
       </div>
       <canvas id="ext-test" width="160" height="160"></canvas>
       <div class="ext-label">待验章提取</div>
       <div class="stamp-candidates" id="cand-test"></div>
       <div class="ocr-inline" id="ocr-test">
         <div class="ocr-inline-row ai-ocr-row" id="ai-ocr-row-test" style="display:none">
-          <button class="ai-ocr-btn" id="ai-ocr-test" title="用 AI 识别本枚印章文字">🤖 AI 识别</button>
+          <button class="ai-ocr-btn" id="ai-ocr-test" title="用 AI 识别本枚印章文字"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 识别</button>
         </div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">名称</span><span class="ocr-inline-val" id="ocr-test-company">—</span></div>
         <div class="ocr-inline-row"><span class="ocr-inline-label">编码</span><span class="ocr-inline-val" id="ocr-test-code">—</span></div>
@@ -3243,10 +4640,11 @@
       </div>
       <span class="tb-sep" aria-hidden="true"></span>
       <div class="tb-group tb-view">
-        <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）" aria-label="自动对齐"><span class="btn-ico" aria-hidden="true">⚡</span><span class="btn-label">自动对齐</span></button>
-        <button class="btn" id="btn-diff" title="高亮差异区域（快捷键 D）" aria-label="差异高亮"><span class="btn-ico" aria-hidden="true">◐</span><span class="btn-label">差异高亮</span></button>
-        <button class="btn btn-icon" id="btn-magnifier" aria-pressed="false" title="放大镜：悬停画布时放大细节；再次点击关闭" aria-label="放大镜"><span aria-hidden="true">⌕</span></button>
-        <button class="btn" id="btn-origin" title="查看原图：放大检查、框选提取区域、直接点选墨色" aria-label="原图"><span class="btn-ico" aria-hidden="true">▣</span><span class="btn-label">原图</span></button>
+        <span class="tb-label">查看与对齐</span>
+        <button class="btn" id="btn-align" title="自动对齐两枚印章（快捷键 A）" aria-label="自动对齐"><svg class="ui-icon" aria-hidden="true"><use href="#i-align"/></svg><span class="btn-label">自动对齐</span></button>
+        <button class="btn" id="btn-diff" title="高亮差异区域（快捷键 D）" aria-label="差异高亮"><svg class="ui-icon" aria-hidden="true"><use href="#i-diff"/></svg><span class="btn-label">差异高亮</span></button>
+        <button class="btn btn-icon" id="btn-magnifier" aria-pressed="false" title="放大镜：悬停画布时放大细节；再次点击关闭" aria-label="放大镜"><svg class="ui-icon" aria-hidden="true"><use href="#i-zoom"/></svg></button>
+        <button class="btn" id="btn-origin" title="查看原图：放大检查、框选提取区域、直接点选墨色" aria-label="原图"><svg class="ui-icon" aria-hidden="true"><use href="#i-original"/></svg><span class="btn-label">原图</span></button>
       </div>
       <span class="tb-sep" aria-hidden="true"></span>
       <div class="tb-group tb-switches">
@@ -3263,13 +4661,13 @@
       </div>
       <span class="tb-spacer" aria-hidden="true"></span>
       <div class="tb-group tb-identify">
-        <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码" aria-label="全部识别"><span class="btn-ico" aria-hidden="true">◎</span><span class="btn-label">全部识别</span></button>
+        <button class="btn" id="btn-ocr" title="提取两个印章的文字及编码" aria-label="全部识别"><svg class="ui-icon" aria-hidden="true"><use href="#i-scan"/></svg><span class="btn-label">全部识别</span></button>
       </div>
       <span class="tb-sep" aria-hidden="true"></span>
       <div class="tb-group tb-end">
-        <button class="btn" id="btn-clear" title="清空两枚印章与所有调整，开始新的比对（⌘⇧⌫）" aria-label="清空"><span class="btn-ico" aria-hidden="true">🗑</span><span class="btn-label">清空</span></button>
+        <button class="btn" id="btn-clear" title="清空两枚印章与所有调整，开始新的比对（⌘⇧⌫）" aria-label="清空"><svg class="ui-icon" aria-hidden="true"><use href="#i-trash"/></svg><span class="btn-label">清空</span></button>
         <!-- 桌面版「存参考章/待验章」按钮由脚本注入到这里 -->
-        <button class="btn" type="button" id="toolbar-more" aria-expanded="false" aria-controls="toolbar-advanced">⋯ 更多</button>
+        <button class="btn" type="button" id="toolbar-more" aria-expanded="false" aria-controls="toolbar-advanced"><svg class="ui-icon" aria-hidden="true"><use href="#i-more"/></svg><span class="btn-label">更多</span></button>
       </div>
     </div>
     <div class="toolbar-advanced" id="toolbar-advanced" hidden>
@@ -3279,9 +4677,9 @@
       </div>
       <div class="toolbar-engine-row">
         <span class="toolbar-engine-label">工具</span>
-        <button class="btn" type="button" id="menu-engine">识别引擎…</button>
-        <button class="btn" type="button" id="btn-export" title="导出对比结果为 PNG（⌘E）">导出 PNG</button>
-        <button class="btn" type="button" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）">AI 识别设置…</button>
+        <button class="btn" type="button" id="menu-engine"><svg class="ui-icon" aria-hidden="true"><use href="#i-engine"/></svg>识别引擎…</button>
+        <button class="btn" type="button" id="btn-export" title="导出对比结果为 PNG（⌘E）"><svg class="ui-icon" aria-hidden="true"><use href="#i-export"/></svg>导出 PNG</button>
+        <button class="btn" type="button" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg>AI 识别设置…</button>
       </div>
       <div class="toolbar-row">
         <label>旋转</label>
@@ -3315,7 +4713,7 @@
           <span class="val" id="val-offset-y">0px</span>
         </div>
         <div class="spacer"></div>
-        <button class="btn btn-icon" id="btn-reset" title="重置调整">↺</button>
+        <button class="btn btn-icon" id="btn-reset" title="重置调整"><svg class="ui-icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
       </div>
     </div>
   </div>
@@ -3329,7 +4727,7 @@
 
   <aside id="inspector" aria-label="判定与识别结果">
     <div class="inspector-empty" id="inspector-empty">
-      <span class="inspector-empty-icon">◎</span>
+      <span class="inspector-empty-icon"><svg class="ui-icon" aria-hidden="true"><use href="#i-empty-seal"/></svg></span>
       加载两枚印章后<br>显示判定、识别与候选结果
     </div>
 
@@ -3372,7 +4770,7 @@
         <div class="inspector-card-title">
           <span id="inspector-recognition-title">识别</span>
         </div>
-        <div class="inspector-warning" id="inspector-name-warning" hidden>⚠ 两章名称不一致</div>
+        <div class="inspector-warning" id="inspector-name-warning" hidden><svg class="ui-icon" aria-hidden="true"><use href="#i-warning"/></svg>两章名称不一致</div>
         <div class="inspector-stamp">
           <div class="inspector-stamp-head">
             <span class="inspector-stamp-label">参考章</span>
@@ -3458,7 +4856,7 @@
         <button type="button" id="ov-zoom-in" title="放大">＋</button>
         <button type="button" id="ov-fit" title="适应窗口">适应</button>
       </div>
-      <button type="button" class="ov-close" id="ov-close" aria-label="关闭">✕</button>
+      <button type="button" class="ov-close" id="ov-close" aria-label="关闭"><svg class="ui-icon" aria-hidden="true"><use href="#i-close"/></svg></button>
     </div>
     <div class="ov-loupe" id="ov-loupe" hidden>
       <div class="ov-loupe-img" id="ov-loupe-img"><i class="loupe-dot"></i></div>
@@ -3510,7 +4908,7 @@
           </div>
           <span class="ov-spacer" aria-hidden="true"></span>
           <div class="ov-group ov-end-group">
-            <button type="button" class="btn" id="ov-reset" title="清除当前框选/取色标记，恢复自动定位">重置</button>
+            <button type="button" class="btn" id="ov-reset" title="清除当前框选/取色标记，恢复自动定位"><svg class="ui-icon" aria-hidden="true"><use href="#i-reset"/></svg>重置</button>
             <button type="button" class="btn" id="ov-cancel">取消</button>
             <button type="button" class="btn btn-primary" id="ov-apply">应用框选</button>
           </div>
@@ -3595,7 +4993,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.18';
+const APP_VERSION = '3.6.19';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6566,9 +7964,9 @@ async function runAIStampExtract(target) {
   }
 
   const btn = $('#ai-pick-' + target);
-  const originalText = btn.textContent;
+  const originalText = btn.innerHTML;
   btn.classList.add('running');
-  btn.textContent = '🤖 定位中...';
+  btn.innerHTML = uiIcon('sparkles') + ' 定位中...';
   showStatus(`${stampLabel(target)}正在由 AI 定位印章...`);
   const token = ++state._aiStampSeq;
 
@@ -6596,7 +7994,7 @@ async function runAIStampExtract(target) {
     }
   } finally {
     btn.classList.remove('running');
-    btn.textContent = originalText;
+    btn.innerHTML = originalText;
   }
 }
 
@@ -7218,7 +8616,7 @@ function ovRenderColors() {
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'del';
-    del.textContent = '✕';
+    del.innerHTML = uiIcon('close');
     del.title = '删除这个颜色';
     del.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -10395,7 +11793,7 @@ document.querySelectorAll('#rec-mode-group .mode-btn').forEach(b => {
       try { aiOpenDialog(); } catch (e) { /* ignore */ }
     } else {
       showStatus(rec === 'ai'
-        ? `识别方式：AI（${(window._aiConfig.model || '')}）— 印章加载后自动识别，或点击每枚印章的「🤖 AI 识别」`
+        ? `识别方式：AI（${(window._aiConfig.model || '')}）— 印章加载后自动识别，或点击每枚印章的「AI 识别」`
         : '识别方式：本地 PaddleOCR');
     }
     // 识别方式变化后重检服务状态（PaddleOCR 缺失时 AI 视觉模式可恢复按钮可用）
@@ -11878,12 +13276,12 @@ statusBar.classList.add('visible');
     display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 16px 56px rgba(0,0,0,0.3);
   }
   #manual-overlay .manual-head { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid #eceff3; }
-  #manual-overlay .manual-head h3 { margin: 0; font-size: 16px; flex: 1; }
-  #manual-overlay .manual-body { flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; padding: 16px 22px; overflow-y: auto; font: 13px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color: #333; }
+  #manual-overlay .manual-head h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.02em; flex: 1; }
+  #manual-overlay .manual-body { flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; padding: 16px 22px; overflow-y: auto; font: 13px/1.7 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Segoe UI","Helvetica Neue",sans-serif; color: var(--text); }
   #manual-overlay table { border-collapse: collapse; margin: 6px 0 14px; width: 100%; }
-  #manual-overlay th, #manual-overlay td { border: 1px solid #e6e9ef; padding: 6px 10px; text-align: left; font-size: 12.5px; }
-  #manual-overlay th { background: #f6f8fa; }
-  #manual-overlay h4 { margin: 14px 0 6px; font-size: 14px; color: #c0392b; }
+  #manual-overlay th, #manual-overlay td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 11px; line-height: 1.6; }
+  #manual-overlay th { background: var(--surface-muted); color: var(--text-secondary); font-weight: 520; }
+  #manual-overlay h4 { margin: 14px 0 6px; font-size: 13px; font-weight: 650; color: var(--text); }
 </style>
 
 <div id="cmp-fab" style="display:none">
@@ -11895,66 +13293,66 @@ statusBar.classList.add('visible');
   <button class="fab-btn" data-fab="rot-l" title="逆时针旋转 1°">↺</button>
   <button class="fab-btn" data-fab="rot-r" title="顺时针旋转 1°">↻</button>
   <div class="fab-sep"></div>
-  <button class="fab-btn" data-fab="align" title="自动对齐两枚印章（A）" style="color:#c0392b">⚡</button>
+  <button class="fab-btn" data-fab="align" title="自动对齐两枚印章（A）"><svg class="ui-icon" aria-hidden="true"><use href="#i-align"/></svg></button>
   <button class="fab-btn" data-fab="reset" title="重置当前印章调整（R）">⟲</button>
   <div class="fab-tip">滚轮旋转（纵向/横向都可）· Ctrl⌘+滚轮缩放</div>
 </div>
 
 <div id="manual-overlay" role="dialog" aria-modal="true" aria-labelledby="manual-title" aria-hidden="true">
   <div class="manual-box" tabindex="-1">
-    <div class="manual-head"><h3 id="manual-title">📖 使用说明</h3><button class="dt-btn" id="manual-close">关闭</button></div>
+    <div class="manual-head"><h3 id="manual-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-help"/></svg>使用说明</h3><button class="dt-btn" id="manual-close">关闭</button></div>
     <div class="manual-body">
-      <h4>🎯 30 秒上手</h4>
+      <h4>30 秒上手</h4>
       <table>
         <tr><th>步骤</th><th>怎么做</th></tr>
-        <tr><td>1 载入</td><td>拖入 / ⌘V 粘贴 / 「选择文件」到「参考章」「待验章」；也可从「📚 印章库」载入。桌面版可 ⌘⇧S 截图后直接粘贴</td></tr>
-        <tr><td>2 提取</td><td>默认按红章自动提取；颜色不对或淡章 → 打开「原图 → 💧点选取色」点笔画取色</td></tr>
-        <tr><td>3 对齐</td><td>点「⚡ 自动对齐」（A）；不理想再用滚轮/滑块微调</td></tr>
+        <tr><td>1 载入</td><td>拖入 / ⌘V 粘贴 / 「选择文件」到「参考章」「待验章」；也可从「印章库」载入。桌面版可 ⌘⇧S 截图后直接粘贴</td></tr>
+        <tr><td>2 提取</td><td>默认按红章自动提取；颜色不对或淡章 → 打开「原图 → 点选取色」点笔画取色</td></tr>
+        <tr><td>3 对齐</td><td>点「自动对齐」（A）；不理想再用滚轮/滑块微调</td></tr>
         <tr><td>4 看结论</td><td>右栏「判定」给相似度与文字/几何/编码三项指标，「差异高亮」看红绿分布</td></tr>
       </table>
 
-      <h4>🧭 该用哪个功能？（按情况选）</h4>
+      <h4>该用哪个功能？（按情况选）</h4>
       <table>
         <tr><th>你的情况</th><th>用这个</th><th>说明</th></tr>
         <tr><td>红章、白底、印得清楚</td><td>什么都不用点</td><td>自动提取已够用；直接「自动对齐」比对</td></tr>
         <tr><td>灰底扫描件，字边一圈深、字心发灰（晕染）</td><td>工具栏「优化提取」开关（开）</td><td>按「深×艳」判墨抑制边缘环；比完记得关回去</td></tr>
         <tr><td>淡章/残缺章，笔画细、提出来断断续续</td><td>「优化提取」开关（关）+ 取色</td><td>默认关就为这种章；开反而会把淡笔画切碎</td></tr>
-        <tr><td>蓝/紫/黑灰/多色混盖</td><td>「原图 → 💧点选取色」</td><td>点几处不同深浅的笔画，多色叠加提取</td></tr>
+        <tr><td>蓝/紫/黑灰/多色混盖</td><td>「原图 → 点选取色」</td><td>点几处不同深浅的笔画，多色叠加提取</td></tr>
         <tr><td>背景/表格线/签名被一起提取进来</td><td>取色面板切「⊘ 排除」再点掉</td><td>排除优先于提取；「剔除容差」调小更精准</td></tr>
         <tr><td>要与具体色值完全一致（专色/防伪油墨）</td><td>查看器底部「匹配 → 精确RGB」</td><td>只认容差内的欧氏距离；色相模式会连深浅一起抓</td></tr>
         <tr><td>盖章压扁/拍歪，章呈椭圆</td><td>工具栏「圆章校正」开关（默认开）</td><td>拟合长轴拉回正圆；淡墨/残缺自动跳过，不会拧出波纹</td></tr>
         <tr><td>只要章的某一块（避开正文压字）</td><td>「原图 → ⭕圆形裁切」</td><td>拖圆心 + 4 个轴端手柄贴合边缘，应用后归一为正圆</td></tr>
         <tr><td>差一点点对不上</td><td>滚轮旋转 + 滑块微调 + 「差异高亮」</td><td>画布内滚轮＝旋转，Ctrl/⌘+滚轮＝缩放</td></tr>
-        <tr><td>想确认公司名/编码/类型</td><td>「🤖 AI 识别」或「全部识别」</td><td>本地 OCR 先出结果、AI 复核；AI 失败保留本地并写原因</td></tr>
-        <tr><td>同一枚章反复比对</td><td>「📚 印章库」→ 存库</td><td>按 OCR 名称建索引，下次一键载入</td></tr>
+        <tr><td>想确认公司名/编码/类型</td><td>「AI 识别」或「全部识别」</td><td>本地 OCR 先出结果、AI 复核；AI 失败保留本地并写原因</td></tr>
+        <tr><td>同一枚章反复比对</td><td>「印章库」→ 存库</td><td>按 OCR 名称建索引，下次一键载入</td></tr>
       </table>
 
-      <h4>🖼 提取与取色</h4>
+      <h4>提取与取色</h4>
       <table>
         <tr><th>项</th><th>说明</th></tr>
         <tr><td>自动提取</td><td>按红度/墨量判墨并归一化；一张图多枚章用候选芯片切换</td></tr>
-        <tr><td>💧 点选取色</td><td>在原图上点笔画颜色（可多次，最多 40 种）；同色再点＝切换提取/排除</td></tr>
+        <tr><td>点选取色</td><td>在原图上点笔画颜色（可多次，最多 40 种）；同色再点＝切换提取/排除</td></tr>
         <tr><td>⊘ 排除</td><td>把该色从结果去掉；「剔除容差」越大去掉越多（14%≈±17 RGB）</td></tr>
         <tr><td>颜色加深</td><td>取色界面底部按墨色浓度提亮淡笔画；淡章晕染时先关掉</td></tr>
         <tr><td>放大镜</td><td>取色时跟随鼠标 5.5× 显示笔画像素与色值（#RRGGBB）</td></tr>
         <tr><td>取色标记</td><td>画布留小白点标记取过处，排除色带斜杠，便于复查</td></tr>
       </table>
 
-      <h4>🔍 对比与判定</h4>
+      <h4>对比与判定</h4>
       <table>
         <tr><th>功能</th><th>怎么用</th></tr>
-        <tr><td>自动对齐</td><td>⚡ 或 A：质心+半径归一+角度直方图+IoU 精调</td></tr>
+        <tr><td>自动对齐</td><td>A：质心+半径归一+角度直方图+IoU 精调</td></tr>
         <tr><td>三种模式</td><td>叠加 / 滑块 / 并排，快捷键 1 / 2 / 3</td></tr>
         <tr><td>差异高亮</td><td>像素级红绿分布，直接看哪里多墨少墨</td></tr>
         <tr><td>判定三指标</td><td>文字＝机构名相似度、几何＝椭圆轴比一致性、编码＝防伪码一致度；缺数据显示「—」</td></tr>
       </table>
 
-      <h4>🤖 AI 识别</h4>
+      <h4>AI 识别</h4>
       <table>
         <tr><th>项</th><th>说明</th></tr>
         <tr><td>识别方式</td><td>左上角「识别：本地 / AI」；本地＝内置 OCR，AI＝配置模型后走云端</td></tr>
         <tr><td>先本地后 AI</td><td>AI 模式仍先跑本地 OCR 填字段，再请 AI 复核；AI 失败保留本地结果并写原因</td></tr>
-        <tr><td>⚡快速 / 🎯精确</td><td>快速＝关思考（约 1 秒）；精确＝开思考（更准但 8–25 秒）；推理模型建议快速</td></tr>
+        <tr><td>快速 / 精确</td><td>快速＝关思考（约 1 秒）；精确＝开思考（更准但 8–25 秒）；推理模型建议快速</td></tr>
         <tr><td>视觉 / 文本解析</td><td>视觉＝把已校正的章面图发给多模态模型；文本解析＝把本地 OCR 文字发过去纠错</td></tr>
         <tr><td>常见失败</td><td>「未返回可解析的 JSON」多为端点/模型不匹配（Anthropic 端点、纯文本模型收到图片）；401＝key 无效</td></tr>
       </table>
@@ -11969,7 +13367,7 @@ statusBar.classList.add('visible');
         <tr><td>退出 / 应用</td><td>Esc 退出取色；Enter 应用框选</td></tr>
       </table>
 
-      <h4>❓ 常见问题</h4>
+      <h4>常见问题</h4>
       <table>
         <tr><th>现象</th><th>原因与处理</th></tr>
         <tr><td>一圈深、字心发灰</td><td>晕染：开「优化提取」；或把「颜色加深」关掉再看</td></tr>
@@ -11980,7 +13378,7 @@ statusBar.classList.add('visible');
       </table>
 
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.18</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.19</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
@@ -12056,7 +13454,11 @@ statusBar.classList.add('visible');
   const manualBtn = document.createElement('button');
   manualBtn.id = 'help-fab';
   manualBtn.type = 'button';
-  manualBtn.textContent = '📖 使用说明';
+  manualBtn.textContent = '';
+  manualBtn.innerHTML = uiIcon('help') + '<span>使用说明</span>';
+  manualBtn.style.display = 'inline-flex';
+  manualBtn.style.alignItems = 'center';
+  manualBtn.style.gap = '5px';
   manualBtn.setAttribute('aria-haspopup', 'dialog');
   manualBtn.addEventListener('click', () => mo.classList.add('visible'));
   (document.getElementById('status-actions') || document.body).appendChild(manualBtn);
@@ -12078,11 +13480,11 @@ statusBar.classList.add('visible');
     + 'padding:7px 12px;margin:0 0 8px;border:1px solid var(--border);border-radius:10px;'
     + 'background:var(--surface);font:12.5px/1.4 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#555;';
   collapseBar.innerHTML = [
-    '<span id="cb-ref" style="display:none">🟥 参考章 ✓</span>',
-    '<span id="cb-test" style="display:none">🟦 待验章 ✓</span>',
-    '<button class="cb-save" type="button" style="border:0;background:transparent;color:inherit;font:inherit;cursor:pointer">💾 保存参考章</button>',
-    '<button class="cb-save" type="button" style="border:0;background:transparent;color:inherit;font:inherit;cursor:pointer">💾 保存待验章</button>',
-    '<a href="#" id="cb-expand" style="color:#c0392b;text-decoration:none;font-weight:600">▲ 展开编辑卡片</a>',
+    '<span id="cb-ref" style="display:none">参考章</span>',
+    '<span id="cb-test" style="display:none">待验章</span>',
+    '<button class="cb-save" type="button" style="display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer">' + uiIcon('save') + '保存参考章</button>',
+    '<button class="cb-save" type="button" style="display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer">' + uiIcon('save') + '保存待验章</button>',
+    '<a href="#" id="cb-expand" style="display:inline-flex;align-items:center;gap:3px;color:var(--text-secondary);text-decoration:none;font-weight:500">' + uiIcon('chevron') + '展开编辑卡片</a>',
   ].join('');
   if (pasteRowEl && pasteRowEl.parentNode) pasteRowEl.parentNode.insertBefore(collapseBar, pasteRowEl);
 
@@ -12137,58 +13539,76 @@ statusBar.classList.add('visible');
      网页版（无 window.stampDesktop 桥）自动隐藏全部入口。
      ============================================================ -->
 <style>
-  .dt-btn { background: #fff; border: 1px solid #d8dce3; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: #333; }
-  .dt-btn:hover { border-color: #c0392b; color: #c0392b; }
-  .dt-btn.primary { background: #c0392b; border-color: #c0392b; color: #fff; }
-  .dt-btn.primary:hover { background: #a93226; }
-  .dt-overlay { position: fixed; inset: 0; background: rgba(20,24,30,0.5); z-index: 10000; display: none; align-items: center; justify-content: center; }
+  .dt-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 520;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .dt-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+  .dt-btn.primary { background: var(--text); border-color: var(--text); color: var(--surface-solid); }
+  .dt-btn.primary:hover { background: var(--text); border-color: var(--text); color: var(--surface-solid); opacity: .88; }
+  .dt-btn .ui-icon { color: currentColor; }
+  .dt-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.30); z-index: 10000; display: none; align-items: center; justify-content: center; }
   .dt-overlay.visible { display: flex; }
-  .dt-modal { background: #fff; border-radius: 10px; box-shadow: 0 12px 48px rgba(0,0,0,0.28); width: min(760px, 92vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; }
-  .dt-modal-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #eceff3; }
-  .dt-modal-head h3 { margin: 0; font-size: 16px; flex: 1; }
+  .dt-modal { background: var(--surface-solid); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-dialog); width: min(760px, 92vw); max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; }
+  .dt-modal-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .dt-modal-head h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.02em; flex: 1; }
+  .dt-modal-head h3 .ui-icon { color: var(--text-secondary); }
   .dt-modal-head { cursor: move; }
-  .dt-drag-dots { color: #b9c0cc; font-size: 12px; letter-spacing: -2px; margin-right: 2px; user-select: none; }
-
-  .dt-modal-body { padding: 16px 18px; overflow-y: auto; }
-  .dt-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .dt-row label { font-size: 13px; color: #555; min-width: 92px; }
-  .dt-input { flex: 1; min-width: 200px; border: 1px solid #d8dce3; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
-  .dt-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-  .dt-lib-item { border: 1px solid #e5e8ee; border-radius: 8px; padding: 8px; text-align: center; position: relative; }
-  .dt-lib-item:hover { border-color: #c0392b; }
-  .dt-lib-item img { width: 100%; height: 110px; object-fit: contain; background: #fafbfc; border-radius: 4px; cursor: pointer; }
-  .dt-lib-name { font-size: 12px; color: #333; margin-top: 6px; line-height: 1.35; word-break: break-all; max-height: 2.7em; overflow: hidden; }
-  .dt-lib-time { font-size: 11px; color: #999; margin-top: 2px; }
+  .dt-drag-dots { color: var(--text-tertiary); font-size: 11px; letter-spacing: -2px; margin-right: 0; user-select: none; }
+  .dt-modal-body { padding: 14px 16px 16px; overflow-y: auto; }
+  .dt-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .dt-row label { font-size: 11px; color: var(--text-secondary); min-width: 88px; }
+  .dt-input { flex: 1; min-width: 200px; height: 30px; border: 1px solid var(--border); border-radius: 7px; padding: 0 9px; background: var(--surface-muted); color: var(--text); font-family: inherit; font-size: 13px; }
+  .dt-input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .dt-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .dt-lib-item { border: 1px solid var(--border); border-radius: 8px; padding: 8px; text-align: center; position: relative; }
+  .dt-lib-item:hover { border-color: var(--border-strong); }
+  .dt-lib-item img { width: 100%; height: 110px; object-fit: contain; background: var(--surface-muted); border-radius: 6px; cursor: pointer; }
+  .dt-lib-name { font-size: 13px; color: var(--text); margin-top: 6px; line-height: 1.35; word-break: break-all; max-height: 2.7em; overflow: hidden; }
+  .dt-lib-time { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
   .dt-lib-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
   .dt-lib-ops button {
-    font-size: 11px; line-height: 1.2; padding: 5px 4px; border: 1px solid #d8dce3; background: #fff;
-    border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    height: 25px; font-size: 11px; line-height: 1.2; padding: 0 4px; border: 1px solid var(--border); background: var(--surface-muted);
+    color: var(--text-secondary); border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .dt-lib-ops button:hover { border-color: #c0392b; color: #c0392b; }
-  .dt-lib-ops button.del:hover { border-color: #e74c3c; color: #e74c3c; }
-  .dt-cap-toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px); background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); padding: 14px 18px; z-index: 10001; display: none; align-items: center; gap: 10px; opacity: 0; transition: all .18s ease; }
+  .dt-lib-ops button:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+  .dt-lib-ops button.del:hover { border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); }
+  .dt-cap-toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px); background: var(--surface-solid); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-dialog); padding: 12px 14px; z-index: 10001; display: none; align-items: center; gap: 10px; opacity: 0; transition: opacity .18s ease, transform .18s ease; }
   .dt-cap-toast.visible { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
-  .dt-cap-toast img { width: 86px; height: 86px; object-fit: contain; background: #fafbfc; border-radius: 6px; }
-  .dt-cap-toast .t { font-size: 13px; color: #333; margin-bottom: 8px; }
-  .dt-kbd-rec { border: 1px dashed #c0392b; color: #c0392b; text-align: center; }
-  .dt-hint { font-size: 12px; color: #8a919c; }
+  .dt-cap-toast img { width: 86px; height: 86px; object-fit: contain; background: var(--surface-muted); border-radius: 6px; }
+  .dt-cap-toast .t { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+  .dt-kbd-rec { border: 1px dashed var(--border-strong); color: var(--text); text-align: center; }
+  .dt-hint { font-size: 11px; color: var(--text-tertiary); }
 </style>
 
 <div class="dt-overlay" id="dt-lib-overlay">
   <div class="dt-modal">
     <div class="dt-modal-head">
-      <h3>📚 印章库</h3>
+      <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-library"/></svg>印章库</h3>
       <button class="dt-btn" id="dt-lib-reveal">打开目录</button>
       <button class="dt-btn" id="dt-lib-changepath">更改保存路径</button>
       <button class="dt-btn" id="dt-lib-close">关闭</button>
     </div>
     <div class="dt-modal-body">
       <div class="dt-row">
-        <input class="dt-input" id="dt-lib-search" placeholder="🔍 按印章名称 / 备注 / OCR 名称搜索…">
+        <input class="dt-input" id="dt-lib-search" placeholder="按印章名称 / 备注 / OCR 名称搜索…">
       </div>
       <div class="dt-hint" id="dt-lib-path" style="margin-bottom:10px"></div>
       <div class="dt-lib-grid" id="dt-lib-grid"></div>
-      <div class="dt-hint" id="dt-lib-empty" style="display:none; padding: 30px 0; text-align: center;">印章库为空 —— 对比界面上每个印章卡片右上角有「💾 存入库」按钮</div>
+      <div class="dt-hint" id="dt-lib-empty" style="display:none; padding: 30px 0; text-align: center;">印章库为空 —— 对比界面上每个印章卡片右上角有存入库按钮</div>
       <div style="border-top:1px solid #eceff3; margin-top:16px; padding-top:14px">
         <div class="dt-row">
           <label>保存当前</label>
@@ -12201,7 +13621,7 @@ statusBar.classList.add('visible');
         <div class="dt-row">
           <label>备注</label>
           <input class="dt-input" id="dt-save-note" placeholder="可选：来源文件、案件号等">
-          <button class="dt-btn primary" id="dt-save-btn">💾 存入库</button>
+          <button class="dt-btn primary" id="dt-save-btn"><svg class="ui-icon" aria-hidden="true"><use href="#i-save"/></svg>存入库</button>
         </div>
       </div>
     </div>
@@ -12211,7 +13631,7 @@ statusBar.classList.add('visible');
 <div class="dt-overlay" id="dt-settings-overlay">
   <div class="dt-modal" style="width:min(560px,92vw)">
     <div class="dt-modal-head">
-      <h3>⚙️ 桌面版设置</h3>
+      <h3><svg class="ui-icon" aria-hidden="true"><use href="#i-settings"/></svg>桌面版设置</h3>
       <button class="dt-btn" id="dt-settings-close">关闭</button>
     </div>
     <div class="dt-modal-body">
@@ -12279,9 +13699,9 @@ statusBar.classList.add('visible');
   const dtNav = document.createElement('div');
   dtNav.className = 'header-actions';
   dtNav.innerHTML = [
-    '<button class="dt-btn" id="dt-nav-capture" title="截图（快捷键可在设置中修改）">📷 截图</button>',
-    '<button class="dt-btn" id="dt-nav-lib">📚 印章库</button>',
-    '<button class="dt-btn" id="dt-nav-settings">⚙️ 设置</button>',
+    '<button class="dt-btn" id="dt-nav-capture" title="截图（快捷键可在设置中修改）">' + uiIcon('camera') + '<span>截图</span></button>',
+    '<button class="dt-btn" id="dt-nav-lib">' + uiIcon('library') + '<span>印章库</span></button>',
+    '<button class="dt-btn" id="dt-nav-settings">' + uiIcon('settings') + '<span>设置</span></button>',
   ].join('');
   headerRow.appendChild(dtNav);
 
@@ -12294,7 +13714,7 @@ statusBar.classList.add('visible');
   const mkSaveBtn = (target) => {
     const b = document.createElement('button');
     b.className = 'dt-btn';
-    b.textContent = '💾 保存' + (target === 'ref' ? '参考章' : '待验章') + '到印章库';
+    b.innerHTML = uiIcon('save') + '<span>保存' + (target === 'ref' ? '参考章' : '待验章') + '到印章库</span>';
     b.addEventListener('click', () => saveToLib(target));
     return b;
   };
@@ -12308,8 +13728,8 @@ statusBar.classList.add('visible');
   const toolbarSave = document.createElement('div');
   toolbarSave.id = 'toolbar-save';
   toolbarSave.style.cssText = 'display:none; gap:4px; align-items:center; flex:0 0 auto';
-  toolbarSave.innerHTML = '<button class="dt-btn" type="button" data-save="ref">💾 存参考章</button>'
-    + '<button class="dt-btn" type="button" data-save="test">💾 存待验章</button>';
+  toolbarSave.innerHTML = '<button class="dt-btn" type="button" data-save="ref">' + uiIcon('save') + '<span>存参考章</span></button>'
+    + '<button class="dt-btn" type="button" data-save="test">' + uiIcon('save') + '<span>存待验章</span></button>';
   if (toolbarEl) {
     const endGroup = toolbarEl.querySelector('.tb-end');
     const more = toolbarEl.querySelector('#toolbar-more');
@@ -12323,15 +13743,19 @@ statusBar.classList.add('visible');
   });
   function syncToolbarSave() {
     const has = (t) => !!(state[t] && state[t].extracted);
-    toolbarSave.style.display = (has('ref') || has('test')) ? 'flex' : 'none';
+    const any = has('ref') || has('test');
+    toolbarSave.style.display = any ? 'flex' : 'none';
+    if (saveRow) saveRow.style.display = any ? 'flex' : 'none';
     // 窄窗口用图标按钮（Apple 风格：空间不足先收文字，不换行不截断）
+    const hasBoth = has('ref') && has('test');
     const compact = window.innerWidth < 1120;
     toolbarSave.querySelectorAll('button').forEach((b) => {
       const t = b.dataset.save;
-      b.textContent = compact ? '💾' : (t === 'ref' ? '💾 存参考章' : '💾 存待验章');
+      const iconOnly = compact || (hasBoth && t === 'test' && window.innerWidth < 1320);
+      b.innerHTML = uiIcon('save') + (iconOnly ? '' : '<span>' + (t === 'ref' ? '存参考章' : '存待验章') + '</span>');
       b.title = t === 'ref' ? '保存参考章到印章库' : '保存待验章到印章库';
-      b.style.width = compact ? '30px' : '';
-      b.style.padding = compact ? '0' : '';
+      b.style.width = iconOnly ? '28px' : '';
+      b.style.padding = iconOnly ? '0' : '';
       b.style.justifyContent = 'center';
     });
     // 没有对应图片时隐藏那一枚，避免点了空保存
@@ -12619,11 +14043,11 @@ statusBar.classList.add('visible');
     if (window._retryOCRConnection) window._retryOCRConnection();
   });
 
-  // AI 模型配置：打开现有 AI 配置面板（与工具栏「🤖 AI」同一入口）
+  // AI 模型配置：打开现有 AI 配置面板（与工具栏 AI 同一入口）
   const aiRow = document.createElement('div');
   aiRow.className = 'dt-row';
   aiRow.innerHTML = '<label>AI 模型</label>' +
-    '<button class="dt-btn" id="dt-ai-cfg">🤖 打开 AI 配置（DeepSeek / 智谱 / 自定义）</button>' +
+    '<button class="dt-btn" id="dt-ai-cfg">' + uiIcon('sparkles') + '打开 AI 配置（DeepSeek / 智谱 / 自定义）</button>' +
     '<span class="dt-hint">识别方式在工具栏「识别」切换</span>';
   document.querySelector('#dt-settings-overlay .dt-modal-body').appendChild(aiRow);
   document.getElementById('dt-ai-cfg').addEventListener('click', () => {
@@ -12715,7 +14139,7 @@ statusBar.classList.add('visible');
   }
 
   #manual-overlay h4 {
-    color: var(--accent-text);
+    color: var(--text);
   }
 
   .header-rec-mode,
