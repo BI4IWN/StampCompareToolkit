@@ -33,7 +33,6 @@
 |---|---|---|
 | macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.17-mac-arm64.dmg` | 推荐；Rust 内核，取色/校正/识别全套功能 |
 | Windows（x64） | `StampCompareToolkit-Tauri-3.6.17-win-x64-setup.exe` | **主推**；约 16 MB，需系统自带 WebView2（Win10 1803+ / Win11 均内置） |
-| Windows（x64，兼容备选） | `StampCompareToolkit-3.6.17-win-x64-setup.exe` / `...-portable.exe` | Electron 版，约 180 MB；老机器/无 WebView2 时用 |
 | macOS（Intel） | `StampCompareToolkit-3.6.17-mac-x64.dmg` | Electron 版，本地视觉模型不可用，其余功能一致 |
 
 - **无需安装 Python**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用。
