@@ -2011,11 +2011,12 @@
     position: fixed; inset: 0; z-index: 1140; display: none;
     align-items: center; justify-content: center; padding: 16px;
     overflow: auto;   /* 窗口矮时可以滚，不再把底部按钮裁掉（Windows 高 DPI 常见） */
-    background: rgba(0,0,0,.24);
-    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    /* 不用 backdrop-filter：铺满屏幕的背景模糊 + 每帧移动的放大镜 = 每帧全屏重算模糊，
+       WebView2/WARP 上就是"鼠标一动就卡"。改用稍深的半透明底，视觉几乎一样。 */
+    background: rgba(0,0,0,.34);
   }
   .origin-viewer.visible { display: flex; }
-  :root[data-theme="dark"] .origin-viewer { background: rgba(0,0,0,.5); }
+  :root[data-theme="dark"] .origin-viewer { background: rgba(0,0,0,.56); }
   /* 取色放大镜：跟随鼠标的圆形放大镜，显示光标处 24×24 像素与颜色值 */
   .ov-loupe {
     position: fixed; z-index: 40; width: 132px; pointer-events: none;
@@ -2027,6 +2028,7 @@
   /* 放大镜本体：CSS background 走 GPU 合成，每帧只改 background-position，不再 drawImage */
   .ov-loupe-img {
     width: 132px; height: 132px; border-radius: 50%; overflow: hidden;
+    will-change: background-position;
     border: 2px solid #fff; box-sizing: border-box;
     background-color: #fff; background-repeat: no-repeat;
     image-rendering: pixelated;
@@ -3185,6 +3187,13 @@
           <button type="button" class="active" data-pick="add">提取</button>
           <button type="button" data-pick="exclude">排除</button>
         </div>
+        <label class="ov-tol" id="ov-match-wrap" title="匹配方式：色相＝按色相+彩度抓相邻深浅；精确RGB＝只认和所选颜色相近的像素">
+          <span>匹配</span>
+          <select id="ov-match">
+            <option value="hue">色相</option>
+            <option value="rgb">精确RGB</option>
+          </select>
+        </label>
         <label class="ov-tol" id="ov-tol-wrap" title="剔除容差：越大越能把相邻的深浅笔画一起去掉">
           <span>剔除容差</span>
           <input type="range" id="ov-tol" min="4" max="40" step="1" value="14">
@@ -5096,8 +5105,17 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
   if (!exclude) {
     const tolNow = state.ink[target].pickTol || 0.14;
     const hueWinNew = Math.min(22, 6 + tolNow * 40);
+    const rgbMode = inkMatchMode() === 'rgb';
+    const rgbTol = Math.max(6, tolNow * 120);
     ink.customs = ink.customs.filter(c => {
       if (!c.exclude || !c.on) return true;
+      if (rgbMode) {
+        const p0 = (c.set && c.set[0]) || null;
+        if (!p0) return true;
+        const d = Math.sqrt((r - p0[0]) ** 2 + (g - p0[1]) ** 2 + (b - p0[2]) ** 2);
+        if (d <= rgbTol) purgedExclude++;
+        return d > rgbTol;
+      }
       const satPick = c.sat || 0;
       let hit = false;
       if (satPick > 0.18) {
@@ -5690,6 +5708,14 @@ function inkFillRatio(canvasEl, ell) {
   return area > 0 ? ink / area : 1;
 }
 
+// 取色/剔除的匹配方式：hue=按色相+彩度（默认，抓相邻深浅）；rgb=只认与所选颜色相近的像素
+function inkMatchMode() {
+  try { return localStorage.getItem('stamp.matchMode') === 'rgb' ? 'rgb' : 'hue'; } catch (e) { return 'hue'; }
+}
+function setInkMatchMode(m) {
+  try { localStorage.setItem('stamp.matchMode', m === 'rgb' ? 'rgb' : 'hue'); } catch (e) {}
+}
+
 function dewarpEnabled() {
   try { return localStorage.getItem('stamp.dewarp') !== 'off'; } catch (e) { return true; }
 }
@@ -5885,6 +5911,9 @@ function recomputeExtracted(target) {
     };
 
     // 1) 提取色 + 2) 排除色：单遍扫描像素，内部逐色判断（颜色多时避免 N 次全图扫描）
+    const RGBMODE = inkMatchMode() === 'rgb';
+    // 精确 RGB 的容差：不能直接用 tolV（它在下面才声明，会踩 TDZ）
+    const rgbTolNow = () => Math.max(6, (state.ink[target].pickTol || 0.14) * 120);
     const extractColors = customs.filter(c => !c.exclude);
     const excludeColors = customs.filter(c => c.exclude);
     let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
@@ -5930,7 +5959,12 @@ function recomputeExtracted(target) {
           for (let ci = 0; ci < excludeColors.length; ci++) {
             const c = excludeColors[ci];
             const satPick = c.sat || 0;
-            if (satPick > 0.18) {
+            if (RGBMODE) {
+              const p0 = (c.set && c.set[0]) || null;
+              if (!p0) continue;
+              const dPix = Math.sqrt((r - p0[0]) ** 2 + (g - p0[1]) ** 2 + (b - p0[2]) ** 2);
+              if (dPix > rgbTolNow()) continue;
+            } else if (satPick > 0.18) {
               // 彩色剔除：按色相 + 彩度判定，不再要求亮度一致
               // （用户点的是鲜红 #ff0000，但章上的红其实暗得多；只比亮度就"点了没反应"）
               // 容差滑杆控制色相窗口：4% → ±7.6°，40% → ±22°（封顶，避免整枚章被一起删掉）
@@ -5976,6 +6010,15 @@ function recomputeExtracted(target) {
         let matched = false;
         for (let ci = 0; ci < extractColors.length; ci++) {
           const c = extractColors[ci];
+          if (RGBMODE) {
+            const st0 = c.set || [];
+            for (let k = 0; k < st0.length; k++) {
+              const d = Math.sqrt((r - st0[k][0]) ** 2 + (g - st0[k][1]) ** 2 + (b - st0[k][2]) ** 2);
+              if (d <= rgbTolNow()) { matched = true; break; }
+            }
+            if (matched) break;
+            continue;
+          }
           const needsContrast = (c.val || 0) >= 0.72 || c.light || (c.sat || 0) < 0.10;
           if (bgSum && needsContrast) {
             // 浅色 / 近中性灰的取色：必须明显比 21×21 邻域平均更暗，
@@ -6390,7 +6433,24 @@ function ovEls() {
 }
 
 // 原图所在窗格（鼠标坐标都以它为准）
-function ovPaneRect() { return (OV.paneA || OV.stage).getBoundingClientRect(); }
+// pane 的 rect 缓存：鼠标悬停时不要每次都 getBoundingClientRect（会强制同步布局）
+let _ovRectCache = { key: '', a: null, b: null };
+function ovRectCacheReset() { _ovRectCache = { key: '', a: null, b: null }; }
+function ovPanesRect() {
+  const el = OV.paneA || OV.stage;
+  if (!el) return { a: null, b: null };
+  const key = [OV.target, Math.round(window.innerWidth), Math.round(window.innerHeight),
+    el.clientWidth, el.clientHeight, OV.zoom, OV.panX, OV.panY].join('|');
+  if (_ovRectCache.key !== key) {
+    _ovRectCache = {
+      key,
+      a: el.getBoundingClientRect(),
+      b: OV.paneB ? OV.paneB.getBoundingClientRect() : null,
+    };
+  }
+  return _ovRectCache;
+}
+function ovPaneRect() { const r = ovPanesRect(); return r.a || (OV.paneA || OV.stage).getBoundingClientRect(); }
 
 function ovIsOpen() { return !!(OV.el && OV.el.classList.contains('visible')); }
 
@@ -6457,6 +6517,7 @@ function ovDrawSoon() {
 
 function ovDraw() {
   ovEls();
+  ovRectCacheReset();
   const ctx = OV.ctx;
   const rect = ovPaneRect();
   const W = rect.width, H = rect.height;
@@ -6666,6 +6727,7 @@ function ovHitHandle(clientX, clientY) {
 }
 
 function ovSetMode(mode) {
+  try { window.__ovSyncMatch && window.__ovSyncMatch(); } catch (e) {}
   OV.mode = mode;
   const el = OV.el || document.getElementById('origin-viewer');
   if (el) el.dataset.mode = mode;
@@ -6959,10 +7021,13 @@ function ovLoupeHide() {
 function ovLoupeTarget(clientX, clientY) {
   const st = state[OV.target];
   if (!st) return null;
-  if (OV.paneB && OV.paneB.contains(document.elementFromPoint(clientX, clientY))) {
+  const rects = ovPanesRect();
+  const rb = rects.b;
+  const inB = rb && clientX >= rb.left && clientX <= rb.right && clientY >= rb.top && clientY <= rb.bottom;
+  if (inB) {
     const src = st.extracted;
     if (!src) return null;
-    const r = OV.paneB.getBoundingClientRect();
+    const r = rb;
     const s = Math.min((r.width - 24) / src.width, (r.height - 24) / src.height);
     const ox = (r.width - src.width * s) / 2, oy = (r.height - src.height * s) / 2;
     const ix = Math.round((clientX - r.left - ox) / s), iy = Math.round((clientY - r.top - oy) / s);
@@ -7137,6 +7202,26 @@ function ovPickAt(clientX, clientY, exclude) {
     tolVal.textContent = v + '%';
   };
   window.__ovSyncTol = syncTol;
+
+  // 匹配方式：色相 / 精确RGB（全局设置，切换后两枚章都重算）
+  const matchSel = document.getElementById('ov-match');
+  const syncMatch = () => { if (matchSel) matchSel.value = inkMatchMode(); };
+  window.__ovSyncMatch = syncMatch;
+  if (matchSel && !matchSel._bound) {
+    matchSel._bound = true;
+    syncMatch();
+    matchSel.addEventListener('change', () => {
+      setInkMatchMode(matchSel.value);
+      for (const t of ['ref', 'test']) {
+        const st = state[t];
+        if (st && st.original) { st._baseKey = null; recomputeExtracted(t); }
+      }
+      try { ovRenderColors(); ovDraw(); } catch (e) {}
+      showStatus(matchSel.value === 'rgb'
+        ? '匹配方式：精确RGB —— 只保留/剔除与所选颜色相近（±' + Math.round((state.ink[OV.target] && state.ink[OV.target].pickTol || 0.14) * 120) + '）的像素'
+        : '匹配方式：色相 —— 按色相+彩度抓相邻深浅，适合扫描件');
+    });
+  }
 
   // 颜色加深（原墨色面板里的"颜色增强"，移到取色界面）
   const enhAuto = document.getElementById('ov-enh-auto');
