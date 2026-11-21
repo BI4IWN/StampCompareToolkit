@@ -6449,12 +6449,53 @@ function processStamp(img, target) {
   let autoFaintApplied = null;
   if (faintAutoEnabled() && !state.ink[target].customs.length) {
     // 用基础提取（增强前）判断：增强后的 alpha 会被抬到 200+，看不出"原本很虚"
-    const baseCanvas = state[target].baseExtracted || state[target].extracted;
-    const baseCount = countInkPixels(baseCanvas);
-    const area = baseCanvas.width * baseCanvas.height;
-    // 触发条件：几乎没有墨（扫描件常见）或"墨很虚"（淡色章的笔画平均 alpha 很低）
-    const baseStat = enhanceStats(baseCanvas);
-    if (baseCount < area * 0.004 || (baseStat.n && baseStat.meanA < 150)) {
+    const faintNow = () => {
+      const bc = state[target].baseExtracted || state[target].extracted;
+      const n = countInkPixels(bc);
+      const a = bc.width * bc.height;
+      const stt = enhanceStats(bc);
+      return n < a * 0.004 || (stt.n && stt.meanA < 150);
+    };
+    if (faintNow()) {
+      // U67-D03：整页扫描件里黑字正文块可能比红章大得多，候选按面积排序会把
+      // 正文块排第一，淡墨兜底又按正文灰底补一个 #7a7b75，红章完全没被提取。
+      // 若当前候选几乎没有彩色墨、而另一个候选有明确彩色印泥，先把候选切过去；
+      // 切换后墨量足够就不再走淡墨兜底（黑/灰章没有彩色候选，不受影响）。
+      const cands = state[target].candidates || [];
+      if (cands.length > 1) {
+        const orig = getOrigData(state[target]);
+        const ow = orig._w, oh = orig._h;
+        const colorScore = (rg) => {
+          const x0 = Math.max(0, rg.x), y0 = Math.max(0, rg.y);
+          const x1 = Math.min(ow, rg.x + rg.w), y1 = Math.min(oh, rg.y + rg.h);
+          let n = 0;
+          for (let y = y0; y < y1; y += 2) {
+            for (let x = x0; x < x1; x += 2) {
+              const o = (y * ow + x) * 4;
+              const r = orig.data[o], g = orig.data[o + 1], b = orig.data[o + 2];
+              const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+              const v = mx / 255, s = mx > 0 ? (mx - mn) / mx : 0;
+              if (s >= 0.35 && v >= 0.12 && v <= 0.95) n++;
+            }
+          }
+          return n;
+        };
+        const curIdx = state[target].candidateIndex || 0;
+        let bestIdx = curIdx, bestScore = colorScore(cands[curIdx] || cands[0]);
+        cands.forEach((rg, i) => {
+          if (i === curIdx) return;
+          const sc = colorScore(rg);
+          if (sc > bestScore) { bestScore = sc; bestIdx = i; }
+        });
+        const curScore = colorScore(cands[curIdx] || cands[0]);
+        if (bestIdx !== curIdx && bestScore >= 250 && bestScore > curScore * 2 + 50) {
+          state[target].candidateIndex = bestIdx;
+          state[target]._baseKey = null;
+          recomputeExtracted(target);
+        }
+      }
+    }
+    if (faintNow()) {
       const faint = detectFaintInk(state[target].original);
       if (faint && faint.coverage >= 0.004) {
         const ink = state.ink[target];
@@ -7176,6 +7217,15 @@ function maybeRefineRegion(target) {
   }), { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity });
   const r0 = valid[0];
 
+  // U67-D06：addCustomInk 首次取色时已把当前区域钉住（_regionLocked），只要这个框
+  // 已经覆盖手工色墨迹，就不能再按候选圆重算 bbox。否则第一次取色会把青岛的 780
+  // 算成 744、排除再算成 772，画布跟着跳。只有手工色明显落在框外（默认定位失败，
+  // 例如黑/灰章落到纸角）时才允许迁移框。
+  if (st._regionLocked && st.bbox) {
+    const b = st.bbox, m = 2;
+    if (u.x1 >= b.x - m && u.y1 >= b.y - m && u.x2 <= b.x + b.w + m && u.y2 <= b.y + b.h + m) return;
+  }
+
   // 目标框（v2.11.9）：每次取色后无条件确保框覆盖全部手工色墨迹与已有提取内容。
   //   - 手工色范围与当前 bbox 重叠或间隙 < max(24, 当前框 15%) → 同枚章：
   //     圆覆盖 —— 把「全部手工色候选（各为质心+半径的圆）」与「当前框圆」
@@ -7305,16 +7355,18 @@ function applyEnhance(img, factor, cutAlpha) {
   const cut = (cutAlpha || 0) * 255;
   const d = img.data;
   const ink = estimateInkColor(img);
-  // 向墨色本色收拢：淡章的笔画被纸张白冲淡，收拢后同一 alpha 也能"更实"
-  const pull = ink ? Math.min(0.7, 0.5 * (factor - 1)) : 0;
+  // 向墨色本色收拢：淡章的笔画被纸张白冲淡，收拢后同一 alpha 也能"更实"。
+  // U67-D05：旧上限 0.7 会把整枚章 70% 拉向同一个平均色，局部墨色层次被抹平
+  // （lapVar 腰斩、边缘更糊）。收拢只做轻微校正，保留每个像素的墨色差异。
+  const pull = ink ? Math.min(0.15, 0.15 * (factor - 1)) : 0;
   // alpha 重映射：把 [cut,1] 线性铺满 0-1，再轻微 gamma。
   // 不做 1-(1-a)^k 这种"指数提亮"——那会把笔画外围的抗锯齿边一起堆成实心，
   // 就是淡章里最刺眼的"晕染/糊成一片"。
   const floor = cut ? cut / 255 : 0;
-  const gammaA = 0.85;
-  const satK = 1 + 0.85 * (factor - 1);  // 饱和度提升
-  const satFloor = 0.22 + 0.30 * (factor - 1); // 彩度下限：淡章被纸白冲淡后补回墨色
-  const dimK = 1 - 0.13 * (factor - 1);  // 略压亮度，视觉更实
+  const gammaA = Math.max(0.66, 0.86 - 0.075 * (factor - 1));
+  const satK = 1 + 0.55 * (factor - 1);  // 饱和度提升
+  const satFloor = 0.18 + 0.20 * (factor - 1); // 彩度下限：只补回墨色，不把所有像素拉成同一彩度
+  const dimK = 1 - 0.10 * (factor - 1);  // 略压亮度，视觉更实
   for (let i = 0; i < d.length; i += 4) {
     const a = d[i + 3];
     if (a < 6) continue;
@@ -7915,9 +7967,16 @@ function recomputeExtracted(target) {
             const satPick = c.sat || 0;
             if (satPick >= 0.25) {
               if (Math.abs(hsv2.s - satPick) > 0.30) continue;
-              let dh = Math.abs(hsv2.h - c.h);
+              // U67-D04：条目字段是 hue，老代码这里读 c.h（恒为 undefined），
+              // NaN 比较使色相门失效 —— 深色取色会连灰底/签名/邻章一起泛洪。
+              const cHue = (c.hue !== undefined ? c.hue : (c.h || 0));
+              let dh = Math.abs(hsv2.h - cHue);
               if (dh > 180) dh = 360 - dh;
-              if (dh > 40) continue;
+              // 深色印泥的色相集中（红章通常 ±10°）；旧值 40° 会把棕灰签名
+              // （色相约 27°、与深红差 35°+）也当成印泥。高饱和深红（如 #350000）
+              // 色相可靠，保留 40°；低饱和深色（如 #341b1f）收紧到 30°。
+              const hueWinDark = satPick >= 0.75 ? 40 : 30;
+              if (dh > hueWinDark) continue;
             } else if (hsv2.s > satPick + 0.15) {
               continue;
             }
@@ -8521,6 +8580,9 @@ function ovDraw() {
       ctx.strokeStyle = '#c7483a'; ctx.lineWidth = 1.3; ctx.stroke();
     }
   }
+  // U67-D11：框选手柄拖动/方向键改变的是 OV.crop，info 之前只在打开/切模式时刷新，
+  // 拖完 NW 仍显示旧坐标。每帧重绘时同步一次，保证 info 与当前 crop 一致。
+  if (OV.mode === 'crop') { try { ovUpdateInfo(); } catch (e) {} }
 }
 
 // 把当前框/取色应用到提取（框选与圆形不关闭查看器，方便继续调）
@@ -14236,9 +14298,35 @@ statusBar.classList.add('visible');
 
   // ---------- 印章库 ----------
   let libItems = [];
+  // U67-D07：首开 list 与输入搜索并发，旧响应可能在新响应之后落地，把 383 条全量
+  // 列表盖回搜索框下；此时点卡片会载入查询不匹配的条目。用请求序号丢弃过期响应，
+  // 并在结果落地前把卡片暂时置为不可载入。
+  let libSeq = 0;
+  let libPending = false;
+  let libQuery = '';
+  function libLoadBlocked() {
+    const input = $('#dt-lib-search');
+    const q = input ? input.value.trim() : '';
+    return libPending || q !== libQuery;
+  }
   async function refreshLib(kw) {
-    libItems = kw ? await DT.libSearch(kw) : await DT.libList();
-    renderLib();
+    const q = (kw || '').trim();
+    const seq = ++libSeq;
+    libQuery = q;
+    libPending = true;
+    const grid = $('#dt-lib-grid');
+    if (grid) grid.dataset.pending = '1';
+    try {
+      const items = q ? await DT.libSearch(q) : await DT.libList();
+      if (seq !== libSeq) return;      // 过期响应：别覆盖更新的一次查询
+      libItems = items;
+    } finally {
+      if (seq === libSeq) {
+        libPending = false;
+        if (grid) delete grid.dataset.pending;
+        renderLib();
+      }
+    }
   }
   // 库条目的时间字段：Rust 侧存的是「秒」字符串（如 "1763500000"），
   // Electron 老数据是 ISO 串，手工改过的可能是毫秒 → 统一在这里兼容，解析不了就给 '—'
@@ -14254,6 +14342,13 @@ statusBar.classList.add('visible');
     const d = new Date(ms);
     if (!isFinite(d.getTime())) return '—';
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  // U67-D09：OCR code 里混着「1」「监171…」「司限N432…」这类碎片，日期行只显示
+  // 正常编号（10–16 位纯数字），明显是识别垃圾的不再拼到日期后面。
+  function libCodeText(v) {
+    const code = String(v === null || v === undefined ? '' : v).trim();
+    return /^\d{10,16}$/.test(code) ? code : '';
   }
 
   function renderLib() {
@@ -14285,9 +14380,15 @@ statusBar.classList.add('visible');
       nameEl.title = '双击改名';
       nameEl.style.cursor = 'text';
       nameEl.addEventListener('dblclick', () => renameLibItem(item));
-      cell.querySelector('.dt-lib-time').textContent = time + (item.ocr && item.ocr.code ? ' · ' + String(item.ocr.code).slice(0, 13) : '');
+      const codeText = libCodeText(item.ocr && item.ocr.code);
+      cell.querySelector('.dt-lib-time').textContent = time + (codeText ? ' · ' + codeText : '');
       const imgEl = cell.querySelector('img');
-      imgEl.addEventListener('click', () => loadFromLib(item.id, 'ref'));
+      const blockLoad = () => {
+        if (!libLoadBlocked()) return false;
+        showStatus('正在搜索印章，请等结果出来后再点选');
+        return true;
+      };
+      imgEl.addEventListener('click', () => { if (!blockLoad()) loadFromLib(item.id, 'ref'); });
       cell.querySelectorAll('.dt-lib-ops button').forEach((b) => {
         b.addEventListener('click', async () => {
           const op = b.dataset.op;
@@ -14298,6 +14399,7 @@ statusBar.classList.add('visible');
           } else if (op === 'rename') {
             renameLibItem(item);
           } else {
+            if (blockLoad()) return;
             loadFromLib(item.id, op);
           }
         });
@@ -14464,7 +14566,7 @@ statusBar.classList.add('visible');
     $('#dt-save-target').value = state.target || 'ref';
     $('#dt-lib-overlay').classList.add('visible');
     makeModalDraggable($('#dt-lib-overlay'));
-    refreshLib('');
+    refreshLib($('#dt-lib-search').value.trim());
   });
   $('#dt-lib-close').addEventListener('click', () => $('#dt-lib-overlay').classList.remove('visible'));
   $('#dt-lib-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('visible'); });
@@ -14472,7 +14574,7 @@ statusBar.classList.add('visible');
   $('#dt-lib-reveal').addEventListener('click', () => DT.libReveal());
   $('#dt-lib-changepath').addEventListener('click', async () => {
     const r = await DT.libChoosePath();
-    if (r.ok) { $('#dt-lib-path').textContent = '保存位置：' + r.path; refreshLib(''); }
+    if (r.ok) { $('#dt-lib-path').textContent = '保存位置：' + r.path; refreshLib($('#dt-lib-search').value.trim()); }
   });
   $('#dt-save-btn').addEventListener('click', () => saveToLib($('#dt-save-target').value));
   $('#dt-save-target').addEventListener('change', (e) => {

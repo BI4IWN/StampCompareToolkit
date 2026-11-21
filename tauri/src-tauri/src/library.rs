@@ -221,11 +221,20 @@ pub fn lib_search(q: &str) -> Value {
     let all = lib_list();
     let kw = q.trim().to_lowercase();
     if kw.is_empty() { return all; }
-    let hit: Vec<Value> = all.as_array().cloned().unwrap_or_default().into_iter().filter(|s| {
+    let items = all.as_array().cloned().unwrap_or_default();
+    // U67-D09：名称/备注是用户可核对的权威字段，OCR company 只是识别结果。
+    // 先按名称/备注命中；只要命中就不再混入“仅 OCR 名称命中”的条目，
+    // 避免脏 OCR（如山东邦图被识别成东平县现代农业）把无关印章带进结果。
+    let name_hit: Vec<Value> = items.iter().filter(|s| {
         let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
         let note = s.get("note").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+        name.contains(&kw) || note.contains(&kw)
+    }).cloned().collect();
+    if !name_hit.is_empty() { return Value::Array(name_hit); }
+    // 名称/备注都没有命中时，才回退到 OCR 名称搜索（照顾名称本身识别不佳的旧条目）。
+    let hit: Vec<Value> = items.into_iter().filter(|s| {
         let comp = s.get("ocr").and_then(|o| o.get("company")).and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
-        name.contains(&kw) || note.contains(&kw) || comp.contains(&kw)
+        comp.contains(&kw)
     }).collect();
     Value::Array(hit)
 }
