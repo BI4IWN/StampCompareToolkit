@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.19</title>
+<title>印章对比工具 v3.6.20</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -30,7 +30,7 @@
     --border-strong: rgba(0,0,0,0.12);
     --text: #1d1d1f;
     --text-secondary: #6e6e73;
-    --text-tertiary: #8e8e93;
+    --text-tertiary: #6e6e73;
     --accent: #c44133;
     --accent-solid: #c44133;
     --accent-light: #d9584b;
@@ -382,14 +382,11 @@
     backdrop-filter: blur(6px);
   }
 
-  .paste-zone:first-child .zone-badge {
-    background: rgba(44,62,80,0.85);
-    color: #fff;
-  }
-
+  .paste-zone:first-child .zone-badge,
   .paste-zone:last-child .zone-badge {
-    background: rgba(196,65,51,0.88);
-    color: #fff;
+    background: rgba(255,255,255,0.82);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
   }
 
   .paste-zone .remove-btn {
@@ -886,7 +883,7 @@
   .tb-group {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex: 0 0 auto;
     min-width: 0;
   }
@@ -898,6 +895,7 @@
     white-space: nowrap;
     letter-spacing: 0.4px;
     flex: 0 0 auto;
+    margin-right: 0;
   }
 
   .tb-sep {
@@ -1022,7 +1020,7 @@
 
   .toolbar.visible .mode-btn { white-space: nowrap; }
 
-  .toolbar-row { display: contents; }
+  .toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
 
   .toolbar label {
     font-size: 11px;
@@ -1088,7 +1086,7 @@
   .slider-group input[type="range"] {
     width: 104px;
     vertical-align: middle;
-    accent-color: var(--accent);
+    accent-color: var(--text-secondary);
   }
 
   .slider-group .val {
@@ -1138,12 +1136,13 @@
   @media (max-width: 1360px) {
     .toolbar-main { gap: 6px; }
     .tb-group { gap: 4px; }
+    .tb-label { margin-right: 4px; }
     .toolbar .btn { padding: 0 8px; }
     .toolbar .mode-btn { padding: 0 9px; }
     .tb-sep { margin: 0 1px; }
   }
 
-  @media (max-width: 1240px) {
+  @media (max-width: 1239px) {
     .tb-label { display: none; }
   }
 
@@ -1173,7 +1172,7 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 7px 9px;
+    gap: 10px 14px;
   }
 
   .toolbar-advanced .extracted-strip.visible {
@@ -1236,6 +1235,56 @@
   }
   .comparison.visible:hover .capture-hint { opacity: 0.7; }
 
+  /* 画布图例旁：每枚印章的更换 / 单独清除 */
+  .canvas-legend-actions {
+    position: absolute;
+    left: 12px;
+    bottom: 84px;
+    z-index: 7;
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    pointer-events: none;
+  }
+  .canvas-legend-actions.visible { display: flex; }
+  .cla-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 4px 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    pointer-events: auto;
+  }
+  .cla-group[hidden] { display: none; }
+  .cla-label {
+    margin-right: 2px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .cla-group button {
+    height: 24px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .cla-group button:hover { background: var(--surface-muted); color: var(--text); }
+
   /* ---- Comparison Area ---- */
   /* 拖滑块 / 拖印章时 WKWebView 会误触文本选择，表现为整块蓝色选区 */
   .comparison, .comparison canvas, .dt-stage, #origin-viewer, #origin-viewer canvas {
@@ -1264,8 +1313,6 @@
   }
 
   .comparison.visible > .paste-row { display: none !important; }
-
-  #comparison > #collapse-bar { display: none !important; }
 
   .rotate-strip.visible + .comparison {
     border-top-left-radius: 0;
@@ -2334,7 +2381,7 @@
     gap: 8px;
     min-height: 28px;
   }
-  .ov-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-height: 64px; overflow-y: auto; scrollbar-width: thin; }
+  .ov-colors { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; align-content: flex-start; max-height: 96px; overflow-y: auto; scrollbar-width: thin; }
   .ov-colors:empty { display: none; }
   .ov-info {
     flex: 0 0 auto;
@@ -2418,6 +2465,21 @@
   .ov-chip button:hover { background: var(--bg); color: var(--text); }
   .ov-chip .del:hover { color: #c0392b; }
   .ov-colors .empty { font-size: 11px; color: var(--text-secondary); }
+  .ov-chip-empty {
+    border-style: dashed;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: default;
+  }
+  .ov-chip-empty .sw {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--surface-muted);
+  }
   .origin-viewer[data-mode="pick"] .ov-tol { display: flex; }
   .ov-enh input[type="checkbox"] { accent-color: var(--text-secondary); }
   .ov-enh input[type="range"] { width: 74px; }
@@ -3252,14 +3314,14 @@
   .toolbar.visible { height: 48px; min-height: 48px; }
 
   .toolbar-main { gap: 4px; }
-  .tb-group { gap: 5px; }
+  .tb-group { gap: 8px; }
 
   .tb-label {
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0;
     color: var(--text-tertiary);
-    margin-right: 1px;
+    margin-right: 0;
   }
 
   .tb-sep {
@@ -3464,6 +3526,7 @@
   @media (max-width: 1360px) {
     .toolbar-main { gap: 2px; }
     .tb-group { gap: 4px; }
+    .tb-label { margin-right: 4px; }
     .tb-sep { margin: 0 3px; }
     .toolbar-main .btn { padding: 0 6px; gap: 4px; font-size: 13px; }
     .mode-group .mode-btn { padding: 0 8px; font-size: 13px; }
@@ -3598,6 +3661,20 @@
   .inspector-stamp-label { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
   .inspector-company { font-size: 13px; font-weight: 560; line-height: 1.45; letter-spacing: -0.01em; }
   .inspector-stamp-meta { margin-top: 4px; font-size: 11px; line-height: 1.5; }
+  .inspector-recognize {
+    margin-top: 6px;
+    height: 26px;
+    padding: 0 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .inspector-recognize:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 
   .inspector-candidate-group + .inspector-candidate-group { margin-top: 10px; padding-top: 10px; }
   .inspector-candidate-label { margin-bottom: 6px; font-size: 11px; font-weight: 500; }
@@ -3658,7 +3735,7 @@
     width: 76px;
     height: 76px;
     color: var(--text-tertiary);
-    opacity: .78;
+    opacity: .9;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.25;
@@ -3699,10 +3776,10 @@
     top: 12px;
     left: 12px;
     padding: 2px 9px;
-    border: 1px solid rgba(255,255,255,.18);
+    border: 1px solid var(--border-strong);
     border-radius: 999px;
-    background: rgba(29,29,31,.58);
-    color: #fff;
+    background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
+    color: var(--text-secondary);
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0;
@@ -3711,7 +3788,11 @@
   }
 
   .paste-zone:first-child .zone-badge,
-  .paste-zone:last-child .zone-badge { background: rgba(29,29,31,.58); color: #fff; }
+  .paste-zone:last-child .zone-badge {
+    background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+  }
 
   /* ---- 状态栏 / 帮助：安静、不抢画布 ---- */
   .status-bar {
@@ -3794,8 +3875,35 @@
   .toolbar-advanced .btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
   .toolbar-advanced .btn-icon { width: auto; padding: 0 9px; }
 
-  .toolbar-advanced label { font-size: 11px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); }
-  .toolbar-advanced .slider-group .val { font-size: 11px; }
+  .toolbar-advanced label { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); }
+  .toolbar-advanced .slider-group .val { font-size: 13px; }
+
+  /* 更多面板：每一枚滑块固定「标签 | 滑块 | 数值」三列，避免数值与下一枚标签抢行 */
+  .tb-adv-slider {
+    display: grid;
+    grid-template-columns: auto minmax(110px, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 230px;
+    max-width: 300px;
+  }
+  .tb-adv-slider > label { font-size: 13px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+  .tb-adv-slider .slider-group { display: contents; }
+  .tb-adv-slider input[type="range"] {
+    width: 100%;
+    min-width: 80px;
+    accent-color: var(--text-secondary);
+  }
+  .tb-adv-slider .val {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: right;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .tb-adv-axis { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .tb-adv-caption { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
 
   .toolbar-advanced .extracted-strip.visible {
     margin: 12px 0 0;
@@ -3907,7 +4015,7 @@
   }
 
   .ov-foot-bar { gap: 7px; min-height: 28px; }
-  .ov-colors { gap: 5px; max-height: 34px; }
+  .ov-colors { gap: 5px; max-height: 96px; }
   .ov-info { font-size: 11px; color: var(--text-secondary); }
   .ov-actions { gap: 6px; flex-wrap: nowrap; }
   .ov-group { gap: 6px; }
@@ -4058,7 +4166,9 @@
   .dt-lib-item img { background: var(--surface-muted); border-radius: 6px; }
   .dt-lib-name { font-size: 13px; color: var(--text); }
   .dt-lib-time { font-size: 11px; color: var(--text-tertiary); }
-  .dt-lib-ops button { height: 26px; border-color: var(--border); border-radius: 6px; background: var(--surface-muted); color: var(--text-secondary); font-size: 11px; }
+  .dt-lib-ops button { height: 30px; border-color: var(--border); border-radius: 6px; background: var(--surface-muted); color: var(--text-secondary); font-size: 13px; padding: 0 8px; }
+  .dt-lib-more > summary { height: 30px; }
+  .dt-lib-more-list button { height: 30px; font-size: 13px; }
   .dt-lib-ops button:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
   .dt-drag-dots { color: var(--text-tertiary); }
 
@@ -4168,12 +4278,13 @@
   }
 
   #ocr-status-bar .ocr-slaunch {
-    background: var(--text);
-    color: var(--surface-solid);
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
     font-size: 11px;
   }
-  #ocr-status-bar .ocr-slaunch:hover { background: var(--text); opacity: .86; }
+  #ocr-status-bar .ocr-slaunch:hover { background: var(--surface-muted); color: var(--text); opacity: 1; }
 
   .ocr-cancel-btn {
     border-color: color-mix(in srgb, var(--danger) 24%, transparent);
@@ -4191,9 +4302,15 @@
   .ai-actions button.primary:hover,
   .dt-btn.primary,
   .dt-btn.primary:hover {
-    border-color: var(--text);
-    background: var(--text);
-    color: var(--surface-solid);
+    border-color: var(--accent-solid);
+    background: var(--accent-solid);
+    color: #fff;
+  }
+  .engine-btn.primary:hover,
+  .ai-actions button.primary:hover,
+  .dt-btn.primary:hover {
+    background: var(--accent-pressed);
+    border-color: var(--accent-pressed);
   }
 
   #cmp-fab .fab-chip.active {
@@ -4397,7 +4514,7 @@
 <!-- OCR 服务状态指示条 (非阻断，其他功能正常使用) -->
 <div id="ocr-status-bar">
   <span class="ocr-sdot checking" id="ocr-sdot"></span>
-  <span class="ocr-stext" id="ocr-stext">正在检测 OCR 服务...</span>
+  <span class="ocr-stext" id="ocr-stext">正在准备文字识别…</span>
   <a class="ocr-slaunch" id="ocr-slaunch" href="#" style="display:none">启动指南</a>
   <button class="ocr-sclose" id="ocr-sclose" title="关闭">&times;</button>
 </div>
@@ -4410,8 +4527,8 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.19">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.19</span></h1>
-      <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地 PaddleOCR（默认）或已配置的 AI 模型">
+      <h1 title="印章对比工具 v3.6.20">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.20</span></h1>
+      <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
         <button class="mode-btn" data-rec="ai" aria-pressed="false">AI</button>
@@ -4492,7 +4609,7 @@
         <label>提取方式</label>
         <select id="ai-mode">
           <option value="vision">视觉识别 — 图片直接发给多模态模型（如 glm-4v / gpt-4o）</option>
-          <option value="parse">文本解析 — 本地 PaddleOCR 粗识别 + AI 清洗结构化（如 deepseek-chat）</option>
+          <option value="parse">文本解析 — 本地识别粗读 + AI 整理（如 deepseek-chat）</option>
         </select>
       </div>
 
@@ -4505,7 +4622,7 @@
       </div>
 
       <div class="ai-note" style="margin-top:4px">
-        保存配置后，在顶部「识别」中选择 <b>AI</b> 即可使用 AI 提取；选择「本地」则始终使用 PaddleOCR（默认）。<br>
+        保存配置后，在顶部「识别」中选择 <b>AI</b> 即可使用 AI 提取；选择「本地」则使用本地文字识别（默认）。<br>
         <b>火山方舟（豆包视觉）</b>：约 3 秒返回，适合清晰印章；严重旋转或低质量图片建议更换更高能力的视觉模型。
       </div>
       <div id="ai-test-result"></div>
@@ -4518,7 +4635,7 @@
 
       <div class="ai-note">
         说明：AI 提取经本地后端代理调用所配置的服务；启用后印章图片会发送至该 AI 服务，密钥仅保存在本机浏览器中。
-        文本解析模式需要本地 PaddleOCR 可用；视觉模式无需 PaddleOCR。DeepSeek 当前为纯文本模型，请选择「文本解析」。
+        文本解析模式需要本地文字识别可用；视觉模式可直接读图。DeepSeek 当前为纯文本模型，请选择「文本解析」。
       </div>
     </div>
   </div>
@@ -4682,35 +4799,48 @@
         <button class="btn" type="button" id="btn-ai-cfg" title="配置 AI 文字提取（DeepSeek / 智谱 / 自定义）"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg>AI 识别设置…</button>
       </div>
       <div class="toolbar-row">
-        <label>旋转</label>
-        <div class="slider-group">
-          <input type="range" id="sl-rotate" min="0" max="360" value="0" step="0.1">
-          <span class="val" id="val-rotate">0°</span>
+        <div class="tb-adv-slider">
+          <label for="sl-rotate">旋转</label>
+          <div class="slider-group">
+            <input type="range" id="sl-rotate" min="0" max="360" value="0" step="0.1">
+            <span class="val" id="val-rotate">0°</span>
+          </div>
         </div>
-        <label>透明度</label>
-        <div class="slider-group">
-          <input type="range" id="sl-opacity" min="0" max="100" value="50">
-          <span class="val" id="val-opacity">50%</span>
+        <div class="tb-adv-slider">
+          <label for="sl-opacity">透明度</label>
+          <div class="slider-group">
+            <input type="range" id="sl-opacity" min="0" max="100" value="50">
+            <span class="val" id="val-opacity">50%</span>
+          </div>
         </div>
-        <label>缩放</label>
-        <div class="slider-group">
-          <input type="range" id="sl-scale" min="20" max="400" value="100" step="0.1">
-          <span class="val" id="val-scale">100%</span>
+        <div class="tb-adv-slider">
+          <label for="sl-scale">缩放</label>
+          <div class="slider-group">
+            <input type="range" id="sl-scale" min="20" max="400" value="100" step="0.1">
+            <span class="val" id="val-scale">100%</span>
+          </div>
         </div>
-        <div class="mode-group" id="axis-group">
-          <button class="mode-btn active" data-axis="uniform" title="等比缩放">等比</button>
-          <button class="mode-btn" data-axis="x" title="仅调水平缩放">水平</button>
-          <button class="mode-btn" data-axis="y" title="仅调垂直缩放">垂直</button>
+        <div class="tb-adv-axis">
+          <span class="tb-adv-caption">缩放轴向</span>
+          <div class="mode-group" id="axis-group">
+            <button class="mode-btn active" data-axis="uniform" title="等比缩放">等比</button>
+            <button class="mode-btn" data-axis="x" title="仅调水平缩放">水平</button>
+            <button class="mode-btn" data-axis="y" title="仅调垂直缩放">垂直</button>
+          </div>
         </div>
-        <label>水平偏移</label>
-        <div class="slider-group">
-          <input type="range" id="sl-offset-x" min="-100" max="100" value="0" step="0.5">
-          <span class="val" id="val-offset-x">0px</span>
+        <div class="tb-adv-slider">
+          <label for="sl-offset-x">水平偏移</label>
+          <div class="slider-group">
+            <input type="range" id="sl-offset-x" min="-100" max="100" value="0" step="0.5">
+            <span class="val" id="val-offset-x">0px</span>
+          </div>
         </div>
-        <label>垂直偏移</label>
-        <div class="slider-group">
-          <input type="range" id="sl-offset-y" min="-100" max="100" value="0" step="0.5">
-          <span class="val" id="val-offset-y">0px</span>
+        <div class="tb-adv-slider">
+          <label for="sl-offset-y">垂直偏移</label>
+          <div class="slider-group">
+            <input type="range" id="sl-offset-y" min="-100" max="100" value="0" step="0.5">
+            <span class="val" id="val-offset-y">0px</span>
+          </div>
         </div>
         <div class="spacer"></div>
         <button class="btn btn-icon" id="btn-reset" title="重置调整"><svg class="ui-icon" aria-hidden="true"><use href="#i-reset"/></svg></button>
@@ -4721,8 +4851,21 @@
   <div class="comparison" id="comparison">
     <canvas id="cmp-canvas"></canvas>
     <div class="slider-handle" id="slider-handle" style="display:none;"></div>
+    <!-- 画布图例旁的快速操作：更换 / 只清除这一枚 -->
+    <div class="canvas-legend-actions" id="canvas-legend-actions" aria-label="画布印章操作">
+      <div class="cla-group" data-stamp="ref" hidden>
+        <span class="cla-label">参考章</span>
+        <button type="button" data-action="replace" data-target="ref">更换图片</button>
+        <button type="button" data-action="remove" data-target="ref">只清除这一枚</button>
+      </div>
+      <div class="cla-group" data-stamp="test" hidden>
+        <span class="cla-label">待验章</span>
+        <button type="button" data-action="replace" data-target="test">更换图片</button>
+        <button type="button" data-action="remove" data-target="test">只清除这一枚</button>
+      </div>
+    </div>
     <!-- 鼠标捕获区域提示角标 -->
-    <div class="capture-hint" id="capture-hint">图内滚轮缩放 · 图外上下滚轮旋转 · 拖拽移动 · 拖四角变形（Shift 等比）</div>
+    <div class="capture-hint" id="capture-hint">图内滚轮旋转 · Ctrl/⌘+滚轮缩放 · 拖拽移动</div>
   </div>
 
   <aside id="inspector" aria-label="判定与识别结果">
@@ -4774,18 +4917,20 @@
         <div class="inspector-stamp">
           <div class="inspector-stamp-head">
             <span class="inspector-stamp-label">参考章</span>
-            <span class="inspector-badge is-neutral" id="inspector-source-ref">未识别</span>
+            <span class="inspector-badge is-neutral" id="inspector-source-ref" hidden>未识别</span>
           </div>
-          <div class="inspector-company" id="inspector-company-ref">未识别</div>
-          <div class="inspector-stamp-meta" id="inspector-meta-ref">置信度 — · 类型 — · 编码 —</div>
+          <div class="inspector-company" id="inspector-company-ref">—</div>
+          <div class="inspector-stamp-meta" id="inspector-meta-ref" hidden>置信度 — · 类型 — · 编码 —</div>
+          <button type="button" class="inspector-recognize" id="inspector-recognize-ref" hidden>识别</button>
         </div>
         <div class="inspector-stamp">
           <div class="inspector-stamp-head">
             <span class="inspector-stamp-label">待验章</span>
-            <span class="inspector-badge is-neutral" id="inspector-source-test">未识别</span>
+            <span class="inspector-badge is-neutral" id="inspector-source-test" hidden>未识别</span>
           </div>
-          <div class="inspector-company" id="inspector-company-test">未识别</div>
-          <div class="inspector-stamp-meta" id="inspector-meta-test">置信度 — · 类型 — · 编码 —</div>
+          <div class="inspector-company" id="inspector-company-test">—</div>
+          <div class="inspector-stamp-meta" id="inspector-meta-test" hidden>置信度 — · 类型 — · 编码 —</div>
+          <button type="button" class="inspector-recognize" id="inspector-recognize-test" hidden>识别</button>
         </div>
         <div class="inspector-engine-note" id="inspector-engine-note" hidden></div>
       </section>
@@ -4908,7 +5053,7 @@
           </div>
           <span class="ov-spacer" aria-hidden="true"></span>
           <div class="ov-group ov-end-group">
-            <button type="button" class="btn" id="ov-reset" title="清除当前框选/取色标记，恢复自动定位"><svg class="ui-icon" aria-hidden="true"><use href="#i-reset"/></svg>重置</button>
+            <button type="button" class="btn" id="ov-reset" title="清除当前框选/取色标记，恢复自动定位"><svg class="ui-icon" aria-hidden="true"><use href="#i-reset"/></svg>清除标记</button>
             <button type="button" class="btn" id="ov-cancel">取消</button>
             <button type="button" class="btn btn-primary" id="ov-apply">应用框选</button>
           </div>
@@ -4959,7 +5104,7 @@
     </ul>
 
     <div class="engine-sheet-foot">
-      <span class="engine-foot-note">不安装也能使用 RapidOCR 与印章库匹配</span>
+      <span class="engine-foot-note">不安装也能完成对比与存章</span>
       <div class="engine-sheet-actions">
         <button class="engine-btn" type="button" id="local-model-dismiss">以后再说</button>
         <button class="engine-btn primary" type="button" id="local-model-install">安装本地模型</button>
@@ -4977,7 +5122,7 @@
     </div>
     <div class="engine-panel-body">
       <h2>识别引擎</h2>
-      <p class="engine-panel-lede">本地视觉模型只在这台 Mac 上运行，图片不出本机。未安装时自动使用内置 RapidOCR 与印章库匹配，功能不受影响。</p>
+      <p class="engine-panel-lede">本地视觉模型只在这台 Mac 上运行，图片不出本机。未安装时仍可完成印章对比、取色与存章。</p>
       <div class="engine-group-label">本地视觉模型</div>
       <section class="engine-card" id="engine-card" aria-live="polite"></section>
     </div>
@@ -4993,7 +5138,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.19';
+const APP_VERSION = '3.6.20';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -5031,6 +5176,8 @@ const state = {
   _renderRequested: false, // requestAnimationFrame 节流标记
   _isInteracting: false,  // 是否正在拖拽/缩放（用于跳过昂贵的差异高亮）
   _ocrControllers: {},     // AbortController per target: { ref: AbortController, test: AbortController }
+  // 判定门槛：两枚章提取完成后先自动对齐，未对齐前不显示「不一致 / 0.0%」
+  alignment: { ready: false, generation: 0 },
 };
 
 // 帧节流：多次连续 render() 调用合并为一帧一次渲染
@@ -6250,6 +6397,7 @@ function probe(msg) {
 
 function processStamp(img, target) {
   let autoGrayApplied = false;
+  resetAlignment();
   const canvas = loadImageToCanvas(img);
 
   // === 阶段 1：立即显示预览图 ===
@@ -6393,6 +6541,7 @@ function processStamp(img, target) {
   const grayNote = autoGrayApplied ? '（检测到黑白/灰度印章，已启用「黑/灰」墨，可在墨色面板调阈值）' : '';
   const faintNote = autoFaintApplied ? `（检测到淡色印章，已自动提取淡墨 ${autoFaintApplied}，颜色列表可停用）` : '';
   showStatus(`${target === 'ref' ? '参考章' : '待验章'}已加载 (${extractedCircular ? '圆形章' : '异形章'}) — 已自动提取${extra}${grayNote}${faintNote}${state[other].extracted ? '' : '，加载另一枚印章后可开始对比'}`);
+  if (state.ref.extracted && state.test.extracted) scheduleAutoAlign();
   postDiag(target);
   if (window.__STAMP_RUST_WARP__ === true) rustDewarp(target);   // 默认关闭，仅调试用
 
@@ -6405,9 +6554,14 @@ function processStamp(img, target) {
     var statusEl = document.getElementById('ocr-' + target + '-status');
     if (inlineEl) {
       inlineEl.classList.add('visible');
-      document.getElementById('ocr-' + target + '-company').textContent = '需启动服务';
+      document.getElementById('ocr-' + target + '-company').textContent = '—';
       document.getElementById('ocr-' + target + '-code').textContent = '—';
       document.getElementById('ocr-' + target + '-type').textContent = '—';
+      if (statusEl) {
+        statusEl.textContent = (window._ocrChecked && window._ocrAvailable === false)
+          ? '文字识别暂时不可用，对比和存章仍可用'
+          : '正在准备文字识别…';
+      }
     }
   }
 }
@@ -8332,9 +8486,15 @@ function ovDraw() {
   }
 }
 
-// 把当前框应用到提取（不关闭查看器，方便继续调）
+// 把当前框/取色应用到提取（框选与圆形不关闭查看器，方便继续调）
 function ovApplyCrop() {
   const st = state[OV.target];
+  if (OV.mode === 'pick') {
+    // 取色是即时生效的；这里只确认并退出，避免把旧框选误当成取色应用
+    closeOriginViewer();
+    showStatus('已应用取色');
+    return;
+  }
   if (OV.mode === 'circle') {
     const el = OV.ell;
     if (!el || el.rx < 8 || el.ry < 8) { showStatus('先在章中心按下并往外拖出椭圆，再拖四个小方块分别贴合边缘'); return; }
@@ -8423,7 +8583,8 @@ function ovSetMode(mode) {
   const actions = document.getElementById('ov-actions');
   const apply = document.getElementById('ov-apply');
   if (actions) actions.style.display = (mode === 'crop' || mode === 'circle' || mode === 'pick') ? 'flex' : 'none';
-  if (apply) apply.textContent = (mode === 'circle') ? '应用圆形' : '应用框选';
+  if (apply) apply.textContent = mode === 'circle' ? '应用圆形' : (mode === 'pick' ? '应用取色' : '应用框选');
+  try { ovRenderColors(); } catch (e) { /* 查看器尚未完全初始化 */ }
   if (mode === 'browse') { OV.drag = null; }
   // 切换模式时把「已选框/已定椭圆」重置，避免两种模式的框互相干扰
   if (mode === 'circle') OV.crop = null; else OV.ell = null;
@@ -8471,7 +8632,7 @@ function ovDrawResult() {
       const px = dx.getImageData(0, 0, 160, 160).data;
       for (let i = 3; i < px.length; i += 4) if (px[i] > 12) ink++;
     } catch (e) {}
-    tag.textContent = `提取结果 · 实时 · 墨 ${(ink / 256).toFixed(1)}%`;
+    tag.textContent = `提取结果 · 实时 · 墨迹占比 ${Math.round(ink / 256)}%`;
   }
 }
 
@@ -8491,7 +8652,7 @@ function ovUpdateInfo() {
     return;
   }
   if (OV.mode === 'pick') {
-    el.textContent = '点击墨迹处添加颜色 · 顶部可切换「提取 / 排除」· Esc 退出取色';
+    el.textContent = '点击墨迹处添加颜色 · 顶部可切换「提取 / 排除」· Enter 应用取色 · Esc 退出';
     return;
   }
   el.textContent = '查看模式：只读，不改变提取结果';
@@ -8582,10 +8743,22 @@ function ovRenderColors() {
   box.innerHTML = '';
   box.classList.toggle('has', list.length > 0);
   if (!list.length) {
-    const e = document.createElement('span');
-    e.className = 'empty';
-    e.textContent = '暂无手工颜色';
-    box.appendChild(e);
+    if (OV.mode === 'pick') {
+      const slot = document.createElement('span');
+      slot.className = 'ov-chip ov-chip-empty';
+      const sw = document.createElement('span');
+      sw.className = 'sw';
+      sw.textContent = '+';
+      const hint = document.createElement('span');
+      hint.textContent = `0/${MAX_INK_COLORS} · 点击笔画添加`;
+      slot.append(sw, hint);
+      box.appendChild(slot);
+    } else {
+      const e = document.createElement('span');
+      e.className = 'empty';
+      e.textContent = '暂无手工颜色';
+      box.appendChild(e);
+    }
     return;
   }
   list.forEach((c, i) => {
@@ -9223,6 +9396,7 @@ function ovPickAt(clientX, clientY, exclude) {
       }
       if (e.key === 'Enter') { ovApplyCrop(); e.preventDefault(); }
     }
+    if (OV.mode === 'pick' && e.key === 'Enter') { ovApplyCrop(); e.preventDefault(); }
   });
 
   window.addEventListener('resize', () => { if (ovIsOpen()) ovResize(); });
@@ -9473,11 +9647,12 @@ function renderCanvasZoom(canvas, e) {
 function removeStamp(target) {
   // 取消进行中的 OCR
   cancelStampOCR(target);
+  resetAlignment();
 
   state[target] = { original: null, extracted: null, baseExtracted: null, _baseKey: null, _baseOriginal: null, _origData: null, _detectData: null, _detectSrc: null, _aiBase: false, _regionLocked: false,
                     circular: false, bbox: null, candidates: null, candidateIndex: 0, inkSpec: null, corners: null,
                     rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0,
-                    _sig: (state[target]._sig || 0) + 1, ocrResult: null };
+                    _sig: (state[target]._sig || 0) + 1, _savedSig: null, ocrResult: null };
   const zone = target === 'ref' ? zoneRef : zoneTest;
   zone.classList.remove('has-image');
   const ph = zone.querySelector('.placeholder');
@@ -9512,6 +9687,12 @@ function removeStamp(target) {
 
   updateVisibility();
   render();
+  if (!state.ref.extracted && !state.test.extracted) {
+    if (typeof window.__resetStampCollapse === 'function') window.__resetStampCollapse();
+    showStatus('已清除两枚印章 — 粘贴或拖入即可重新开始');
+  } else {
+    showStatus(`已清除${stampLabel(target)} — 可粘贴或拖入新图`);
+  }
 }
 
 /* ============================================================
@@ -9519,6 +9700,8 @@ function removeStamp(target) {
    ============================================================ */
 // 清空参考章 / 待验章及全部调整，回到空白状态开始新的比对
 function clearAllComparison() {
+  if (hasUnsavedWork() && !confirm('将清除两枚印章和所有对齐/取色，且不能撤销。')) return;
+  resetAlignment();
   ['ref', 'test'].forEach((t) => {
     const st = state[t];
     st.original = null;
@@ -9539,6 +9722,10 @@ function clearAllComparison() {
     st.corners = null;
     st.ocrResult = null;
     st.enhanceFactor = 1;
+    st.circleLock = null;
+    st.circleCanvas = null;
+    st.warpInfo = null;
+    st._savedSig = null;
     st._sig = (st._sig || 0) + 1;
     st.dx = 0; st.dy = 0; st.scale = 1; st.angle = 0; st.offsetX = 0; st.offsetY = 0;
 
@@ -9589,21 +9776,45 @@ function clearAllComparison() {
   const diff = document.getElementById('diff-canvas');
   if (diff) diff.getContext('2d').clearRect(0, 0, diff.width, diff.height);
 
+  if (typeof window.__resetStampCollapse === 'function') window.__resetStampCollapse();
   updateVisibility();
   updateInspector();
   render();
   showStatus('已清空 —— 粘贴或拖入两枚印章即可开始新的比对');
 }
 
+function updateCanvasLegendActions() {
+  const box = document.getElementById('canvas-legend-actions');
+  if (!box) return;
+  const any = !!(state.ref.extracted || state.test.extracted);
+  box.classList.toggle('visible', any);
+  const refGroup = box.querySelector('[data-stamp="ref"]');
+  const testGroup = box.querySelector('[data-stamp="test"]');
+  if (refGroup) refGroup.hidden = !state.ref.extracted;
+  if (testGroup) testGroup.hidden = !state.test.extracted;
+}
+
 function updateVisibility() {
   const hasBoth = state.ref.extracted && state.test.extracted;
   const hasOne = state.ref.extracted || state.test.extracted;
+  updateCanvasLegendActions();
   extractedStrip.classList.toggle('visible', hasOne);
+  const alignBtn = document.getElementById('btn-align');
+  if (alignBtn) {
+    alignBtn.disabled = !hasBoth;
+    alignBtn.title = hasBoth ? '自动对齐两枚印章（快捷键 A）' : '加载两枚印章后可自动对齐';
+  }
+  const diffBtn = document.getElementById('btn-diff');
+  if (diffBtn) {
+    diffBtn.disabled = !hasBoth;
+    diffBtn.title = hasBoth ? '高亮差异区域（快捷键 D）' : '加载两枚印章后可查看差异';
+  }
   // 单枚印章加载后即显示对比区域与工具栏，可先行查看提取结果并做人工比对
   toolbar.classList.toggle('visible', hasOne);
   comparison.classList.toggle('visible', hasOne);
   statusBar.classList.toggle('visible', hasOne);
   kbdHints.classList.toggle('visible', hasOne);
+  if (typeof window.__refreshCanvasFab === 'function') window.__refreshCanvasFab();
   updateInspector();
 }
 
@@ -9614,6 +9825,40 @@ function showStatus(msg) {
   if (statusTextEl) statusTextEl.textContent = msg;
   else statusBar.textContent = msg;
   statusBar.classList.add('visible');
+}
+
+// 判定门槛：提取/清空/替换后作废旧的对齐结果，未对齐前不显示相似度
+function resetAlignment() {
+  state.alignment = state.alignment || { ready: false, generation: 0 };
+  state.alignment.ready = false;
+  state.alignment.generation = (state.alignment.generation || 0) + 1;
+  _diffCache.key = null;
+}
+
+function markAlignmentReady() {
+  state.alignment = state.alignment || { ready: false, generation: 0 };
+  state.alignment.ready = true;
+  _diffCache.key = null;
+}
+
+function hasUnsavedWork() {
+  return ['ref', 'test'].some((t) => {
+    const st = state[t];
+    return !!(st && st.original && st._savedSig !== st._sig);
+  });
+}
+
+let _autoAlignTimer = 0;
+function scheduleAutoAlign() {
+  clearTimeout(_autoAlignTimer);
+  const generation = state.alignment.generation;
+  _autoAlignTimer = setTimeout(() => {
+    if (generation !== state.alignment.generation) return;
+    if (!state.ref.extracted || !state.test.extracted) return;
+    if (state.alignment.ready) return;
+    showStatus('两枚印章已就绪 — 正在自动对齐…');
+    autoAlignStamps({ auto: true });
+  }, 260);
 }
 
 // ---- Inspector: 判定、识别与候选 ----
@@ -9694,26 +9939,81 @@ function adoptInspectorCandidate(target, name) {
 
 function renderInspectorStamp(target) {
   const st = state[target];
+  const label = stampLabel(target);
   const result = st.ocrResult || null;
   const company = result ? String(result.company || '').trim() : '';
   const code = result ? String(result.code || '').trim() : '';
   const type = result ? String(result.type || '').trim() : '';
-  const source = inspectorSource(result ? result.matchSource : '', !!result);
   const sourceEl = $(`#inspector-source-${target}`);
-  sourceEl.textContent = source.label;
-  sourceEl.className = `inspector-badge ${source.cls}`;
-  $(`#inspector-company-${target}`).textContent = company || '未识别';
-  $(`#inspector-meta-${target}`).textContent =
-    `置信度 ${formatInspectorConfidence(result && result.confidence)} · 类型 ${type || '—'} · 编码 ${code || '—'}`;
-
+  const companyEl = $(`#inspector-company-${target}`);
+  const metaEl = $(`#inspector-meta-${target}`);
+  const recognizeBtn = $(`#inspector-recognize-${target}`);
   const candidateList = $(`#inspector-candidates-${target}`);
-  candidateList.replaceChildren();
-  const candidates = result && Array.isArray(result.candidates) ? result.candidates.slice(0, 3) : [];
-  if (!candidates.length) {
+  const addEmpty = (text) => {
     const empty = document.createElement('div');
     empty.className = 'inspector-candidates-empty';
-    empty.textContent = '无候选（未入库或识别失败）';
+    empty.textContent = text;
     candidateList.appendChild(empty);
+  };
+  candidateList.replaceChildren();
+
+  const loaded = !!(st.original || st.extracted);
+  if (!loaded) {
+    sourceEl.hidden = true;
+    companyEl.textContent = `${label}未加载`;
+    metaEl.hidden = true;
+    recognizeBtn.hidden = true;
+    addEmpty(`${label}未加载`);
+    return;
+  }
+
+  if (!result) {
+    sourceEl.hidden = true;
+    companyEl.textContent = `${label} · 尚未识别`;
+    metaEl.hidden = true;
+    recognizeBtn.hidden = false;
+    recognizeBtn.disabled = false;
+    addEmpty(window._ocrChecked && window._ocrAvailable === false
+      ? '文字识别暂时不可用，对比和存章仍可用'
+      : '尚未识别，点右侧「识别」或工具栏「全部识别」');
+    return;
+  }
+
+  if (result.unavailable) {
+    sourceEl.hidden = true;
+    companyEl.textContent = '文字识别暂时不可用';
+    metaEl.hidden = true;
+    recognizeBtn.hidden = false;
+    recognizeBtn.disabled = false;
+    addEmpty('对比和存章仍可用');
+    return;
+  }
+
+  if (result.failed) {
+    sourceEl.hidden = true;
+    companyEl.textContent = `${label} · 识别失败`;
+    metaEl.hidden = true;
+    recognizeBtn.hidden = false;
+    recognizeBtn.disabled = false;
+    addEmpty(String(result.error || '识别失败，请重试'));
+    return;
+  }
+
+  // 识别已经跑过：徽章与度量骨架要等有结果再出现
+  const source = inspectorSource(result.matchSource, true);
+  const hasMeta = !!(company || code || type || result.confidence !== undefined);
+  sourceEl.hidden = !(company || result.matchSource);
+  sourceEl.textContent = source.label;
+  sourceEl.className = `inspector-badge ${source.cls}`;
+  companyEl.textContent = company || '未识别到文字';
+  metaEl.hidden = !hasMeta;
+  metaEl.textContent =
+    `置信度 ${formatInspectorConfidence(result.confidence)} · 类型 ${type || '—'} · 编码 ${code || '—'}`;
+  recognizeBtn.hidden = true;
+
+  const candidates = Array.isArray(result.candidates) ? result.candidates.slice(0, 3) : [];
+  if (!candidates.length) {
+    addEmpty('库中暂无相近候选');
     return;
   }
 
@@ -9740,6 +10040,20 @@ function renderInspectorStamp(target) {
     candidateList.appendChild(row);
   }
 }
+
+// 右栏识别空态里的「识别」：只识别这一枚
+['ref', 'test'].forEach((target) => {
+  const button = $(`#inspector-recognize-${target}`);
+  if (!button) return;
+  button.addEventListener('click', () => {
+    if (!state[target].original) { showStatus(`${stampLabel(target)}未加载`); return; }
+    if (!window._ocrAvailable) {
+      showStatus('文字识别暂时不可用，对比和存章仍可用');
+      return;
+    }
+    runStampOCR(target);
+  });
+});
 
 // ---- T3-JS：文字 / 几何 / 编码三项指标 ----
 function t3LcsRatio(a, b) {
@@ -9832,15 +10146,14 @@ function updateInspector() {
   t3RenderMetric('geom', t3GeomMetric());
   t3RenderMetric('code', t3CodeMetric());
 
-  const diff = computeStampDiff();
   const gradeEl = $('#inspector-grade');
   const matchEl = $('#inspector-match');
   const captionEl = $('#inspector-match-caption');
   const fillEl = $('#inspector-match-fill');
   const verdictEmptyEl = $('#inspector-verdict-empty');
   const verdictBodyEl = $('#inspector-verdict-body');
-  if (!diff || !Number.isFinite(diff.matchPct)) {
-    if (verdictEmptyEl) verdictEmptyEl.hidden = false;
+  const hideVerdict = (message) => {
+    if (verdictEmptyEl) { verdictEmptyEl.hidden = false; verdictEmptyEl.textContent = message; }
     if (verdictBodyEl) verdictBodyEl.hidden = true;
     gradeEl.hidden = true;
     gradeEl.textContent = '—';
@@ -9849,6 +10162,21 @@ function updateInspector() {
     matchEl.textContent = '—';
     captionEl.textContent = '—';
     fillEl.style.width = '0%';
+  };
+
+  // 只有两枚都提取完成、且已对齐，才允许出现「不一致 / 相似度」
+  if (!(state.ref.extracted && state.test.extracted)) {
+    hideVerdict('加载两枚印章并完成提取后，在这里显示判定');
+    return;
+  }
+  if (!state.alignment || !state.alignment.ready) {
+    hideVerdict('请先自动对齐');
+    return;
+  }
+
+  const diff = computeStampDiff();
+  if (!diff || !Number.isFinite(diff.matchPct)) {
+    hideVerdict('对齐完成，但墨迹不足，请调整提取');
     return;
   }
 
@@ -10430,6 +10758,7 @@ function computeStampDiff() {
 }
 
 function renderDiffOverlay(cx, cy, stampSize, scale) {
+  if (!state.alignment || !state.alignment.ready) return;
   const res = computeStampDiff();
   if (!res) return;
 
@@ -10491,8 +10820,10 @@ function analyzeStampMask(canvasEl) {
 }
 
 // 自动对齐主流程：调整待验章（旋转/缩放/偏移）使其与参考章当前姿态最佳匹配
-function autoAlignStamps() {
+function autoAlignStamps(options) {
   if (!state.ref.extracted || !state.test.extracted) {
+    resetAlignment();
+    updateInspector();
     showStatus('请先加载两枚印章再自动对齐');
     return;
   }
@@ -10680,14 +11011,16 @@ function autoAlignStamps() {
   document.querySelectorAll('#target-group .mode-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.target === 'test'));
   syncSlidersToTarget();
+  markAlignmentReady();
   scheduleRender();
+  updateInspector();
 
   // 计算对齐后的相似度并提示
   const res = computeStampDiff();
   const pct = res ? res.matchPct.toFixed(1) : '—';
   const wi = [state.ref.warpInfo, state.test.warpInfo].filter(Boolean);
   const warpNote = wi.length ? ` · 圆章校正 ${wi.map(w => w.ratio.toFixed(2)).join('/')}→1.00` : '';
-  let msg = `自动对齐完成：旋转 ${t.rotate}° · 缩放 ${t.scaleX}% · 偏移 (${t.offsetX}, ${t.offsetY})px · 相似度 ${pct}%${warpNote}`;
+  let msg = `已对齐：旋转 ${t.rotate}° · 缩放 ${t.scaleX}% · 偏移 (${t.offsetX}, ${t.offsetY})px · 相似度 ${pct}%${warpNote}`;
   if (res && res.matchPct < 40) {
     msg += ' — 两枚印章墨迹差异较大，对齐结果仅供参考';
   }
@@ -10898,6 +11231,25 @@ document.addEventListener('drop', (e) => {
     removeStamp(target);
   });
 });
+
+// 画布图例旁：更换图片 / 只清除这一枚
+(function bindCanvasLegendActions() {
+  const box = document.getElementById('canvas-legend-actions');
+  if (!box) return;
+  box.querySelectorAll('button[data-action]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const target = btn.dataset.target === 'ref' ? 'ref' : 'test';
+      if (btn.dataset.action === 'remove') {
+        removeStamp(target);
+        return;
+      }
+      if (state[target].original &&
+          !confirm(`将替换${stampLabel(target)}，未存库的提取与对齐会丢失。`)) return;
+      openImagePicker(target);
+    });
+  });
+})();
 
 // Mode buttons (comparison mode only, not target selector or axis selector)
 // 对比模式切换（排除 target/axis/color 组，墨色组为多选独立逻辑）
@@ -11324,11 +11676,10 @@ comparison.addEventListener('mouseleave', () => { magnifier.style.display = 'non
 
 // Mouse wheel — scale or rotate selected stamp（按区域分离，v2.11.1）
 // 交互模型：
-//   ① 对比图像区域（cmpCanvas 画布内）：纵向滚动 = 缩放；
-//      横向滚动 = 旋转（触控板双指横滑，无需 Shift）
+//   ① 画布内：滚轮 = 旋转；Ctrl/⌘ + 滚轮 = 缩放；拖拽 = 移动
 //   ② 画布上下扩展带（各 280px，覆盖工具栏/旋转条/提示区）：滚动 = 旋转（无需 Shift）
 //   ③ 其余区域：不拦截（页面正常滚动）
-// 附：画布内 Shift+纵向 = 旋转（兼容老习惯）；旋转→缩放 200ms 保护窗防误触
+// 附：Shift 加速旋转；旋转→缩放 200ms 保护窗防误触
 let zoomAccum = 0;
 let rotAccum = 0;
 const WHEEL_ZOOM_THRESH = 15;
@@ -11794,7 +12145,7 @@ document.querySelectorAll('#rec-mode-group .mode-btn').forEach(b => {
     } else {
       showStatus(rec === 'ai'
         ? `识别方式：AI（${(window._aiConfig.model || '')}）— 印章加载后自动识别，或点击每枚印章的「AI 识别」`
-        : '识别方式：本地 PaddleOCR');
+        : '识别方式：本地识别');
     }
     // 识别方式变化后重检服务状态（PaddleOCR 缺失时 AI 视觉模式可恢复按钮可用）
     if (window._retryOCRConnection) window._retryOCRConnection();
@@ -11985,6 +12336,30 @@ async function localFallbackOCR(target, imgB64, spec) {
   return null;
 }
 
+function markOcrUnavailable(target, message) {
+  const st = state[target];
+  if (!st || !st.original) return;
+  st.ocrResult = {
+    unavailable: true,
+    error: String(message || '文字识别暂时不可用，对比和存章仍可用'),
+    candidates: [],
+    matchSource: 'none',
+  };
+  updateInspector();
+}
+
+function markOcrFailure(target, message) {
+  const st = state[target];
+  if (!st || !st.original) return;
+  st.ocrResult = {
+    failed: true,
+    error: String(message || '识别失败，请重试'),
+    candidates: [],
+    matchSource: 'none',
+  };
+  updateInspector();
+}
+
 async function runStampOCR(target) {
   const t0 = performance.now();
   if (state._ocrRunning && state._ocrRunning[target]) return null;   // 防重复点击
@@ -12047,31 +12422,34 @@ async function runStampOCR(target) {
       $(`#ocr-${target}-company`).textContent = '未配置 AI';
       $(`#ocr-${target}-code`).textContent = '—';
       $(`#ocr-${target}-type`).textContent = '—';
-      statusEl.textContent = 'AI 识别未配置 — 请在「更多 → AI 识别设置…」完善配置';
-      showStatus('AI 识别未配置 — 请在「更多 → AI 识别设置…」完善配置');
+      statusEl.textContent = 'AI 识别尚未配置，可在「更多 → AI 识别设置…」中完善';
+      showStatus('AI 识别尚未配置，可在「更多 → AI 识别设置…」中完善');
+      markOcrFailure(target, 'AI 识别尚未配置，可在「更多 → AI 识别设置…」中完善');
       ocrBusyEnd(target);
     return null;
     }
     if (serverState === 'no-ocr') {
-      statusEl.textContent = 'OCR 模型未加载（需安装 PaddleOCR 依赖）';
-      $(`#ocr-${target}-company`).textContent = '需装依赖';
+      statusEl.textContent = '文字识别暂时不可用，对比和存章仍可用';
+      $(`#ocr-${target}-company`).textContent = '暂不可用';
       $(`#ocr-${target}-code`).textContent = '—';
       $(`#ocr-${target}-type`).textContent = '—';
-      showStatus('OCR 模型未加载 — 请安装依赖: pip install paddlepaddle paddleocr opencv-python');
+      showStatus('文字识别暂时不可用，对比和存章仍可用');
+      markOcrUnavailable(target);
       ocrBusyEnd(target);
     return null;
     }
-    statusEl.textContent = 'OCR 服务未启动';
-    $(`#ocr-${target}-company`).textContent = '需启动服务';
+    statusEl.textContent = '文字识别暂时不可用，对比和存章仍可用';
+    $(`#ocr-${target}-company`).textContent = '暂不可用';
     $(`#ocr-${target}-code`).textContent = '—';
     $(`#ocr-${target}-type`).textContent = '—';
-    showStatus('OCR 服务未连接，请运行: python3 stamp_app.py');
+    showStatus('文字识别暂时不可用，对比和存章仍可用');
+    markOcrUnavailable(target);
     ocrBusyEnd(target);
     return null;
   }
 
   fillEl.style.width = '20%';
-  statusEl.textContent = '发送图像到 OCR 服务...';
+  statusEl.textContent = '正在发送图像…';
 
   // 将原始画布转为 base64 发送
   // 交给 AI 视觉模型的是「已经做完了颜色分离 + 圆章校正」的章面（合成白底），
@@ -12105,10 +12483,10 @@ async function runStampOCR(target) {
     if (state.recMode === 'ai') {
       // 选择了 AI 但配置不完整：提示并回退本地
       statusEl.textContent = 'AI 未配置完整，已回退本地 OCR...';
-      showStatus('AI 识别未配置完整 — 请在「更多 → AI 识别设置…」完成配置，本次回退使用本地 PaddleOCR');
+      showStatus('AI 识别尚未配置完整 — 请在「更多 → AI 识别设置…」完成配置，本次使用本地识别');
     }
     fillEl.style.width = '30%';
-    statusEl.textContent = 'PaddleOCR 识别中...';
+    statusEl.textContent = '正在识别文字…';
   }
 
   // 组装请求体：携带当前墨色选择（预设色 + 手工取色 hues）
@@ -12154,7 +12532,7 @@ async function runStampOCR(target) {
         const lcode = (localPeek.code || '').trim();
         const ltype = (localPeek.kind || '').trim();
         if (lc || lcode) {
-          $(`#ocr-${target}-company`).textContent = lc || '未识别';
+          $(`#ocr-${target}-company`).textContent = lc || '未识别到文字';
           $(`#ocr-${target}-code`).textContent = lcode || '未检测到';
           $(`#ocr-${target}-type`).textContent = ltype || '未检测到';
           state[target].ocrResult = { company: lc, code: lcode, type: ltype, matchSource: 'local' };
@@ -12205,7 +12583,7 @@ async function runStampOCR(target) {
           const lc = (localPeek.company || '').trim();
           const lcode = (localPeek.code || '').trim();
           const ltype = (localPeek.kind || '').trim();
-          $(`#ocr-${target}-company`).textContent = lc || '未识别';
+          $(`#ocr-${target}-company`).textContent = lc || '未识别到文字';
           $(`#ocr-${target}-code`).textContent = lcode || '未检测到';
           $(`#ocr-${target}-type`).textContent = ltype || '未检测到';
           state[target].ocrResult = { company: lc, code: lcode, type: ltype, matchSource: 'local' };
@@ -12229,6 +12607,7 @@ async function runStampOCR(target) {
         cancelBtn.classList.remove('visible');
         state._ocrControllers[target] = null;
         showStatus('AI 提取失败: ' + reason);
+        markOcrFailure(target, reason);
         ocrBusyEnd(target);
     return null;
       }
@@ -12236,7 +12615,7 @@ async function runStampOCR(target) {
       const company = (ai.company || '').trim();
       const code = (ai.code || '').trim();
       const type = (ai.type || '').trim();
-      $(`#ocr-${target}-company`).textContent = company || '未识别';
+      $(`#ocr-${target}-company`).textContent = company || '未识别到文字';
       $(`#ocr-${target}-company`).title = ai.raw || '';
       $(`#ocr-${target}-code`).textContent = code || '未检测到';
       $(`#ocr-${target}-type`).textContent = type || '未检测到';
@@ -12255,13 +12634,14 @@ async function runStampOCR(target) {
 
     if (!data.success || !data.stamps || data.stamps.length === 0) {
       const reason = data.error || (data.stamps && data.stamps.length === 0 ? '未检测到印章文字' : '识别失败');
-      $(`#ocr-${target}-company`).textContent = data.error ? '识别出错' : '未识别到印章';
+      $(`#ocr-${target}-company`).textContent = data.error ? '识别出错' : '未识别到文字';
       $(`#ocr-${target}-code`).textContent = '—';
       $(`#ocr-${target}-type`).textContent = '—';
       fillEl.style.width = '100%';
       statusEl.textContent = reason;
       cancelBtn.classList.remove('visible');
       state._ocrControllers[target] = null;
+      markOcrFailure(target, reason);
       ocrBusyEnd(target);
     return null;
     }
@@ -12279,7 +12659,7 @@ async function runStampOCR(target) {
     const code = (s0.code || parsed.code || '').trim();
     const type = (s0.type || parsed.type || '').trim();
 
-    $(`#ocr-${target}-company`).textContent = company || '未识别';
+    $(`#ocr-${target}-company`).textContent = company || '未识别到文字';
     $(`#ocr-${target}-code`).textContent = code || '未检测到';
     $(`#ocr-${target}-type`).textContent = type || '未检测到';
 
@@ -12316,11 +12696,13 @@ async function runStampOCR(target) {
     return null;
     }
     fillEl.style.width = '100%';
-    statusEl.textContent = '识别失败: ' + err.message;
+    statusEl.textContent = '识别失败，请稍后重试';
+    statusEl.title = String(err && err.message || '');
     cancelBtn.classList.remove('visible');
     state._ocrControllers[target] = null;
     console.error('OCR error:', err);
-    showStatus('OCR 请求失败: ' + err.message);
+    showStatus('识别失败，请稍后重试');
+    markOcrFailure(target, '识别失败，请稍后重试');
     ocrBusyEnd(target);
     return null;
   }
@@ -12330,7 +12712,7 @@ async function runStampOCR(target) {
 $('#btn-ocr').addEventListener('click', async () => {
   // 检查 OCR 服务是否可用
   if (!window._ocrAvailable) {
-    showStatus('OCR 服务未连接 — 请运行 launcher 启动服务后重试');
+    showStatus('文字识别暂时不可用，对比和存章仍可用');
     return;
   }
 
@@ -12660,7 +13042,7 @@ statusBar.classList.add('visible');
     const top = make('div', 'engine-card-top');
     const main = make('div', 'engine-card-main');
     const title = make('div', 'engine-card-title');
-    title.appendChild(document.createTextNode('PaddleOCR-VL · 4bit'));
+    title.appendChild(document.createTextNode('本地识别模型 · 4bit'));
     let versionText = stateBadgeText(state, job);
     if (state === 'ready') versionText = String(engine.version || '4bit');
     title.appendChild(make('span', 'engine-version-badge', versionText));
@@ -12909,7 +13291,7 @@ statusBar.classList.add('visible');
       ui.active = result.active || target;
       renderEngineCard();
       updateEngineRecognitionNote();
-      showStatus(target === ENGINE_ID ? '已启用本地视觉引擎' : '已切换回 RapidOCR');
+      showStatus(target === ENGINE_ID ? '已启用本地视觉引擎' : '已切换回本地识别');
     } catch (e) {
       showStatus(`切换识别引擎失败：${e.message}`);
     }
@@ -13004,15 +13386,15 @@ statusBar.classList.add('visible');
     const active = ui.active;
     const state = ui.engine && ui.engine.state;
     if (active === 'rapidocr' && state === 'absent') {
-      recognitionNote.textContent = '本地视觉未安装 · 已用 RapidOCR 兜底';
-      recognitionNote.title = '本地视觉模型未安装，识别回退到 RapidOCR + 印章库匹配；可在「更多 → 识别引擎…」或设置中安装。';
-      recognitionNote.hidden = false;
+      // 默认能工作时不打扰主界面：不展示模型名/兜底等技术说明
+      recognitionNote.textContent = '';
+      recognitionNote.title = '';
+      recognitionNote.hidden = true;
       return;
     }
     if (active === ENGINE_ID && ui.fallback) {
-      const reason = String(ui.fallback.vlmError || '').trim().slice(0, 60) || '未返回详细原因';
-      recognitionNote.textContent = `本地视觉降级 · ${reason}`;
-      recognitionNote.title = `本地视觉降级：${reason}`;
+      recognitionNote.textContent = '本次使用了备用识别方式';
+      recognitionNote.title = String(ui.fallback.vlmError || '').trim().slice(0, 120);
       recognitionNote.hidden = false;
       return;
     }
@@ -13125,26 +13507,12 @@ statusBar.classList.add('visible');
     dismissed = true;
   });
 
-  // 启动指南弹窗
+  // 「查看使用说明」：不再展示 launcher / pip / 脚本名等开发者说明
+  launch.textContent = '查看使用说明';
   launch.addEventListener('click', function(e) {
     e.preventDefault();
-    var msg = '印章对比工具的 OCR 功能需要后端服务支持。\n\n';
-    if (navigator.platform.indexOf('Mac') >= 0) {
-      msg += 'macOS 启动方式（任选其一）：\n';
-      msg += '① 双击「启动印章对比工具.command」（推荐，双击即运行）\n';
-      msg += '② 终端执行：\n';
-      msg += '   chmod +x launcher.sh && ./launcher.sh\n';
-      msg += '③ 右键 launcher.sh → 打开方式 → 终端.app\n';
-      msg += '（若双击 .sh 打开的是文本编辑器，请改用方式 ①）\n';
-    } else {
-      msg += 'Windows: 双击同目录下的 launcher.bat\n';
-    }
-    msg += '\n或命令行运行: python3 stamp_app.py\n\n';
-    msg += '注意: 现代 macOS/Linux 的 Python 受 PEP 668 限制，\n';
-    msg += '直接 pip install 会被拒绝；请优先使用启动器（会自动\n';
-    msg += '创建项目内 .venv 虚拟环境安装依赖，无此问题）。\n\n';
-    msg += '即使没有 OCR 服务，印章对比、差异高亮、\n导出等其他功能仍可正常使用。';
-    alert(msg);
+    var manual = document.getElementById('manual-overlay');
+    if (manual) manual.classList.add('visible');
   });
 
   function showBar() {
@@ -13153,27 +13521,40 @@ statusBar.classList.add('visible');
 
   function setOcrUnavailable(msg) {
     window._ocrAvailable = false;
+    window._ocrChecked = true;
     dot.className = 'ocr-sdot fail';
-    txt.textContent = msg || 'OCR 服务未连接 — 对比/导出等功能可正常使用，文字识别不可用';
-    launch.style.display = msg ? 'none' : 'inline-block';
+    txt.textContent = '文字识别暂时不可用，对比和存章仍可用';
+    txt.title = msg || '';
+    launch.style.display = 'inline-block';
     if (ocrBtn) {
       ocrBtn.disabled = true;
       ocrBtn.classList.add('btn-ocr-disabled');
-      ocrBtn.title = 'OCR 不可用';
+      ocrBtn.title = '文字识别暂时不可用';
     }
+    ['ref', 'test'].forEach(function(t) {
+      var panel = document.getElementById('ocr-' + t);
+      if (!panel || !panel.classList.contains('visible')) return;
+      var sEl = document.getElementById('ocr-' + t + '-status');
+      var cEl = document.getElementById('ocr-' + t + '-company');
+      if (sEl) sEl.textContent = '文字识别暂时不可用，对比和存章仍可用';
+      if (cEl) cEl.textContent = '暂不可用';
+    });
+    if (typeof updateInspector === 'function') updateInspector();
     showBar();
   }
 
   function setOcrAvailable() {
     window._ocrAvailable = true;
+    window._ocrChecked = true;
     dot.className = 'ocr-sdot ok';
-    txt.textContent = 'OCR 服务已就绪';
+    txt.textContent = '文字识别已就绪';
     launch.style.display = 'none';
     if (ocrBtn) {
       ocrBtn.disabled = false;
       ocrBtn.classList.remove('btn-ocr-disabled');
       ocrBtn.title = '提取两个印章的文字及编码';
     }
+    if (typeof updateInspector === 'function') updateInspector();
     showBar();
     // 3 秒后自动隐藏（如果未被 dismiss）
     setTimeout(function() {
@@ -13195,7 +13576,7 @@ statusBar.classList.add('visible');
       .then(function(d) {
         if (d.status === 'ok' && d.ocr === 'loading') {
           // 模型后台加载中（桌面版内置运行时冷启动）：显示加载态并持续轮询
-          txt.textContent = 'OCR 模型加载中（首次约 10-30 秒）...';
+          txt.textContent = '文字识别准备中（首次约 10–30 秒）…';
           setTimeout(checkServer, 1500);
         } else if (d.status === 'ok' && d.ocr !== false) {
           setOcrAvailable();
@@ -13205,9 +13586,9 @@ statusBar.classList.add('visible');
           var aiVisionReady = !!(ai && ai.mode === 'vision' && aiCfgReady(ai) && state.recMode === 'ai');
           if (aiVisionReady) {
             setOcrAvailable();
-            txt.textContent = 'PaddleOCR 未加载 — AI 提取可用（识别: AI）';
+            txt.textContent = '文字识别已就绪（AI）';
           } else {
-            setOcrUnavailable('PaddleOCR 未加载 — 可在工具栏「识别」切到 AI（视觉模式无需 PaddleOCR）');
+            setOcrUnavailable('本地文字识别未启用，可在工具栏「识别」切到 AI');
           }
         } else {
           if (checkCount < maxChecks) {
@@ -13235,7 +13616,7 @@ statusBar.classList.add('visible');
   window._retryOCRConnection = function() {
     checkCount = 0;
     dot.className = 'ocr-sdot checking';
-    txt.textContent = '正在重新检测 OCR 服务...';
+    txt.textContent = '正在重新准备文字识别…';
     launch.style.display = 'none';
     dismissed = false;
     showBar();
@@ -13261,7 +13642,7 @@ statusBar.classList.add('visible');
     padding: 8px 12px; border-radius: 8px; cursor: pointer; color: #5a6472;
     border: 1px solid transparent; background: transparent;
   }
-  #cmp-fab .fab-chip.active { color: #fff; background: #c0392b; font-weight: 600; }
+  #cmp-fab .fab-chip.active { color: var(--text); background: var(--surface-solid); box-shadow: inset 0 0 0 1px var(--border); font-weight: 520; }
   #cmp-fab .fab-btn {
     width: 34px; height: 34px; border-radius: 9px; border: 1px solid #dfe3ea;
     background: #fff; color: #333; font-size: 15px; cursor: pointer; line-height: 1;
@@ -13318,10 +13699,10 @@ statusBar.classList.add('visible');
         <tr><td>灰底扫描件，字边一圈深、字心发灰（晕染）</td><td>工具栏「优化提取」开关（开）</td><td>按「深×艳」判墨抑制边缘环；比完记得关回去</td></tr>
         <tr><td>淡章/残缺章，笔画细、提出来断断续续</td><td>「优化提取」开关（关）+ 取色</td><td>默认关就为这种章；开反而会把淡笔画切碎</td></tr>
         <tr><td>蓝/紫/黑灰/多色混盖</td><td>「原图 → 点选取色」</td><td>点几处不同深浅的笔画，多色叠加提取</td></tr>
-        <tr><td>背景/表格线/签名被一起提取进来</td><td>取色面板切「⊘ 排除」再点掉</td><td>排除优先于提取；「剔除容差」调小更精准</td></tr>
+        <tr><td>背景/表格线/签名被一起提取进来</td><td>取色面板切「排除」再点掉</td><td>排除优先于提取；「剔除容差」调小更精准</td></tr>
         <tr><td>要与具体色值完全一致（专色/防伪油墨）</td><td>查看器底部「匹配 → 精确RGB」</td><td>只认容差内的欧氏距离；色相模式会连深浅一起抓</td></tr>
         <tr><td>盖章压扁/拍歪，章呈椭圆</td><td>工具栏「圆章校正」开关（默认开）</td><td>拟合长轴拉回正圆；淡墨/残缺自动跳过，不会拧出波纹</td></tr>
-        <tr><td>只要章的某一块（避开正文压字）</td><td>「原图 → ⭕圆形裁切」</td><td>拖圆心 + 4 个轴端手柄贴合边缘，应用后归一为正圆</td></tr>
+        <tr><td>只要章的某一块（避开正文压字）</td><td>「原图 → 圆形裁切」</td><td>拖圆心 + 4 个轴端手柄贴合边缘，应用后归一为正圆</td></tr>
         <tr><td>差一点点对不上</td><td>滚轮旋转 + 滑块微调 + 「差异高亮」</td><td>画布内滚轮＝旋转，Ctrl/⌘+滚轮＝缩放</td></tr>
         <tr><td>想确认公司名/编码/类型</td><td>「AI 识别」或「全部识别」</td><td>本地 OCR 先出结果、AI 复核；AI 失败保留本地并写原因</td></tr>
         <tr><td>同一枚章反复比对</td><td>「印章库」→ 存库</td><td>按 OCR 名称建索引，下次一键载入</td></tr>
@@ -13332,7 +13713,7 @@ statusBar.classList.add('visible');
         <tr><th>项</th><th>说明</th></tr>
         <tr><td>自动提取</td><td>按红度/墨量判墨并归一化；一张图多枚章用候选芯片切换</td></tr>
         <tr><td>点选取色</td><td>在原图上点笔画颜色（可多次，最多 40 种）；同色再点＝切换提取/排除</td></tr>
-        <tr><td>⊘ 排除</td><td>把该色从结果去掉；「剔除容差」越大去掉越多（14%≈±17 RGB）</td></tr>
+        <tr><td>排除</td><td>把该色从结果去掉；「剔除容差」越大去掉越多（14%≈±17 RGB）</td></tr>
         <tr><td>颜色加深</td><td>取色界面底部按墨色浓度提亮淡笔画；淡章晕染时先关掉</td></tr>
         <tr><td>放大镜</td><td>取色时跟随鼠标 5.5× 显示笔画像素与色值（#RRGGBB）</td></tr>
         <tr><td>取色标记</td><td>画布留小白点标记取过处，排除色带斜杠，便于复查</td></tr>
@@ -13378,7 +13759,7 @@ statusBar.classList.add('visible');
       </table>
 
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.19</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.20</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
@@ -13438,6 +13819,7 @@ statusBar.classList.add('visible');
     window.scheduleRender = function () { _sr(); setTimeout(refreshFab, 0); };
   }
   refreshFab();
+  window.__refreshCanvasFab = refreshFab;
 
   // 状态栏右侧操作位：⌨ 与「使用说明」固定在栏内，不再浮动遮挡状态文本
   (function mountStatusActions() {
@@ -13476,9 +13858,9 @@ statusBar.classList.add('visible');
 
   const collapseBar = document.createElement('div');
   collapseBar.id = 'collapse-bar';
-  collapseBar.style.cssText = 'display:none;align-items:center;gap:10px;justify-content:center;'
-    + 'padding:7px 12px;margin:0 0 8px;border:1px solid var(--border);border-radius:10px;'
-    + 'background:var(--surface);font:12.5px/1.4 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#555;';
+  collapseBar.style.cssText = 'display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:9;align-items:center;gap:10px;justify-content:center;'
+    + 'padding:7px 12px;margin:0;max-width:calc(100% - 24px);border:1px solid var(--border);border-radius:10px;'
+    + 'background:var(--surface);font:12.5px/1.4 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text-secondary);';
   collapseBar.innerHTML = [
     '<span id="cb-ref" style="display:none">参考章</span>',
     '<span id="cb-test" style="display:none">待验章</span>',
@@ -13497,6 +13879,12 @@ statusBar.classList.add('visible');
     collapseBar.querySelector('#cb-ref').style.display = hasRef ? 'inline' : 'none';
     collapseBar.querySelector('#cb-test').style.display = hasTest ? 'inline' : 'none';
   }
+  // 清空/删到无图时由主流程复位：撤掉折叠态，重新露出两个投放区
+  window.__setStampCollapsed = setCollapsed;
+  window.__resetStampCollapse = function () {
+    userExpanded = false;
+    setCollapsed(false);
+  };
   document.getElementById('cb-expand').addEventListener('click', (e) => {
     e.preventDefault();
     userExpanded = true;
@@ -13557,8 +13945,8 @@ statusBar.classList.add('visible');
     cursor: pointer;
   }
   .dt-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
-  .dt-btn.primary { background: var(--text); border-color: var(--text); color: var(--surface-solid); }
-  .dt-btn.primary:hover { background: var(--text); border-color: var(--text); color: var(--surface-solid); opacity: .88; }
+  .dt-btn.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; }
+  .dt-btn.primary:hover { background: var(--accent-pressed); border-color: var(--accent-pressed); color: #fff; opacity: 1; }
   .dt-btn .ui-icon { color: currentColor; }
   .dt-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.30); z-index: 10000; display: none; align-items: center; justify-content: center; }
   .dt-overlay.visible { display: flex; }
@@ -13579,17 +13967,49 @@ statusBar.classList.add('visible');
   .dt-lib-item img { width: 100%; height: 110px; object-fit: contain; background: var(--surface-muted); border-radius: 6px; cursor: pointer; }
   .dt-lib-name { font-size: 13px; color: var(--text); margin-top: 6px; line-height: 1.35; word-break: break-all; max-height: 2.7em; overflow: hidden; }
   .dt-lib-time { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
-  .dt-lib-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; }
+  .dt-lib-ops { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; margin-top: 8px; }
   .dt-lib-ops button {
-    height: 25px; font-size: 11px; line-height: 1.2; padding: 0 4px; border: 1px solid var(--border); background: var(--surface-muted);
-    color: var(--text-secondary); border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    height: 30px; font-size: 13px; line-height: 1.2; padding: 0 8px; border: 1px solid var(--border); background: var(--surface-muted);
+    color: var(--text-secondary); border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .dt-lib-ops button:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
   .dt-lib-ops button.del:hover { border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); }
+  .dt-lib-more { position: absolute; top: 8px; right: 8px; }
+  .dt-lib-more > summary {
+    list-style: none;
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface-muted); color: var(--text-secondary);
+    font-size: 17px; line-height: 1; cursor: pointer; user-select: none;
+  }
+  .dt-lib-more > summary::-webkit-details-marker { display: none; }
+  .dt-lib-more[open] > summary { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+  .dt-lib-more-list {
+    position: absolute; right: 0; top: calc(100% + 5px); z-index: 4;
+    min-width: 104px; padding: 4px; display: flex; flex-direction: column; gap: 2px;
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    background: var(--surface-solid); box-shadow: var(--shadow-1);
+  }
+  .dt-lib-more-list button { justify-content: flex-start; text-align: left; background: transparent; border-color: transparent; }
+  .dt-lib-more-list button:hover { background: var(--surface-hover); border-color: transparent; }
+  .dt-lib-more-list button.del:hover { background: var(--danger-bg); color: var(--danger); }
   .dt-cap-toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px); background: var(--surface-solid); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-dialog); padding: 12px 14px; z-index: 10001; display: none; align-items: center; gap: 10px; opacity: 0; transition: opacity .18s ease, transform .18s ease; }
   .dt-cap-toast.visible { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
   .dt-cap-toast img { width: 86px; height: 86px; object-fit: contain; background: var(--surface-muted); border-radius: 6px; }
   .dt-cap-toast .t { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+  .dt-cap-actions { display: flex; gap: 8px; align-items: center; }
+  .dt-cap-toast .dt-btn-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    box-shadow: none;
+  }
+  .dt-cap-toast .dt-btn-ghost:hover {
+    border-color: var(--border);
+    background: var(--surface-muted);
+    color: var(--text);
+  }
   .dt-kbd-rec { border: 1px dashed var(--border-strong); color: var(--text); text-align: center; }
   .dt-hint { font-size: 11px; color: var(--text-tertiary); }
 </style>
@@ -13608,7 +14028,7 @@ statusBar.classList.add('visible');
       </div>
       <div class="dt-hint" id="dt-lib-path" style="margin-bottom:10px"></div>
       <div class="dt-lib-grid" id="dt-lib-grid"></div>
-      <div class="dt-hint" id="dt-lib-empty" style="display:none; padding: 30px 0; text-align: center;">印章库为空 —— 对比界面上每个印章卡片右上角有存入库按钮</div>
+      <div class="dt-hint" id="dt-lib-empty" style="display:none; padding: 30px 0; text-align: center;">印章库为空 —— 用工具栏「存参考章 / 存待验章」保存当前印章，也可在下方选择后点「存入库」</div>
       <div style="border-top:1px solid #eceff3; margin-top:16px; padding-top:14px">
         <div class="dt-row">
           <label>保存当前</label>
@@ -13659,9 +14079,9 @@ statusBar.classList.add('visible');
         </select>
       </div>
       <div class="dt-row">
-        <label>OCR 后端</label>
+        <label>文字识别</label>
         <select class="dt-input" id="dt-backend" style="max-width:240px">
-          <option value="true">自动启动（需 Python + PaddleOCR）</option>
+          <option value="true">自动启动（推荐）</option>
           <option value="false">不启动</option>
         </select>
         <span class="dt-hint">重启应用后生效</span>
@@ -13678,11 +14098,11 @@ statusBar.classList.add('visible');
 <div class="dt-cap-toast" id="dt-cap-toast">
   <img id="dt-cap-thumb">
   <div>
-    <div class="t">截图完成 —— 已复制到剪贴板，粘贴到：</div>
-    <div style="display:flex; gap:8px">
-      <button class="dt-btn primary" id="dt-cap-ref">→ 参考章</button>
-      <button class="dt-btn primary" id="dt-cap-test">→ 待验章</button>
-      <button class="dt-btn" id="dt-cap-dismiss">仅复制</button>
+    <div class="t">截图完成 —— 已复制到剪贴板，选择粘贴位置：</div>
+    <div class="dt-cap-actions">
+      <button class="dt-btn primary" id="dt-cap-ref">→ 参考章（推荐）</button>
+      <button class="dt-btn" id="dt-cap-test">→ 待验章</button>
+      <button class="dt-btn dt-btn-ghost" id="dt-cap-dismiss">仅复制</button>
     </div>
   </div>
 </div>
@@ -13801,10 +14221,15 @@ statusBar.classList.add('visible');
         '<div class="dt-lib-name"></div>',
         '<div class="dt-lib-time"></div>',
         '<div class="dt-lib-ops">',
-        '<button data-op="ref">→ 参考章</button>',
-        '<button data-op="test">→ 待验章</button>',
-        '<button data-op="rename" title="重命名（也可双击名称）">改名</button>',
+        '<button data-op="ref" class="dt-lib-use">用作参考</button>',
+        '<button data-op="test" class="dt-lib-use">用作待验</button>',
+        '<details class="dt-lib-more">',
+        '<summary aria-label="更多操作" title="更多操作">⋯</summary>',
+        '<div class="dt-lib-more-list">',
+        '<button data-op="rename">改名</button>',
         '<button data-op="del" class="del">删除</button>',
+        '</div>',
+        '</details>',
         '</div>',
       ].join('');
       const nameEl = cell.querySelector('.dt-lib-name');
@@ -13833,6 +14258,13 @@ statusBar.classList.add('visible');
       grid.appendChild(cell);
     });
   }
+
+  // 点卡片外面时收起「更多」菜单
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.dt-lib-more')) return;
+    document.querySelectorAll('.dt-lib-more[open]').forEach((node) => node.removeAttribute('open'));
+  });
+
   // 重命名：文件与本程序命名规则一致时磁盘文件一起改名（见主进程 lib:rename）
   async function renameLibItem(item) {
     const v = await dtPrompt('重命名印章 —— 「' + item.name + '」', item.name, '保存');
@@ -13950,8 +14382,14 @@ statusBar.classList.add('visible');
     const pad = (n) => String(n).padStart(2, '0');
     const dateName = '印章_' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate())
       + '_' + pad(now.getHours()) + pad(now.getMinutes());
-    const defName = (st.ocrResult && st.ocrResult.company && String(st.ocrResult.company).trim())
+    const dialogNameEl = $('#dt-save-name');
+    const dialogNoteEl = $('#dt-save-note');
+    const dialogTarget = $('#dt-save-target');
+    const useDialogValues = !!(dialogTarget && dialogTarget.value === target);
+    const defName = (useDialogValues && dialogNameEl && dialogNameEl.value.trim())
+      || (st.ocrResult && st.ocrResult.company && String(st.ocrResult.company).trim())
       || dateName;
+    const note = (useDialogValues && dialogNoteEl) ? dialogNoteEl.value.trim() : '';
     // 重名检测：已存在同名印章时提示（仍保存为新条目 / 返回修改名称）
     let finalName = await dtPrompt('保存到印章库 —— 印章名称（用于索引检索）', defName, '保存');
     while (finalName !== null) {
@@ -13964,8 +14402,11 @@ statusBar.classList.add('visible');
     if (finalName === null) return;
     // 仅保存印章原图（一份；载入时走完整提取流程）
     const png = (st.original || st.extracted).toDataURL('image/png');
-    const r = await DT.libSave({ name: finalName || defName, note: '', png: png, original: null, ocr: st.ocrResult });
-    if (r.ok) showStatus('已保存到印章库：' + (finalName || defName));
+    const r = await DT.libSave({ name: finalName || defName, note: note, png: png, original: null, ocr: st.ocrResult });
+    if (r.ok) {
+      st._savedSig = st._sig;
+      showStatus('已保存到印章库：' + (finalName || defName));
+    }
     if ($('#dt-lib-overlay').classList.contains('visible')) refreshLib($('#dt-lib-search').value.trim());
   }
 
@@ -14187,9 +14628,23 @@ statusBar.classList.add('visible');
     color: var(--text);
   }
 
+  #cmp-fab .fab-btn {
+    background: var(--surface-solid);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  #cmp-fab .fab-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    color: var(--accent-text);
+  }
+
   #cmp-fab .fab-chip.active {
-    color: #fff;
-    background: var(--accent);
+    color: var(--text);
+    background: var(--surface-solid);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-weight: 520;
   }
 
   #cmp-fab .fab-tip {
