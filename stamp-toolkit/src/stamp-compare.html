@@ -7758,6 +7758,9 @@ function recomputeExtracted(target) {
     const rgbTolNow = () => Math.max(6, (state.ink[target].pickTol || 0.14) * 120);
     const extractColors = customs.filter(c => !c.exclude);
     const excludeColors = customs.filter(c => c.exclude);
+    // 提取色的"主色"（用户实际点到的那一个）。颜色簇里可能混入正文/抗锯齿色，
+    // 排除深色正文时只有主色才可靠地代表印章主体，用它做保护。
+    const extractPrimary = extractColors.map(c => (c.set && c.set[0]) || null).filter(Boolean);
     let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
     for (const c of extractColors) {
       for (const p of (c.set || [])) {
@@ -7806,6 +7809,34 @@ function recomputeExtracted(target) {
               if (!p0) continue;
               const dPix = Math.sqrt((r - p0[0]) ** 2 + (g - p0[1]) ** 2 + (b - p0[2]) ** 2);
               if (dPix > rgbTolNow()) continue;
+            } else if ((c.val || 0) <= 0.34) {
+              // 近黑 / 深色排除：HSV 在低 V 时饱和度极不稳定（#390001 会被算成 S≈1），
+              // 若按"彩色剔除"走色相窗，会因色相与红章几乎重合而把整枚暗红章一起删掉。
+              // 这里改用"暗度带"：只删与所选深色同深/更深的正文像素，不再看宽色相窗。
+              const vLimit = Math.min(0.55, Math.max(0.34, (c.val || 0) + 0.16));
+              if (vNow > vLimit) continue;
+              const p0 = (c.set && c.set[0]) || null;
+              if (!p0) continue;
+              if (satPick < 0.18) {
+                // 中性深灰/黑：仍按 RGB 距离，避免把同亮度的暗红章当成灰字
+                const dPix = Math.sqrt((r - p0[0]) ** 2 + (g - p0[1]) ** 2 + (b - p0[2]) ** 2);
+                const dTol = Math.max(16, tolV * 130);
+                if (dPix > dTol) continue;
+              } else if (extractPrimary.length) {
+                // 已匹配提取色的印章主体优先保留：只有"明显更接近排除色"的像素才删。
+                // 用主色而不是整簇颜色比较，避免颜色簇里的正文色把正文自己保护下来。
+                let dEx = Infinity;
+                for (const q of (c.set || [])) {
+                  const d = Math.sqrt((r - q[0]) ** 2 + (g - q[1]) ** 2 + (b - q[2]) ** 2);
+                  if (d < dEx) dEx = d;
+                }
+                let dStamp = Infinity;
+                for (const q of extractPrimary) {
+                  const d = Math.sqrt((r - q[0]) ** 2 + (g - q[1]) ** 2 + (b - q[2]) ** 2);
+                  if (d < dStamp) dStamp = d;
+                }
+                if (dStamp + 12 < dEx) continue;
+              }
             } else if (satPick > 0.18) {
               // 彩色剔除：按色相 + 彩度判定，不再要求亮度一致
               // （用户点的是鲜红 #ff0000，但章上的红其实暗得多；只比亮度就"点了没反应"）
@@ -7842,7 +7873,13 @@ function recomputeExtracted(target) {
             hit = true;
             break;
           }
-          if (hit) { img.data[i + 3] = 0; continue; }
+          if (hit) {
+            // 状态栏的"剔除 N 像素"要反映真实 ink 减少：此前只统计去孤立噪点，
+            // 排除色直接清 alpha 不计入，导致 -59,257 被报成 138。
+            if (img.data[i + 3] > 10) removed++;
+            img.data[i + 3] = 0;
+            continue;
+          }
         }
 
         if (!extractColors.length) continue;
@@ -10831,9 +10868,18 @@ function autoAlignStamps(options) {
   const stampSize = currentStampSize();
   const S = 256; // 对齐计算分辨率
 
-  // 参考章：带当前变换渲染（用户手动调整过的参考姿态会被保留）
+  // U68-D10：自动对齐必须幂等。此前参考章用"当前变换"渲染、待验章用基准姿态，
+  // 结尾又对参考章 offset 做累加归位，第二次点击会在已偏移的参考上再算一次，
+  // 同文件从 100% 掉到 33.7%。现在每次从基准姿态重算，并一次性写入结果。
+  const resetPose = (st) => {
+    st.rotate = 0; st.scaleX = 100; st.scaleY = 100;
+    st.offsetX = 0; st.offsetY = 0; st.corners = null;
+  };
+  resetPose(state.ref);
+  resetPose(state.test);
+
+  // 参考章 / 待验章都从基准姿态渲染
   const refCanvas = renderStampToSize(state.ref, S, stampSize);
-  // 待验章：重置为基准姿态渲染
   const testBase = { extracted: state.test.extracted, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0 };
   const testCanvas = renderStampToSize(testBase, S, S);
 
@@ -10999,11 +11045,13 @@ function autoAlignStamps(options) {
   t.scaleX = Math.round(best.k * 1000) / 10;
   t.scaleY = t.scaleX;
   // v3.0.9：中心归位 —— 参考章墨迹质心平移到画布中心（两章整体平移，
-  // 相对对齐关系不变），解决"截图印章中心不在画布中心"的问题
+  // 相对对齐关系不变），解决"截图印章中心不在画布中心"的问题。
+  // U68-D10：入口已重置基准姿态，这里必须"赋值"而不是累加；否则第二次自动对齐
+  // 会在上一次 offset 上再加一遍，同文件 100% → 33.7%。
   const cd = { x: -refRel.x * unit, y: -refRel.y * unit };
   const r = state.ref;
-  r.offsetX = Math.max(-100, Math.min(100, r.offsetX + Math.round(cd.x)));
-  r.offsetY = Math.max(-100, Math.min(100, r.offsetY + Math.round(cd.y)));
+  r.offsetX = Math.max(-100, Math.min(100, Math.round(cd.x)));
+  r.offsetY = Math.max(-100, Math.min(100, Math.round(cd.y)));
   t.offsetX = Math.max(-100, Math.min(100, Math.round(best.x * unit + cd.x)));
   t.offsetY = Math.max(-100, Math.min(100, Math.round(best.y * unit + cd.y)));
 
