@@ -1,4 +1,4 @@
-# 印章对比工具 (Stamp Compare Toolkit) v3.6.13
+# 印章对比工具 (Stamp Compare Toolkit) v3.6.17
 
 一款面向法务合规与文档核验场景的本地印章对比工具，支持将单据印章与合同印章进行可视化对比和文字识别。
 
@@ -27,11 +27,13 @@
 安装包见 [Releases](https://github.com/BI4IWN/StampCompareToolkit/releases/latest)。
 
 
-| 平台 | 安装包 | 说明 |
+**Windows 主推 Tauri 版**（约 16 MB，功能与 macOS 新版一致）；Electron 版（约 180 MB）保留为兼容备选。
+
+| 平台 | 推荐安装包 | 说明 |
 |---|---|---|
-| macOS（Apple Silicon） | `StampCompareToolkit-3.6.12-mac-arm64.dmg` | 推荐；支持可选安装本地视觉大模型（MLX） |
-| macOS（Intel） | `StampCompareToolkit-3.6.12-mac-x64.dmg` | 本地视觉模型不可用，其余功能一致 |
-| Windows（x64） | `StampCompareToolkit-3.6.12-win-x64-setup.exe` / `...-win-x64-portable.exe` | 安装版 / 免安装版；详见 [Windows 版安装与使用](stamp-toolkit/docs/windows-guide.md) |
+| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.17-mac-arm64.dmg` | 推荐；Rust 内核，取色/校正/识别全套功能 |
+| Windows（x64） | `StampCompareToolkit-Tauri-3.6.17-win-x64-setup.exe` | **主推**；约 16 MB，需系统自带 WebView2（Win10 1803+ / Win11 均内置） |
+| macOS（Intel） | `StampCompareToolkit-3.6.17-mac-x64.dmg` | Electron 版，本地视觉模型不可用，其余功能一致 |
 
 - **无需安装 Python**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用。
 - **本地视觉大模型为可选件**：仅 Apple Silicon 支持，首次启动探测硬件后再询问是否下载（约 1.5 GB），不随包分发；Windows 走 RapidOCR + 印章库匹配，或配置云端视觉模型。
@@ -45,6 +47,25 @@
 - **设置面板**：截图快捷键录制、截图完成后动作、OCR 后端开关、印章库路径
 - 安全模型：contextIsolation + preload 受控桥（无 nodeIntegration）；桌面功能入口仅在 Electron 环境注入
 - **OCR 开箱即用**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime）组件，模型随包分发、离线可用，启动自动加载，无需用户安装 Python；系统装有 PaddleOCR 时自动作为回退引擎
+
+## v3.6.17
+
+- 前端同步 Rust 线的全部改动：圆形裁切、精确RGB 匹配、优化提取开关、圆章校正主界面开关、取色卡顿三层修复（悬停不重绘 / 放大镜 CSS 合成 / 去掉查看器全屏 backdrop-filter）。
+- Windows 分发调整：**主推 Tauri 版（约 16 MB）**，Electron 版（约 180 MB）改为兼容备选。
+
+## v3.6.16
+
+- Windows 版重新打包（x64 setup / portable），带上 3.6.14–3.6.16 的全部提取修复：淡章去晕染（线性重映射）、圆章校正自适应掩膜、自动校正保留最好一轮、近圆与淡墨残缺章不再强行拉圆（避免把圆章拧出波纹）。
+- macOS 端同步：0.4.18 的 Tauri/Rust 预览版已可用（`rust-rewrite` 分支）。
+
+## v3.6.15
+
+- 修复圆章校正对「软边/淡章」失效：掩膜阈值从固定 `alpha>40` 改为 **自适应**（最高不透明度的一半，最低 60），避免外圈被晕边撑大导致拟合覆盖率不足而整段跳过校正。
+- 同时生效：黑/灰章（工商银行费县）现在也能校正（0.92 → 归一）。
+
+## v3.6.14
+
+- 淡色章的「颜色加深」改为**线性重映射**（先切掉极淡的一圈，再把剩下的 alpha 线性铺满），不再用指数提亮——避免笔画外围抗锯齿边被堆成实心，也就是淡章里最刺眼的「晕染/糊成一片」。
 
 ## v3.6.13
 

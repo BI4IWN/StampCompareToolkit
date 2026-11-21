@@ -1,4 +1,4 @@
-# 印章对比工具 — 技术文档（v3.6.8）
+# 印章对比工具 — 技术文档（v3.6.17）
 
 ## 目录
 
@@ -926,3 +926,80 @@ ctx.rotate(θ); ctx.scale(1, a / b); ctx.rotate(-θ);
 ### 布局
 
 ≥1200px 常驻右栏 300px；≤1199px 收成抽屉，`⌘I` 或页头「判定」按钮展开；展开状态与画布尺寸联动，保证一屏不出现纵向滚动。
+
+---
+
+## 二十一、v0.4.x 算法与性能补记（2026-11）
+
+本节记录 v0.4.x 这一轮里真正改了实现的部分，老章节未删，以本节为准。
+
+### 21.1 墨迹评分：为什么会"字边一圈深、字心发灰"
+
+灰底扫描件里，笔画实心偏暗棕、红度（`r − max(g,b)`）反而不高；而字边与亮纸的过渡带红度最高。所以按红度取 alpha，掩膜会落在"边缘环"上，字心被掏空——看起来就是晕染。
+
+现行评分（`inkScoreAt`，`stamp-compare.html`）：
+
+```js
+score = (1 - max/255) * ((max - min) / max)   // 深 × 艳
+```
+
+- 全局阈值取该图分数的 55 分位，并夹在 `[12, 80]`（`redScoreCut`）；
+- 分块（6×6）再做一次 Otsu（`redBlockCut`），解决局部偏亮/偏暗；
+- 红带 alpha：`smoothstep(0.12, 0.60, (score - cut) / (cut * 1.2))`；
+- 完全移除旧的"局部更暗就抬 alpha"分支（它会把纸纹、抗锯齿边一起抬起来）。
+
+同一张图墨占比从 **42.3% → 20.0%**，字心填实。
+
+### 21.2 剔除判定的三代演化（每代都有实测支撑）
+
+| 代 | 判据 | 失败模式 |
+|---|---|---|
+| 亮度 | `|V − 被剔V| ≤ tolV` | 深红笔画 V 与灰杂色相近，被一起剔掉；「剔完加不回来」 |
+| 色相 | `|h − c.hue| ≤ min(22, 6+tolV*40)` + 彩度门 | 同色相不同深浅一起删；且 `c.h` 字段名与存储的 `c.hue` 不一致时 `NaN` 比较恒 false → **剔除命中所有彩色像素**（v0.4.27 修） |
+| RGB 距离（现行） | `√((r−pr)²+…) ≤ max(14, tolV×150)` | 可精确控制；高饱和分支再加 `|ΔV| > 0.62` 不剔 |
+
+- 「精确RGB」模式（v0.4.35）把容差映射改为 `max(6, tolV×120)`，与色相模式共用同一滑杆；
+- 教训：`const RGBTOL = Math.max(6, tolV*120)` 写在 `tolV` 声明之前会抛 TDZ `ReferenceError`，被上层 `try` 吞掉后表现为"剔除点了没反应"。常数一律做成惰性函数 `rgbTolNow()`。
+
+### 21.3 圆章校正的可信度门槛（v0.4.17/0.4.18）
+
+迭代最多 3 轮、保留最好一轮；以下任一条件即放弃变形：内点率 <0.6、采样点 <80、角度覆盖 <0.6、轴比 <0.62、`inkFill > 0.55`、**`inkFill < 0.22`（淡墨/残缺）**、轴比已 ≥0.93。
+
+最后两条是"自动提取不圆、点一下提取反而变圆"的真因：前者防止把正文当章拉，后者防止淡章环被拧出波纹。
+
+### 21.4 取色交互性能（Windows 卡顿的三层根因）
+
+1. **悬停重绘**：`stage` 的 `mousemove` 在 pick 模式下每条事件都 `ovDraw()`（整图 `clearRect + drawImage`）。改为悬停直接 return、拖动走 `ovDrawSoon()`（rAF 合并）。实测悬停 30 次事件 `ovDraw` 30 → 0。
+2. **放大镜重绘**：`<canvas>` + 每帧 `drawImage` + 移动元素上的 `filter: drop-shadow`。改为 `<div>` + `background-image`（dataURL 用 WeakMap 缓存）+ 每帧只写 `background-position`；`box-shadow` 替 `filter`；`translate3d` 定位。
+3. **全屏模糊**：`.origin-viewer{backdrop-filter: blur(6px)}` —— 铺满屏幕的背景模糊叠加每帧移动的子元素，等于每帧重算整屏模糊（WebView2 上是 WARP 软件光栅）。去掉后改 `rgba(0,0,0,.34)`。
+
+配套：`pixelsOf()` 整图像素缓存（WeakMap + `_pixVer`，`recomputeExtracted` 里 `invalidatePixels()`）、`ovPanesRect()` rect 缓存（去掉 `elementFromPoint` 与逐帧 `getBoundingClientRect`）、像素级 HSV 记忆化。
+
+### 21.5 判定三指标（T3-JS，v0.4.21）
+
+| 指标 | 定义 | 缺数据 |
+|---|---|---|
+| 文字 | 两枚章机构名的 LCS 相似度（归一化） | `—` |
+| 几何 | 椭圆轴比一致性 `1 - |a₁/b₁ - a₂/b₂|`，三级兜底（extracted → baseExtracted → `warpInfo` 的 a/b） | `—` |
+| 编码 | 防伪码数字序列一致度 | `—` |
+
+### 21.6 AI 调用的三个坑
+
+- **推理模型**：`deepseek-flash` / `glm-5.3-flash` 的正文在 `reasoning_content`，`max_tokens` 不足时 `content` 恒空（`finish_reason=length`）。对策：`max_tokens` 4096–8192 + `text_of()` 回退 `reasoning_content` + 日志带 `finish_reason`。
+- **Anthropic 兼容端点**：`base` 含 `/anthropic` 时走 `{base}/v1/messages`、头 `x-api-key` + `anthropic-version: 2023-06-01`、图片块 `{type:"image",source:{type:"base64",media_type,data}}`，响应 `content[].text`。
+- **思考开关**：请求体加 `{"thinking":{"type":"disabled"}}`（部分服务商 400 时自动去掉重发），单枚识别 0.86 s 量级。
+
+另：AI 模式下前端先跑本地 `/ocr` 填字段，再请 AI 复核；AI 失败保留本地结果并写原因（v0.4.20）。请求图片用**已校正的 extracted 白底图**，不是原图。
+
+### 21.7 Tauri（Rust）内核与包体
+
+| 项 | Electron 线 | Tauri 线 |
+|---|---|---|
+| macOS 包 | ~218 MB | ~24 MB |
+| Windows 包 | ~182 MB | **~16 MB** |
+| 依赖 | 自带 Chromium + 便携 Python | 系统 WebView2 + Rust 二进制 |
+| OCR | 便携 Python + RapidOCR | `stamp-ocr`（tract + Paddle 静态 ONNX） |
+
+Rust 侧路由：`/ocr`、`/ai-ocr`、`/ai/test`、`/ai/stamp`、`/dewarp`、`/settings`、`/lib/*`、`/capture/*`、`/diag`。前端通过 `web/desktop-shim.html` 伪装 `window.stampDesktop`，注入必须在 `<body>` 起始之后、且每次改前端要 `npm run sync-web`（`include_str!` 内嵌）。
+
+识别管线：`ink_strength` → 椭圆拟合 + 可信度门 → `dewarp_iterative` → 极坐标展开 `0.42R–0.905R` → 切分（列投影最小处吸附）→ 批识别 → `postprocess`（机构名/编码/类型）。字覆盖 0.796（1/4 线程一致），4 线程 84–91 ms/枚。
