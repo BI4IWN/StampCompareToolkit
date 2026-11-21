@@ -1,8 +1,10 @@
 # Windows 版安装与使用
 
-> 版本：v3.6.17 ｜ 适用系统：Windows 10 / 11（64 位）
+> 版本：v3.6.21 文档 ｜ 适用系统：Windows 10 / 11（64 位）
 
-印章比对工具（Stamp Compare Toolkit）桌面版在 Windows 上提供两种分发形式，功能与 macOS 版一致（唯一差异见「平台差异」）。
+印章比对工具（Stamp Compare Toolkit）桌面版在 Windows 上**主推 Tauri 版**（Rust 内核，约 16 MB）；Electron 版仅作兼容备选，本轮未发布 Windows Electron 包。
+
+> **本轮发行说明**：3.6.21 只提供 macOS 安装包，未在本机构建 Windows 3.6.21 安装包。Windows 用户可继续使用下面列出的 v3.6.17 Tauri 安装包；3.6.21 的源码修复会在下一次 Windows 构建时带入。
 
 ---
 
@@ -10,11 +12,9 @@
 
 | 文件 | 说明 | 适用场景 |
 |---|---|---|
-| `StampCompareToolkit-3.6.17-win-x64-setup.exe` | NSIS 安装向导，可选安装目录，创建开始菜单/桌面快捷方式 | 长期使用、需要卸载项 |
-| `StampCompareToolkit-3.6.17-win-x64-portable.exe` | 免安装单文件，双击直接运行 | 临时使用、U 盘携带、无管理员权限 |
+| `StampCompareToolkit-Tauri-3.6.17-win-x64-setup.exe` | Tauri NSIS 安装向导，可选安装目录，创建开始菜单/桌面快捷方式 | 长期使用、需要卸载项 |
 
-- 体积约 180 MB（内含 Python 运行时与 OCR 引擎，**无需另装 Python**）。
-- 首次运行会解包到临时目录，启动约 3–10 秒。
+- 体积约 16 MB；需系统自带 WebView2（Windows 10 1803+ / Windows 11 均内置）。
 - 程序未做代码签名，Windows SmartScreen 可能提示「已保护你的电脑」→ 点「更多信息 → 仍要运行」。
 
 ## 二、系统要求
@@ -29,7 +29,7 @@
 
 ## 三、首次启动
 
-1. 双击安装包完成安装（或直接运行免安装版）。
+1. 双击安装包完成安装。
 2. 程序会在本机启动一个后端服务并把界面加载进来，右上角显示后端版本号即表示就绪。
 3. 状态栏提示「OCR 模型加载中（首次约 10–30 秒）」——首次加载完成后，之后启动只需 1–3 秒。
 4. 拖入（或 `Ctrl+V` 粘贴）两枚印章图片 → 自动提取、自动对齐 → 右侧显示判定/识别/候选。
@@ -94,20 +94,14 @@ netstat -ano | findstr "8799 18799"
 
 ## 八、构建说明（开发者）
 
-在 macOS 或 Windows 上均可交叉构建 Windows 包（无需 Wine）：
+Windows 3.6.21 安装包本轮未在 macOS 本机构建。Tauri 主推线的 Windows 构建应在 Windows 主机或 CI 上执行（仓库 `.github/workflows/tauri-windows.yml`），产物命名为 `StampCompareToolkit-Tauri-<版本>-win-x64-setup.exe`。
+
+Electron 兼容备选仍可按旧方式构建（本轮不发布 Windows Electron 包）：
 
 ```bash
 cd desktop
 npm install
-npx electron-builder --win nsis portable --x64
+npx electron-builder --win nsis --x64
 ```
 
-产物：
-- `desktop/dist/印章比对工具 Setup <版本>.exe`（安装器）
-- `desktop/dist/印章比对工具 <版本>.exe`（免安装）
-- `desktop/dist/win-unpacked/`（解包目录，便于排查）
-
-前置条件：
-- `desktop/runtime/python-win-x64/` 存在且包含 `python.exe`、`rapidocr_onnxruntime`、`onnxruntime`、`opencv`、`numpy`、`Pillow`（已随仓库本地保留，不入库）；
-- `stamp-toolkit/` 通过 `extraResources` 打进 `resources/stamp-toolkit`；
-- 构建后可用 `desktop/dist/win-unpacked/resources/runtime/python-win-x64/python.exe` 体积校验（约 450 MB）。
+前置条件（Electron 备选）：`desktop/runtime/python-win-x64/` 存在且包含 `python.exe`、`rapidocr_onnxruntime`、`onnxruntime`、`opencv`、`numpy`、`Pillow`（已随仓库本地保留，不入库）；`stamp-toolkit/` 通过 `extraResources` 打进去。

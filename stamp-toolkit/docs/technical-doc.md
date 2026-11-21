@@ -1,4 +1,4 @@
-# 印章对比工具 — 技术文档（v3.6.17）
+# 印章对比工具 — 技术文档（v3.6.21）
 
 ## 目录
 
@@ -148,7 +148,7 @@ Response (失败，v2.0.0 结构化错误):
 健康检查通过 GET /health 端点实现：
 
 ```
-{"status": "ok", "version": "3.6.8", "ocr": true}
+{"status": "ok", "version": "3.6.21", "ocr": true}
 ```
 
 本地识别引擎管理（v3.5.0 起，全部为 `POST`/`GET` + JSON）：`/engine/probe`（硬件探测与建议）、`/engine/status`、`/engine/install`（返回 job id）、`/engine/job/<id>`（轮询）、`/engine/cancel`、`/engine/remove`、`/engine/activate`、`/engine/import`（手动导入模型目录）、`/engine/runtime`（安装 Python 运行时）。状态落盘在 `~/Library/Application Support/印章比对工具/engines.json`（临时文件 + 原子替换，读写加锁，损坏时回落默认值）。

@@ -1,4 +1,4 @@
-# 印章对比工具 (Stamp Compare Toolkit) v3.6.17
+# 印章对比工具 (Stamp Compare Toolkit) v3.6.21
 
 一款面向法务合规与文档核验场景的本地印章对比工具，支持将单据印章与合同印章进行可视化对比和文字识别。
 
@@ -18,7 +18,7 @@
 - **差异高亮**：像素级对比两枚印章，绿色表示吻合、红色表示偏差，实时计算相似度百分比（带结果缓存，交互流畅）
 - **交互微调**：旋转、缩放（等比/水平/垂直独立调节）、偏移、拖拽，精确对齐两枚印章
 - **放大镜**：4 倍局部放大，配合高分辨率提取可检查笔画级细节
-- **OCR 文字识别**：集成 PaddleOCR 后端，自动识别印章公司名称、编码和类型，兼容 PaddleOCR 2.x / 3.x，支持多墨色识别
+- **OCR 文字识别**：Tauri 版内置 Rust OCR；Electron 版集成 RapidOCR / PaddleOCR，自动识别印章公司名称、编码和类型，支持多墨色识别
 - **PNG 导出**：将当前对比画面导出为 PNG 图片
 - **纯本地运行**：所有数据处理均在本地完成，不上传任何信息
 
@@ -27,17 +27,19 @@
 安装包见 [Releases](https://github.com/BI4IWN/StampCompareToolkit/releases/latest)。
 
 
-**Windows 主推 Tauri 版**（约 16 MB，功能与 macOS 新版一致）；Electron 版（约 180 MB）保留为兼容备选。
+**macOS 主推 Tauri 版**（Rust 内核，约 24 MB）；Electron 版保留为兼容备选。Windows 3.6.21 安装包本轮未提供，Windows 用户可继续使用 v3.6.17 的 Tauri 版（见下方说明）。
 
 | 平台 | 推荐安装包 | 说明 |
 |---|---|---|
-| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.17-mac-arm64.dmg` | 推荐；Rust 内核，取色/校正/识别全套功能 |
-| Windows（x64） | `StampCompareToolkit-Tauri-3.6.17-win-x64-setup.exe` | **主推**；约 16 MB，需系统自带 WebView2（Win10 1803+ / Win11 均内置） |
-| macOS（Intel） | `StampCompareToolkit-3.6.17-mac-x64.dmg` | Electron 版，本地视觉模型不可用，其余功能一致 |
+| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.21-mac-arm64.dmg` | **推荐**；Rust 内核，取色/校正/识别全套功能 |
+| macOS（Apple Silicon） | `StampCompareToolkit-3.6.21-mac-arm64.dmg` | Electron 兼容备选；内置 Python + RapidOCR，本地视觉模型可选 |
 
-- **无需安装 Python**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用。
-- **本地视觉大模型为可选件**：仅 Apple Silicon 支持，首次启动探测硬件后再询问是否下载（约 1.5 GB），不随包分发；Windows 走 RapidOCR + 印章库匹配，或配置云端视觉模型。
-- **构建**：`cd desktop && npm run dist:mac` / `npm run dist:win`（Windows 目标已固定 x64）。
+- **Windows 3.6.21 未提供安装包**：本轮在 macOS 本机构建，未生成 Windows 包；`StampCompareToolkit-Tauri-3.6.17-win-x64-setup.exe` 仍在 v3.6.17 Release 中可用。
+- **macOS Intel（x64）3.6.21 未发布**：本机 Electron x64 产物只带 `python-mac-arm64` 运行时，Intel 机器上 OCR 后端不可用，核验不通过，故不列入下载表。
+- **macOS 包未做 Developer ID 签名与公证**：首次打开请右键「打开」，或到「系统设置 → 隐私与安全性」允许。
+- **Tauri 版**：无需安装 Python，Rust OCR 模型随包分发，离线可用。
+- **Electron 版**：内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用；本地视觉大模型为可选件（仅 Apple Silicon，首次启动探测硬件后再询问是否下载，约 1.5 GB，不随包分发）。
+- **构建**：Tauri `cd tauri && npm run build`；Electron `cd desktop && npm run dist:mac`。
 
 ## v3.0.0 更新日志 — 桌面版（Electron）
 
@@ -47,6 +49,28 @@
 - **设置面板**：截图快捷键录制、截图完成后动作、OCR 后端开关、印章库路径
 - 安全模型：contextIsolation + preload 受控桥（无 nodeIntegration）；桌面功能入口仅在 Electron 环境注入
 - **OCR 开箱即用**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime）组件，模型随包分发、离线可用，启动自动加载，无需用户安装 Python；系统装有 PaddleOCR 时自动作为回退引擎
+
+## v3.6.21
+
+正式版。3.6.18 / 3.6.19 未发布，3.6.20 仅为预览且不含 U68/U68b；本版合并 `origin/main` 的 3.6.17 文档纪律，并带入 U64–U68b 的界面、视觉、交互、提取与对齐修复。
+
+- **U64 界面**：三栏结构与右侧检查器整理，外观设置归位，工具栏窄屏可滚动，使用说明可滚动。
+- **U66 视觉**：按 2026 Apple 视觉语言统一间距、层次、控件状态与深浅色细节。
+- **U67 交互**：取色/框选/印章库搜索/自动对齐等 P0/P1 修复；过滤完成前不再误载旧卡，框选 `ov-info` 与当前 crop 同步。
+- **U68/U68b 提取**：
+  - D01 洪家楼：排除近黑 `#390001` 后 84,637 → **73,404**（-13.27%，状态栏剔除 11,233），不再误伤红章；
+  - D02 高唐：取红后 63,495、排除后 **60,217**（-4.94%）；青岛排除后 **26,314**，画布保持 **780**；
+  - D03 莘县淡章：自动提取 **41,026 px / 17.81%**，不再退化为约 5,402 px 灰纸；
+  - D05 垦利加深：2.5× lapVar **18,240.7（-22.8%）**，不再腰斩到 -52%；
+  - D07 库搜索竞态：结果未落定时点旧卡不载入；D09 脏 OCR 搜索只出 **2 条**东平；D11 框选 info 与 crop 一致。
+- **U68/U68b 对齐**：东平同文件连续三次自动对齐均为 **100.0%**，缩放 100%，偏移 **(-5, 6)**，不再第二次掉到 33.7%。
+
+**已知限制**：
+
+- D08：阳谷两拍自动对齐后仍约 **50.2%**（缩放 107.8%，偏移 -9,3，geom 87%）；同文件手动归零约 12.8%，再自动 100%；负例东元 vs 洪家楼约 3.3%。本轮未改相似度公式。
+- D04：枣庄深色取色仅部分减轻（42,317 → 46,458，+9.8%），默认底图里已有的签名/表格线/邻章仍在。
+- P2「开关就地说明」未做，列为后续改进，不阻塞本版发行。
+- macOS 包无 Developer ID 签名与公证，首次请右键「打开」；Windows 3.6.21 包本轮未构建，已有 v3.6.17 Tauri 包未代码签名。
 
 ## v3.6.17
 

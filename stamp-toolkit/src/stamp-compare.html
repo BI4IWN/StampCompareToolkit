@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.20</title>
+<title>印章对比工具 v3.6.21</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.20">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.20</span></h1>
+      <h1 title="印章对比工具 v3.6.21">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.21</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5138,7 +5138,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.20';
+const APP_VERSION = '3.6.21';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -13869,7 +13869,7 @@ statusBar.classList.add('visible');
       </table>
 
       <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.20</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+      <p>印章对比工具 <span id="manual-ver">v3.6.21</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
     </div>
   </div>
 </div>
