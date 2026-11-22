@@ -1,7 +1,10 @@
-# Rust 内核（P1 几何 + OCR 基线 spike）
+# Rust 内核（几何 + OCR）
 
-> 分支 `rust-rewrite` ｜ 状态：**本地试验，未合入 main、未推送**
-> 目标：为 P2（Tauri 换壳）验证「几何内核 + OCR 识别器」能否用 Rust 复现现有 JS/Python 的行为与精度。
+> 当前状态：已作为 **Tauri 正式桌面线** 的内核使用（见仓库 `tauri/`）。Windows 与 macOS 官方发行均走该架构；Electron 仅作存档备选。
+>
+> 下文保留 2026-11-17 的 P1 spike 记录（当时在分支 `rust-rewrite` 上做对照实验）。数字与结论是当时的基线，不代表随后合入正式线后的全部行为。
+
+目标（历史）：验证「几何内核 + OCR 识别器」能否用 Rust 复现现有 JS/Python 的行为与精度。
 
 ## 目录
 
@@ -25,7 +28,7 @@ cd stamp-core && cargo build --release
 cd ../ocr && cargo build --release && ./target/release/ocr-tract <data-dir>
 ```
 
-## 已知缺口（进 P2 前要补）
+## 已知缺口（spike 当时记录）
 
 1. **检测器（DB）未实现**：OCR spike 只比了识别器，条带由极坐标展开 + 固定切分给出。
 2. `ort` crate 绑定存在输入传递问题（喂同样张量输出全 blank），已改用 tract；若将来要用 ort 需先定位。

@@ -27,19 +27,21 @@
 安装包见 [Releases](https://github.com/BI4IWN/StampCompareToolkit/releases/latest)。
 
 
-**macOS 主推 Tauri 版**（Rust 内核，约 24 MB）；Electron 版保留为兼容备选。Windows 3.6.21 安装包本轮未提供，Windows 用户可继续使用 v3.6.17 的 Tauri 版（见下方说明）。
+**正式线为 Windows 与 macOS 统一的 Tauri + Rust**（Rust 内核，无需安装 Python）。Electron 版仅作为中间版存档备选，供选择；新版本以新架构为主。下表只列出本轮已核验的安装包。
 
-| 平台 | 推荐安装包 | 说明 |
+| 平台 | 安装包 | 说明 |
 |---|---|---|
-| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.21-mac-arm64.dmg` | **推荐**；Rust 内核，取色/校正/识别全套功能 |
-| macOS（Apple Silicon） | `StampCompareToolkit-3.6.21-mac-arm64.dmg` | Electron 兼容备选；内置 Python + RapidOCR，本地视觉模型可选 |
+| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.21-mac-arm64.dmg` | **推荐**；正式线，Rust 内核，约 24 MB |
+| Windows（x64） | `StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe` | **推荐**；正式线，Rust 内核，NSIS 安装包，16,895,288 B |
+| macOS（Apple Silicon） | `StampCompareToolkit-3.6.21-mac-arm64.dmg` | Electron 存档备选；内置 Python + RapidOCR，本地视觉模型可选 |
 
-- **Windows 3.6.21 未提供安装包**：本轮在 macOS 本机构建，未生成 Windows 包；`StampCompareToolkit-Tauri-3.6.17-win-x64-setup.exe` 仍在 v3.6.17 Release 中可用。
-- **macOS Intel（x64）3.6.21 未发布**：本机 Electron x64 产物只带 `python-mac-arm64` 运行时，Intel 机器上 OCR 后端不可用，核验不通过，故不列入下载表。
+- **SHA-256（Windows Tauri）**：`e3b2ae25476c9c41d5a9180e25682387504e607d96fbdf45d6cca7116347038d`
+- **Windows 包未做代码签名**：首次运行如遇 SmartScreen「已保护你的电脑」，请点「更多信息 → 仍要运行」。
 - **macOS 包未做 Developer ID 签名与公证**：首次打开请右键「打开」，或到「系统设置 → 隐私与安全性」允许。
-- **Tauri 版**：无需安装 Python，Rust OCR 模型随包分发，离线可用。
-- **Electron 版**：内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用；本地视觉大模型为可选件（仅 Apple Silicon，首次启动探测硬件后再询问是否下载，约 1.5 GB，不随包分发）。
-- **构建**：Tauri `cd tauri && npm run build`；Electron `cd desktop && npm run dist:mac`。
+- **macOS Intel（x64）3.6.21 未发布**：本机 Electron x64 产物只带 `python-mac-arm64` 运行时，Intel 机器上 OCR 后端不可用，核验不通过，故不列入下载表。
+- **Tauri 版**：无需安装 Python，Rust OCR 模型随包分发，离线可用。Windows 需系统自带 WebView2（Windows 10 1803+ / Windows 11 均内置）。
+- **Electron 版**：仅作存档备选；内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用；本地视觉大模型为可选件（仅 Apple Silicon，首次启动探测硬件后再询问是否下载，约 1.5 GB，不随包分发）。
+- **构建**：正式线在 `tauri/`。macOS：`cd tauri && npm run build`。Windows 须在 Windows 主机或 CI 上执行 `npx tauri build --target x86_64-pc-windows-msvc --bundles nsis`（见 `.github/workflows/tauri-windows.yml`），不要从 macOS 交叉编译。Electron 备选：`cd desktop && npm run dist:mac`。
 
 ## v3.0.0 更新日志 — 桌面版（Electron）
 
@@ -52,7 +54,7 @@
 
 ## v3.6.21
 
-正式版。3.6.18 / 3.6.19 未发布，3.6.20 仅为预览且不含 U68/U68b；本版合并 `origin/main` 的 3.6.17 文档纪律，并带入 U64–U68b 的界面、视觉、交互、提取与对齐修复。
+正式版。3.6.18 / 3.6.19 未发布，3.6.20 仅为预览且不含 U68/U68b；本版合并 `origin/main` 的 3.6.17 文档纪律，并带入 U64–U68b 的界面、视觉、交互、提取与对齐修复。官方发行线统一为 Windows 与 macOS 的 Tauri + Rust；Electron 仅作存档备选。本轮已核验并提供 Windows x64 Tauri 安装包。
 
 - **U64 界面**：三栏结构与右侧检查器整理，外观设置归位，工具栏窄屏可滚动，使用说明可滚动。
 - **U66 视觉**：按 2026 Apple 视觉语言统一间距、层次、控件状态与深浅色细节。
@@ -70,7 +72,7 @@
 - D08：阳谷两拍自动对齐后仍约 **50.2%**（缩放 107.8%，偏移 -9,3，geom 87%）；同文件手动归零约 12.8%，再自动 100%；负例东元 vs 洪家楼约 3.3%。本轮未改相似度公式。
 - D04：枣庄深色取色仅部分减轻（42,317 → 46,458，+9.8%），默认底图里已有的签名/表格线/邻章仍在。
 - P2「开关就地说明」未做，列为后续改进，不阻塞本版发行。
-- macOS 包无 Developer ID 签名与公证，首次请右键「打开」；Windows 3.6.21 包本轮未构建，已有 v3.6.17 Tauri 包未代码签名。
+- macOS 包无 Developer ID 签名与公证，首次请右键「打开」。Windows 3.6.21 Tauri 安装包已核验（`StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe`），未做代码签名，首次运行如遇 SmartScreen 请选择「仍要运行」。
 
 ## v3.6.17
 

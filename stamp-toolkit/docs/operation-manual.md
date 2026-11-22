@@ -62,16 +62,19 @@
 
 ### 桌面版
 
+正式桌面版为 **Tauri + Rust**（Windows 与 macOS 统一）。Electron 版仅作存档备选。下表只列当前已核验的 3.6.21 包；完整文件名与校验和见仓库根 [README](../../README.md) 与 [Releases](https://github.com/BI4IWN/StampCompareToolkit/releases/tag/v3.6.21)。
+
 | 平台 | 安装包 | 说明 |
 |---|---|---|
-| macOS（Apple Silicon） | `StampCompareToolkit-<版本>-mac-arm64.dmg` | 推荐；支持可选安装本地视觉模型 |
-| macOS（Intel） | `StampCompareToolkit-<版本>-mac-x64.dmg` | 本地视觉模型不可用，其余一致 |
-| Windows（x64） | `StampCompareToolkit-<版本>-win-x64-setup.exe`（安装版）/ `-win-x64-portable.exe`（免安装） | 内置便携 Python 运行时与 RapidOCR |
+| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.21-mac-arm64.dmg` | **推荐**；正式线，Rust 内核，无需 Python |
+| Windows（x64） | `StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe` | **推荐**；正式线，Rust 内核，NSIS 安装包 |
+| macOS（Apple Silicon） | `StampCompareToolkit-3.6.21-mac-arm64.dmg` | Electron 存档备选；内置便携 Python + RapidOCR，可选本地视觉模型 |
 
-- **无需安装 Python**：安装包内置便携运行时与 OCR 组件（RapidOCR + onnxruntime），离线可用。
-- **首次打开较慢**：未签名的包会被系统安全扫描几十秒（仅首次）；OCR 模型在后台加载，状态栏显示「OCR 模型加载中」，约 10–30 秒后自动就绪。
+- **无需安装 Python（正式线）**：Tauri 版内置 Rust OCR，模型随包分发，离线可用。Electron 备选仍内置便携 Python 与 RapidOCR。
+- **macOS Intel（x64）3.6.21 未发布**，故不列入本表。
+- **首次打开**：包均未签名。
   - macOS 提示「无法验证开发者」：右键应用 → 打开，或在「系统设置 → 隐私与安全性」里点「仍要打开」。
-  - Windows SmartScreen：更多信息 → 仍要运行。
+  - Windows SmartScreen「已保护你的电脑」：更多信息 → 仍要运行。
 - **数据目录**：macOS `~/Library/Application Support/印章比对工具/`；Windows `%APPDATA%\印章比对工具\`（设置、识别引擎、印章库默认路径等）。
 
 ### 网页版
@@ -433,13 +436,13 @@ v0.4.35 已修：根因是查看器 `.origin-viewer` 上的全屏 `backdrop-filt
 不会。识别方式（本地/AI）会持久保存，清空与重启都保持上次选择。
 
 **Q：Windows 上有什么不一样？**
-本地视觉模型不可用；快捷键用 `Ctrl` 替代 `⌘`；数据目录在 `%APPDATA%\印章比对工具\`。其余功能一致。
+正式线与 macOS 同为 Tauri + Rust。本地视觉大模型不可用（依赖 Apple Metal/MLX）；快捷键用 `Ctrl` 替代 `⌘`；数据目录在 `%APPDATA%\印章比对工具\`。安装包未代码签名，如遇 SmartScreen 请选择「仍要运行」。其余取色、校正、对齐、比对功能一致。
 
 ---
 
 ## 版本与更新
 
-当前版本 **v3.6.21**。近期变化：
+当前版本 **v3.6.21**。官方桌面线为 Windows 与 macOS 统一的 Tauri + Rust；Electron 仅作存档备选。近期变化：
 
 - **U64 界面**：三栏结构与右侧检查器整理，工具栏在窄屏可滚动，使用说明可滚动。
 - **U66 视觉**：按 2026 Apple 视觉语言统一间距、层次与控件状态。
@@ -457,6 +460,6 @@ v0.4.35 已修：根因是查看器 `.origin-viewer` 上的全屏 `backdrop-filt
 - **判定三指标（v0.4.21）**：文字/几何/编码三项落地，缺数据显示「—」。
 - **圆形裁切（v0.4.22）**：查看器第四页签，椭圆归一为正圆。
 - **界面**：三栏结构 + 右侧检查器、外观移入设置、清空按钮、工具栏窄屏可滚动、使用说明可滚动。
-- **Windows 版**：x64 安装版与免安装版，内置运行时。
+- **Windows 版**：正式线为已核验的 Tauri NSIS 包 `StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe`（未代码签名）。Electron 安装版/免安装版仅作历史存档，本轮不提供。
 
 历史版本变更见 [README](../../README.md) 的版本日志。

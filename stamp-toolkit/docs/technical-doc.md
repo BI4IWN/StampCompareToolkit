@@ -2,6 +2,7 @@
 
 ## 目录
 
+- [桌面版架构](#桌面版架构v3621正式线为-tauri--rust)
 - [一、系统架构](#一系统架构)
 - [二、前端架构](#二前端架构)
 - [三、印章提取算法](#三印章提取算法)
@@ -19,7 +20,20 @@
 
 ---
 
-## 桌面版架构（Electron，v3.0.0）
+## 桌面版架构（v3.6.21：正式线为 Tauri + Rust）
+
+自 3.6.21 起，Windows 与 macOS 的官方发行统一为 **Tauri 2 + Rust**（仓库路径 `tauri/`）。本地 axum 服务默认监听 `http://127.0.0.1:18970/`，`/health` 返回 `{"status":"ok","version":"3.6.21","ocr":true,"engine":"rust"}`。几何与识别走 `stamp-core` / `stamp-ocr`（tract + 随包 ONNX），不依赖便携 Python。bundle id 为 `com.bi4iwn.stampcompare`。
+
+Electron 桌面版（`desktop/`）是 v3.0.0 起的中间版，现仅作存档备选；本轮已核验的 Electron 包只有 macOS Apple Silicon。新版本以 Tauri 架构为主。
+
+### 正式线（Tauri）
+
+- 配置：`tauri/src-tauri/tauri.conf.json`（version `3.6.21`，identifier `com.bi4iwn.stampcompare`，productName `印章比对工具`）。
+- 前端仍是 `stamp-compare.html`，经 `npm run sync-web` 同步到 `tauri/web/` 后由本地服务托管（`tauri/web/index.html` 不入库）。
+- 构建：macOS `cd tauri && npm run build`（默认 dmg）。Windows 须在 Windows 主机或 CI 上执行 `npx tauri build --target x86_64-pc-windows-msvc --bundles nsis`，见 `.github/workflows/tauri-windows.yml`；**不要从 macOS 交叉编译**。
+- 已核验包与校验和见仓库根 README 与 [Release v3.6.21](https://github.com/BI4IWN/StampCompareToolkit/releases/tag/v3.6.21)。
+
+### 存档备选（Electron，v3.0.0 起）
 
 ```
 desktop/
@@ -74,16 +88,17 @@ desktop/
 └──────────────────────────────────────────────────────────┘
 ```
 
-上图为 v2.x 的精简示意。**v3.6.8 的实际分层**：
+上图为 v2.x 网页/Python 线的精简示意。**v3.6.21 正式桌面线（Tauri + Rust）与存档备选（Electron）的分层**：
 
-| 层 | 组件 | 说明 |
+| 层 | 正式线（Tauri + Rust） | 存档备选（Electron + Python） |
 |---|---|---|
-| 外壳 | Electron `desktop/main.js`（406 行） | 固定端口：静态服务 `127.0.0.1:18799`、反代 Python `8799`；全局截图快捷键；印章库与设置持久化 |
-| 前端 | `stamp-compare.html`（约 11100 行） | 三栏 UI、提取/校正/对齐/比对/检查器、印章库与设置；不依赖后端也能完成比对与导出 |
-| 服务 | `stamp_app.py`（约 3300 行） | 页面托管 + `/ocr`、`/ai/*`、`/engine/*`；线程池 + OCR 全局锁 |
-| 识别 | RapidOCR（主）→ PaddleOCR（回退） | 环形展开管线；印章库 Top-3 校验 |
-| 视觉模型（可选） | `vlm_engine.py` + mlx-vlm | 独立子进程，stdout 仅 JSON；未安装时识别自动回退 RapidOCR |
-| 云端（可选） | AI 代理 `/ai-ocr` | DeepSeek / 智谱 / 火山方舟豆包 / 自定义，Key 只在浏览器 localStorage |
+| 外壳 | Tauri 2（`tauri/src-tauri`），系统 WebView | Electron `desktop/main.js`，自带 Chromium |
+| 本地服务 | Rust axum，默认 `127.0.0.1:18970` | 静态服务 `127.0.0.1:18799`，反代 Python `8799` |
+| 前端 | 同一份 `stamp-compare.html` | 同一份 `stamp-compare.html` |
+| 识别 | `stamp-ocr`（tract + 随包 ONNX） | RapidOCR（主）→ PaddleOCR（回退） |
+| 几何内核 | `stamp-core` | 前端 JS + 后端 OpenCV 辅助 |
+| 视觉模型（可选） | 不随正式线分发 | `vlm_engine.py` + mlx-vlm（仅 Apple Silicon） |
+| 云端（可选） | `/ai-ocr` 等，Key 只在浏览器 localStorage | 同左 |
 
 ### 文件职责
 
@@ -993,11 +1008,13 @@ score = (1 - max/255) * ((max - min) / max)   // 深 × 艳
 
 ### 21.7 Tauri（Rust）内核与包体
 
-| 项 | Electron 线 | Tauri 线 |
+自 3.6.21 起，**正式发行线就是 Tauri 线**（Windows 与 macOS 统一）；Electron 线仅作存档备选，且本轮只提供已核验的 macOS Apple Silicon Electron 包，不提供 Windows Electron 包。
+
+| 项 | Electron 存档备选 | Tauri 正式线 |
 |---|---|---|
-| macOS 包 | ~218 MB | ~24 MB |
-| Windows 包 | ~182 MB | **~16 MB** |
-| 依赖 | 自带 Chromium + 便携 Python | 系统 WebView2 + Rust 二进制 |
+| macOS Apple Silicon 包（已核验 3.6.21） | 249,001,242 B | 24,121,767 B |
+| Windows x64 包（已核验 3.6.21） | 本轮未提供 | 16,895,288 B（`StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe`） |
+| 依赖 | 自带 Chromium + 便携 Python | macOS 用系统 WebView，Windows 用系统 WebView2 + Rust 二进制 |
 | OCR | 便携 Python + RapidOCR | `stamp-ocr`（tract + Paddle 静态 ONNX） |
 
 Rust 侧路由：`/ocr`、`/ai-ocr`、`/ai/test`、`/ai/stamp`、`/dewarp`、`/settings`、`/lib/*`、`/capture/*`、`/diag`。前端通过 `web/desktop-shim.html` 伪装 `window.stampDesktop`，注入必须在 `<body>` 起始之后、且每次改前端要 `npm run sync-web`（`include_str!` 内嵌）。

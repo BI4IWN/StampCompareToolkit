@@ -1,4 +1,6 @@
-# 印章对比工具 (Stamp Compare Toolkit) v3.0.0
+# 印章对比工具 (Stamp Compare Toolkit)
+
+> 当前发行版本与下载表以仓库根目录 [README](../README.md) 为准（**v3.6.21**）。**官方桌面线为 Windows 与 macOS 统一的 Tauri + Rust**；Electron 仅作中间版存档备选。安装与操作见 [docs/operation-manual.md](docs/operation-manual.md)、[docs/windows-guide.md](docs/windows-guide.md) 与 [docs/technical-doc.md](docs/technical-doc.md)。
 
 一款面向法务合规与文档核验场景的本地印章对比工具，支持将单据印章与合同印章进行可视化对比和文字识别。
 
@@ -19,11 +21,11 @@
 - **差异高亮**：像素级对比两枚印章，绿色表示吻合、红色表示偏差，实时计算相似度百分比（带结果缓存，交互流畅）
 - **交互微调**：旋转、缩放（等比/水平/垂直独立调节）、偏移、拖拽，精确对齐两枚印章
 - **放大镜**：4 倍局部放大，配合高分辨率提取可检查笔画级细节
-- **OCR 文字识别**：集成 PaddleOCR 后端，自动识别印章公司名称、编码和类型，兼容 PaddleOCR 2.x / 3.x，支持多墨色识别
+- **OCR 文字识别**：正式 Tauri 版内置 Rust OCR；Electron 存档备选集成 RapidOCR / PaddleOCR。自动识别印章公司名称、编码和类型，支持多墨色识别
 - **PNG 导出**：将当前对比画面导出为 PNG 图片
 - **纯本地运行**：所有数据处理均在本地完成，不上传任何信息
 
-## v3.0.0 更新日志 — 桌面版（Electron）
+## v3.0.0 更新日志 — 桌面版（Electron，现为存档备选）
 
 - **macOS / Windows 桌面客户端**（`desktop/`）：Electron 封装，打包配置齐备（mac dmg/zip · win nsis/portable）。内置本地静态服务加载前端页面（同源无跨域限制），自动拉起 Python 后端（OCR/AI 可用，无 Python 环境静默降级），网页版继续独立可用且完全无感知桌面代码
 - **印章库**：对比中的印章可一键保存（每个印章卡片「💾」按钮或库面板），默认取 **OCR 识别的印章名称作为索引**（可改），保存提取结果 PNG + 原图 PNG + 元数据（名称/备注/OCR/时间）到可配置路径（默认「文档/印章库」，设置或库面板均可更改）；库面板支持缩略图浏览、按名称/备注/OCR 名称搜索、一键载入到参考章/待验章、删除、打开目录
@@ -411,4 +413,4 @@ BI4IWN · 李劲松
 
 ## Windows
 
-桌面版的 Windows 构建与使用说明见 [docs/windows-guide.md](docs/windows-guide.md)：安装包形式、系统要求、数据目录、快捷键、与 macOS 的功能差异及构建命令。
+正式线为已核验的 Tauri + Rust 安装包（3.6.21：`StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe`）。构建与使用说明见 [docs/windows-guide.md](docs/windows-guide.md)：安装包、系统要求、数据目录、快捷键、与 macOS 的功能差异，以及必须在 Windows 主机或 CI 上打包（不要从 macOS 交叉编译）。Electron 仅作存档备选，本轮不提供 Windows Electron 包。
