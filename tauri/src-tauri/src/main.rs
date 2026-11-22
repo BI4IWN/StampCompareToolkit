@@ -15,6 +15,9 @@ mod library;
 
 static ENGINE: std::sync::OnceLock<Option<Arc<stamp_ocr::Engine>>> = std::sync::OnceLock::new();
 static INDEX: &str = include_str!("../../web/index.html");
+// 使用说明与其所引 README 随编译打进二进制，离线可读
+static OPERATION_MANUAL: &str = include_str!("../../../stamp-toolkit/docs/operation-manual.md");
+static README_MD: &str = include_str!("../../../README.md");
 
 fn decode_png(b64: &str) -> Option<RgbaImage> {
     let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
@@ -214,7 +217,49 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "3.6.21", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "3.6.22", "ocr": true, "engine": "rust" }))
+}
+
+async fn operation_manual() -> impl axum::response::IntoResponse {
+    markdown_doc(OPERATION_MANUAL)
+}
+
+async fn readme_md() -> impl axum::response::IntoResponse {
+    markdown_doc(README_MD)
+}
+
+fn markdown_doc(body: &'static str) -> impl axum::response::IntoResponse {
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "text/markdown; charset=utf-8"),
+            (axum::http::header::CACHE_CONTROL, "no-cache"),
+        ],
+        body,
+    )
+}
+
+/// 仅打开 http(s) 链接到系统浏览器，供使用说明里的 README / Releases 使用。
+async fn open_url(Json(body): Json<Value>) -> Json<Value> {
+    let url = body.get("url").and_then(|v| v.as_str()).unwrap_or("").trim();
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Json(json!({ "ok": false, "error": "unsupported url" }));
+    }
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Json(json!({ "ok": false, "error": "invalid url" }));
+    }
+    let status = {
+        #[cfg(target_os = "macos")]
+        { std::process::Command::new("open").arg(url).status() }
+        #[cfg(target_os = "windows")]
+        { std::process::Command::new("cmd").args(["/C", "start", "", url]).status() }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        { std::process::Command::new("xdg-open").arg(url).status() }
+    };
+    match status {
+        Ok(s) if s.success() => Json(json!({ "ok": true })),
+        Ok(s) => Json(json!({ "ok": false, "error": format!("exit {s}") })),
+        Err(e) => Json(json!({ "ok": false, "error": format!("{e}") })),
+    }
 }
 
 async fn ocr(Json(body): Json<Value>) -> Json<Value> {
@@ -300,6 +345,10 @@ fn main() {
                     .route("/", get(index_html))
                     .route("/stamp-compare.html", get(index_html))
                     .route("/health", get(health))
+                    .route("/docs/operation-manual.md", get(operation_manual))
+                    .route("/operation-manual.md", get(operation_manual))
+                    .route("/docs/README.md", get(readme_md))
+                    .route("/open-url", post(open_url))
                     .route("/ocr", post(ocr))
                     .route("/diag", post(diag))
                     .route("/ai/test", post(api_ai_test))

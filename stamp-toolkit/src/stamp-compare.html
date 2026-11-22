@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.21</title>
+<title>印章对比工具 v3.6.22</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.21">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.21</span></h1>
+      <h1 title="印章对比工具 v3.6.22">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.22</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5138,7 +5138,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.21';
+const APP_VERSION = '3.6.22';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6326,7 +6326,7 @@ function isAchromaticSource(canvas) {
   return colored / tot < 0.01 && dark / tot > 0.03;
 }
 
-// 诊断：把这次处理的几何数值发到本机 /diag（Tauri 预览版用它定位真机与浏览器差异）
+// 诊断：把这次处理的几何数值发到本机 /diag（Tauri 桌面版用它定位真机与浏览器差异）
 function postDiag(target) {
   try {
     if (!/^127\.0\.0\.1$|^localhost$/.test(location.hostname)) return;
@@ -13773,6 +13773,22 @@ statusBar.classList.add('visible');
   #manual-overlay th, #manual-overlay td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 11px; line-height: 1.6; }
   #manual-overlay th { background: var(--surface-muted); color: var(--text-secondary); font-weight: 520; }
   #manual-overlay h4 { margin: 14px 0 6px; font-size: 13px; font-weight: 650; color: var(--text); }
+  #manual-overlay .manual-body h1 { margin: 0 0 10px; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+  #manual-overlay .manual-body h2 { margin: 22px 0 8px; font-size: 15px; font-weight: 650; color: var(--text); }
+  #manual-overlay .manual-body h3 { margin: 16px 0 6px; font-size: 13px; font-weight: 650; color: var(--text); }
+  #manual-overlay .manual-body p { margin: 0 0 10px; }
+  #manual-overlay .manual-body ul,
+  #manual-overlay .manual-body ol { margin: 0 0 12px; padding-left: 1.4em; }
+  #manual-overlay .manual-body li { margin: 2px 0; }
+  #manual-overlay .manual-body blockquote { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--border-strong, #c0392b); background: var(--surface-muted); color: var(--text-secondary); }
+  #manual-overlay .manual-body pre { margin: 0 0 12px; padding: 10px 12px; overflow: auto; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 8px; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+  #manual-overlay .manual-body code { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface-muted); padding: 1px 4px; border-radius: 4px; }
+  #manual-overlay .manual-body pre code { background: transparent; padding: 0; }
+  #manual-overlay .manual-body a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+  #manual-overlay .manual-body hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+  #manual-overlay .manual-body .manual-loading,
+  #manual-overlay .manual-body .manual-error { color: var(--text-tertiary); }
+  #manual-overlay .manual-toc { margin: 0 0 14px; }
 </style>
 
 <div id="cmp-fab" style="display:none">
@@ -13792,87 +13808,139 @@ statusBar.classList.add('visible');
 <div id="manual-overlay" role="dialog" aria-modal="true" aria-labelledby="manual-title" aria-hidden="true">
   <div class="manual-box" tabindex="-1">
     <div class="manual-head"><h3 id="manual-title"><svg class="ui-icon" aria-hidden="true"><use href="#i-help"/></svg>使用说明</h3><button class="dt-btn" id="manual-close">关闭</button></div>
-    <div class="manual-body">
-      <h4>30 秒上手</h4>
-      <table>
-        <tr><th>步骤</th><th>怎么做</th></tr>
-        <tr><td>1 载入</td><td>拖入 / ⌘V 粘贴 / 「选择文件」到「参考章」「待验章」；也可从「印章库」载入。桌面版可 ⌘⇧S 截图后直接粘贴</td></tr>
-        <tr><td>2 提取</td><td>默认按红章自动提取；颜色不对或淡章 → 打开「原图 → 点选取色」点笔画取色</td></tr>
-        <tr><td>3 对齐</td><td>点「自动对齐」（A）；不理想再用滚轮/滑块微调</td></tr>
-        <tr><td>4 看结论</td><td>右栏「判定」给相似度与文字/几何/编码三项指标，「差异高亮」看红绿分布</td></tr>
-      </table>
-
-      <h4>该用哪个功能？（按情况选）</h4>
-      <table>
-        <tr><th>你的情况</th><th>用这个</th><th>说明</th></tr>
-        <tr><td>红章、白底、印得清楚</td><td>什么都不用点</td><td>自动提取已够用；直接「自动对齐」比对</td></tr>
-        <tr><td>灰底扫描件，字边一圈深、字心发灰（晕染）</td><td>工具栏「优化提取」开关（开）</td><td>按「深×艳」判墨抑制边缘环；比完记得关回去</td></tr>
-        <tr><td>淡章/残缺章，笔画细、提出来断断续续</td><td>「优化提取」开关（关）+ 取色</td><td>默认关就为这种章；开反而会把淡笔画切碎</td></tr>
-        <tr><td>蓝/紫/黑灰/多色混盖</td><td>「原图 → 点选取色」</td><td>点几处不同深浅的笔画，多色叠加提取</td></tr>
-        <tr><td>背景/表格线/签名被一起提取进来</td><td>取色面板切「排除」再点掉</td><td>排除优先于提取；「剔除容差」调小更精准</td></tr>
-        <tr><td>要与具体色值完全一致（专色/防伪油墨）</td><td>查看器底部「匹配 → 精确RGB」</td><td>只认容差内的欧氏距离；色相模式会连深浅一起抓</td></tr>
-        <tr><td>盖章压扁/拍歪，章呈椭圆</td><td>工具栏「圆章校正」开关（默认开）</td><td>拟合长轴拉回正圆；淡墨/残缺自动跳过，不会拧出波纹</td></tr>
-        <tr><td>只要章的某一块（避开正文压字）</td><td>「原图 → 圆形裁切」</td><td>拖圆心 + 4 个轴端手柄贴合边缘，应用后归一为正圆</td></tr>
-        <tr><td>差一点点对不上</td><td>滚轮旋转 + 滑块微调 + 「差异高亮」</td><td>画布内滚轮＝旋转，Ctrl/⌘+滚轮＝缩放</td></tr>
-        <tr><td>想确认公司名/编码/类型</td><td>「AI 识别」或「全部识别」</td><td>本地 OCR 先出结果、AI 复核；AI 失败保留本地并写原因</td></tr>
-        <tr><td>同一枚章反复比对</td><td>「印章库」→ 存库</td><td>按 OCR 名称建索引，下次一键载入</td></tr>
-      </table>
-
-      <h4>提取与取色</h4>
-      <table>
-        <tr><th>项</th><th>说明</th></tr>
-        <tr><td>自动提取</td><td>按红度/墨量判墨并归一化；一张图多枚章用候选芯片切换</td></tr>
-        <tr><td>点选取色</td><td>在原图上点笔画颜色（可多次，最多 40 种）；同色再点＝切换提取/排除</td></tr>
-        <tr><td>排除</td><td>把该色从结果去掉；「剔除容差」越大去掉越多（14%≈±17 RGB）</td></tr>
-        <tr><td>颜色加深</td><td>取色界面底部按墨色浓度提亮淡笔画；淡章晕染时先关掉</td></tr>
-        <tr><td>放大镜</td><td>取色时跟随鼠标 5.5× 显示笔画像素与色值（#RRGGBB）</td></tr>
-        <tr><td>取色标记</td><td>画布留小白点标记取过处，排除色带斜杠，便于复查</td></tr>
-      </table>
-
-      <h4>对比与判定</h4>
-      <table>
-        <tr><th>功能</th><th>怎么用</th></tr>
-        <tr><td>自动对齐</td><td>A：质心+半径归一+角度直方图+IoU 精调</td></tr>
-        <tr><td>三种模式</td><td>叠加 / 滑块 / 并排，快捷键 1 / 2 / 3</td></tr>
-        <tr><td>差异高亮</td><td>像素级红绿分布，直接看哪里多墨少墨</td></tr>
-        <tr><td>判定三指标</td><td>文字＝机构名相似度、几何＝椭圆轴比一致性、编码＝防伪码一致度；缺数据显示「—」</td></tr>
-      </table>
-
-      <h4>AI 识别</h4>
-      <table>
-        <tr><th>项</th><th>说明</th></tr>
-        <tr><td>识别方式</td><td>左上角「识别：本地 / AI」；本地＝内置 OCR，AI＝配置模型后走云端</td></tr>
-        <tr><td>先本地后 AI</td><td>AI 模式仍先跑本地 OCR 填字段，再请 AI 复核；AI 失败保留本地结果并写原因</td></tr>
-        <tr><td>快速 / 精确</td><td>快速＝关思考（约 1 秒）；精确＝开思考（更准但 8–25 秒）；推理模型建议快速</td></tr>
-        <tr><td>视觉 / 文本解析</td><td>视觉＝把已校正的章面图发给多模态模型；文本解析＝把本地 OCR 文字发过去纠错</td></tr>
-        <tr><td>常见失败</td><td>「未返回可解析的 JSON」多为端点/模型不匹配（Anthropic 端点、纯文本模型收到图片）；401＝key 无效</td></tr>
-      </table>
-
-      <h4>⌨️ 快捷键与桌面功能</h4>
-      <table>
-        <tr><th>操作</th><th>键位</th></tr>
-        <tr><td>导入 / 导出 / 清空</td><td>⌘O / ⌘E / ⌘⇧⌫</td></tr>
-        <tr><td>切换操作对象</td><td>⌘1 参考章、⌘2 待验章；Alt+滚轮＝调另一枚</td></tr>
-        <tr><td>画布内滚轮</td><td>旋转（纵向横向都行）；Ctrl/⌘+滚轮＝缩放</td></tr>
-        <tr><td>截图</td><td>⌘⇧S（可自定义）→ 选区 → 粘贴到参考/待验章</td></tr>
-        <tr><td>退出 / 应用</td><td>Esc 退出取色；Enter 应用框选</td></tr>
-      </table>
-
-      <h4>常见问题</h4>
-      <table>
-        <tr><th>现象</th><th>原因与处理</th></tr>
-        <tr><td>一圈深、字心发灰</td><td>晕染：开「优化提取」；或把「颜色加深」关掉再看</td></tr>
-        <tr><td>剔除后颜色加不回来</td><td>同一颜色再点一次＝切换用途；被旧排除色挡住时会自动替换并提示</td></tr>
-        <tr><td>剔一个色别的也没了</td><td>「剔除容差」太大或用了色相模式；调小容差或切「精确RGB」</td></tr>
-        <tr><td>章被拉歪/拧出波纹</td><td>淡墨或残缺章：关「圆章校正」；或用「圆形裁切」手动框</td></tr>
-        <tr><td>鼠标移动卡</td><td>0.4.35 已修查看器全屏模糊导致的重绘；仍卡请反馈系统与显卡信息</td></tr>
-      </table>
-
-      <h4>关于</h4>
-      <p>印章对比工具 <span id="manual-ver">v3.6.21</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>
+    <div class="manual-body" id="manual-body">
+      <p class="manual-loading">正在载入本版使用说明…</p>
     </div>
   </div>
 </div>
+<script type="text/plain" id="bundled-operation-manual">
+# 印章对比工具 · 使用说明与技巧
+
+> 正式桌面版为 **Tauri + Rust** 内核（macOS / Windows），网页版同源。界面三栏：左边工具栏与画布、右边「判定 / 识别 / 候选」检查器、底部状态栏显示进度。
+> 这份说明只讲怎么用、怎么用好；不记录版本变化。
+
+## 目录
+
+- [一、三分钟上手](#一三分钟上手)
+- [二、按情况选功能](#二按情况选功能)
+- [三、提取不干净怎么办（五级处理）](#三提取不干净怎么办五级处理)
+- [四、取色技巧](#四取色技巧)
+- [五、圆章校正与拉正](#五圆章校正与拉正)
+- [六、对齐与判定怎么看](#六对齐与判定怎么看)
+- [七、AI 识别技巧](#七ai-识别技巧)
+- [八、印章库与截图](#八印章库与截图)
+- [九、快捷键](#九快捷键)
+- [十、症状速查](#十症状速查)
+
+## 一、三分钟上手
+
+1. **放两张章**：拖入 / `⌘V` 粘贴 / 「选择文件…」到左边「参考章」，右边「待验章」。桌面版 `⌘⇧S` 截图后直接粘贴最快。
+2. **自动出结果**：放进去就自动提取（红章默认按红度取墨）。要么保持默认，要么按第二章"看情况开关"。
+3. **对齐**：点 `⚡ 自动对齐`（`A`）。不理想再用滚轮微调或滑块。
+4. **看结论**：右侧「判定」给相似度与文字 / 几何 / 编码三项指标；想看差在哪就开「差异高亮」。
+
+> 小贴士：一次只比"同一位置的两枚章"。跨页比对会带上不同的正文背景，相似度必然偏低。
+
+## 二、按情况选功能
+
+| 你手上的情况 | 该用什么 | 说明 |
+|---|---|---|
+| 红章、白底、印得清楚 | 什么都不用点 | 自动提取已够用，直接对齐比对 |
+| 灰底扫描件，字边一圈深、字心发灰（晕染） | 工具栏「优化提取·开」 | 改按"深×艳"取墨，抑制边缘环；比完记得关回去 |
+| 淡章、残章，笔画细、提出来断断续续 | 「优化提取·关」+ 取色 | 默认关就是为这种章；开着反而把淡笔画切碎 |
+| 蓝/紫/黑/灰章，或多种颜色混盖 | 原图 → `💧 点选取色` | 每个颜色点一处，深浅各取一次 |
+| 背景表格线、签名、正文被一起提进来 | 取色面板 `⊘ 排除` 后点它 | 排除优先于提取；「剔除容差」调小更精准 |
+| 必须和某个具体色值严格一致（专色、防伪油墨） | 查看器底部「匹配 → 精确RGB」 | 只认容差内的欧氏距离；色相模式会把相近深浅一起抓 |
+| 盖章压扁、拍歪，章呈椭圆 | 工具栏「圆章校正·开」（默认开） | 拟合长短轴拉回正圆；淡墨或残章会自动跳过，不会拧出波纹 |
+| 只要章的某一块（避开正文压字） | 原图 → `◯ 圆形裁切` | 拖圆心 + 4 个轴端手柄贴住边缘，应用后归一为正圆 |
+| 差一点点对不上 | 滚轮旋转 + 滑块微调 + 「差异高亮」 | 画布内滚轮＝旋转，`Ctrl/⌘`+滚轮＝缩放 |
+| 要确认公司名 / 编码 / 类型 | 「🤖 AI 识别」或「全部识别」 | 本地 OCR 先出结果，AI 复核；AI 失败会保留本地结果并写原因 |
+
+## 三、提取不干净怎么办（五级处理）
+
+按顺序加码，前一级够用就停：
+
+1. **先调容差**：取色面板的「剔除容差」往小调，往往比反复取色更有效。
+2. **再排除污染**：点「⊘ 排除」，去点背景线、签名、正文黑字——排除优先于提取。
+3. **补取缺的墨**：章有深浅两段色，就分别点取深、浅两处；一次点不准就多点两三处。
+4. **换匹配方式**：颜色杂乱时切「精确RGB」，只认你点的那个色值。
+5. **还不行就圈定范围**：用「圆形裁切」或「框选区域」把正文压字切掉，再提取。
+
+> 小贴士：取完色用「颜色加深」把淡墨提亮一档再比对，能明显改善浅章的相似度；但别开过头，笔画会糊成一片。
+
+## 四、取色技巧
+
+- **点笔画中段，不要点边缘**：边缘是过渡色，会把一圈抗锯齿像素一起取进去（这也是晕染的来源）。
+- **同一种墨点 2–3 处**：扫描件同一枚章的墨色有深浅差，多点几处比调容差更稳。
+- **深浅各取一次**：深色笔画 + 浅色笔画各一个色块，覆盖最完整。
+- **取错了直接改用途**：同一个颜色再点一次会切换「提取 / 排除」，以最后一次为准，不用删了重加。
+- **放大镜是 5.5×**：悬停即可看像素和 hex 值，点下去之前先确认这里确实是墨。
+- **取色标记**：取过的地方会留一个小圆点（排除色带斜杠），方便回看取过哪里。
+- **颜色条上限 40 个**：点第 41 个会提示，先删掉不用的再加。
+- **深色章**：先点一处最深的地方，再点一处中间的灰度，两色叠加通常一次成型。
+
+## 五、圆章校正与拉正
+
+- 默认开启。它会拟合章的椭圆长短轴，把压扁的章拉回正圆，同时把尺寸归一，便于和另一枚章叠比。
+- **会自动跳过的情况**：墨迹太淡、残缺过多（覆盖太低）、本来就是近似正圆（≥0.93）。跳过时不改几何，避免把淡章拧出波纹。
+- **想知道有没有校正过**：状态栏会写明旋转角度、缩放比例与校正前后的轴比。
+- **手动兜底**：校正后还不正，用「圆形裁切」按章的外缘圈一个圆，应用后即为正圆；或者用滑块/滚轮手动拉。
+- 若发现某枚章被"越拉越歪"，把「圆章校正」关掉再比，说明这枚章的形状不适合自动校正。
+
+## 六、对齐与判定怎么看
+
+- **先自动、再手调**：`⚡ 自动对齐` 会先找最优旋转/缩放/平移；手调只做最后 ±2° 的微调。
+- **叠加 / 滑块 / 并排**：叠加看整体重合，滑块左右拉看细节，并排看两枚章各自的边缘。
+- **差异高亮**：红/绿分别表示"只有这枚有"的墨迹，集中在边缘说明是扫描噪声，成片错位说明真的不一致。
+- **三项指标**（缺数据显示「—」）：
+- **文字**：两枚章的机构名相似度，同一枚章应接近 100%，不同章通常掉到 30% 以下。
+- **几何**：椭圆轴比与外形一致性，用来判断是不是"同一个章型"；不同章常见 0%。
+- **编码**：防伪码 / 编号是否一致，没有编码就显示「—」。
+- **判定标签**：相似度与三项指标会合成为「通过 / 可疑 / 不一致」，可疑通常意味着"形状像、文字差一点"，值得人工再看一眼。
+
+## 七、AI 识别技巧
+
+- **先本地、后 AI**：点识别会先用本地 OCR 出结果（约 1 秒），再让 AI 复核；AI 超时或报错时不会清空本地结果，只会在面板写明原因。
+- **⚡快速 / 🎯精确**：快速关闭模型思考，一般 1 秒内出结果，适合清晰章；精确更慢但抗模糊、抗旋转。
+- **图越干净越准**：先在取色面板把背景和正文排除掉，AI 看到的是白底章面，识别率显著提高。
+- **失败怎么读**：面板与状态栏会写具体原因——`未返回可解析的 JSON` 多半是模型/端点不匹配；`401` 是 key 无效；`限流` 是调用太频繁，隔几秒重试即可。
+- **纯文本模型**：只支持文本的模型请把「提取方式」切到「文本解析」，让它读本地 OCR 的粗文字而不是看图。
+
+## 八、印章库与截图
+
+- **存库**：比对满意的章点「存参考章 / 存待验章」进库，下次在「印章库」里一键载入；库里的章可改名、删除，按名称/备注/识别文字搜索。
+- **改保存路径**：印章库 →「更改保存路径」，之后新存的章都在新目录（老文件不会被搬走）。
+- **截图**：桌面版 `⌘⇧S`（可在设置里改）框选屏幕区域，截完自动进剪贴板；设置里可选"截完直接贴到参考章/待验章"。
+
+## 九、快捷键
+
+| 操作 | 快捷键 |
+|---|---|
+| 载入图片 | `⌘O` / 拖入 / `⌘V` 粘贴 |
+| 自动对齐 | `A` |
+| 切换对比模式 | `1` 叠加 · `2` 滑块 · `3` 并排 |
+| 切换操作对象 | `⌘1` 参考章 · `⌘2` 待验章 |
+| 导出对比图 | `⌘E` |
+| 画布内滚轮 | 旋转（`Shift` 加速） |
+| `Ctrl/⌘` + 滚轮 | 缩放 |
+| 查看器内 | `Esc` 退出取色 / 关闭查看器 |
+
+## 十、症状速查
+
+| 症状 | 三步处置 |
+|---|---|
+| 提出来只有外轮廓、字心发空 | 开「优化提取」→ 仍空就用取色补一处深色 → 还不行切精确RGB |
+| 提出来带了一圈正文/表格线 | 用「⊘ 排除」点它 → 剔除容差调小 → 再不行用圆形裁切圈定 |
+| 取色后图里冒出另一枚章 | 说明取到了背景色，删掉那个颜色；先把正文排除再取色 |
+| 剔除之后颜色加不上 | 检查是不是剔到了笔画主色（列表里带红色圆点的），删掉那条再提取 |
+| 章是歪的 / 椭圆的 | 开「圆章校正」→ 关掉看是否更差 → 用圆形裁切手动圈正 |
+| 相似度只有个位数 | 检查两枚章是不是同一枚、有没有对齐；看差异高亮是不是整体错位 |
+| AI 一直失败 | 看面板写的原因 → 换「文本解析」→ 检查 key 与模型名是否匹配 |
+| 取色时鼠标发飘 | 关掉「差异高亮」和「颜色加深」再取色，取完再开 |
+| 存库后日期显示「—」 | 文件没有创建时间，属于正常兜底；不影响载入比对 |
+
+> 隐私说明：印章图片与识别结果默认只在本机处理；只有你主动点「AI 识别」时，当前章的图才会发给你配置的 AI 服务，密钥只保存在本机。
+</script>
 
 <script>
 (function () {
@@ -13941,7 +14009,7 @@ statusBar.classList.add('visible');
     if (helpBtn) slot.appendChild(helpBtn);
   })();
 
-  // ── 使用说明弹窗（固定帮助入口；开发者信息收纳在“关于”） ──
+  // ── 使用说明弹窗：正文来自随包的 usage-guide.md（说明书+技巧，不含版本记录，不访问外网） ──
   const mo = document.getElementById('manual-overlay');
   const manualBtn = document.createElement('button');
   manualBtn.id = 'help-fab';
@@ -13952,11 +14020,248 @@ statusBar.classList.add('visible');
   manualBtn.style.alignItems = 'center';
   manualBtn.style.gap = '5px';
   manualBtn.setAttribute('aria-haspopup', 'dialog');
-  manualBtn.addEventListener('click', () => mo.classList.add('visible'));
+  function setManualOpen(open) {
+    mo.classList.toggle('visible', open);
+    mo.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open) loadOperationManual();
+  }
+  manualBtn.addEventListener('click', () => setManualOpen(true));
   (document.getElementById('status-actions') || document.body).appendChild(manualBtn);
-  document.getElementById('manual-close').addEventListener('click', () => mo.classList.remove('visible'));
-  mo.addEventListener('click', (e) => { if (e.target === mo) mo.classList.remove('visible'); });
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') mo.classList.remove('visible'); });
+  document.getElementById('manual-close').addEventListener('click', () => setManualOpen(false));
+  mo.addEventListener('click', (e) => { if (e.target === mo) setManualOpen(false); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') setManualOpen(false); });
+
+  function escapeManualHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  function githubSlug(text) {
+    return String(text).trim().toLowerCase()
+      .replace(/[→⟶—–]/g, '-')
+      .replace(/[^\p{L}\p{N}\s-]/gu, '')
+      .replace(/[\s-]+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+  function rewriteManualHref(href) {
+    if (!href) return href;
+    if (/^(https?:|mailto:|#)/i.test(href)) return href;
+    let path = href.split('#')[0];
+    const hash = href.includes('#') ? href.slice(href.indexOf('#')) : '';
+    const parts = ['stamp-toolkit', 'docs'];
+    path.split('/').forEach((seg) => {
+      if (!seg || seg === '.') return;
+      if (seg === '..') { if (parts.length) parts.pop(); }
+      else parts.push(seg);
+    });
+    const resolved = parts.join('/');
+    // 手册相对链接优先走随包本地文档，避免安装后变成死链
+    if (resolved === 'README.md') return '/docs/README.md' + hash;
+    if (resolved === 'stamp-toolkit/docs/operation-manual.md') return '/docs/operation-manual.md' + hash;
+    return 'https://github.com/BI4IWN/StampCompareToolkit/blob/main/' + resolved + hash;
+  }
+  function renderManualInline(text) {
+    let s = escapeManualHtml(text);
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, href) {
+      const raw = href.startsWith('#') ? ('#' + githubSlug(label)) : rewriteManualHref(href);
+      const safe = raw.replace(/"/g, '');
+      const isLocal = safe.startsWith('#');
+      return '<a href="' + safe + '"' + (isLocal ? '' : ' target="_blank" rel="noopener noreferrer"') + '>' + label + '</a>';
+    });
+    return s;
+  }
+  function renderManualMarkdown(md) {
+    const lines = String(md).replace(/\r\n/g, '\n').split('\n');
+    const out = [];
+    let i = 0;
+    const flushPara = (buf) => {
+      const t = buf.join(' ').trim();
+      if (t) out.push('<p>' + renderManualInline(t) + '</p>');
+      buf.length = 0;
+    };
+    while (i < lines.length) {
+      const line = lines[i];
+      if (line.startsWith('```')) {
+        const buf = [];
+        i++;
+        while (i < lines.length && !lines[i].startsWith('```')) { buf.push(lines[i]); i++; }
+        if (i < lines.length) i++;
+        out.push('<pre><code>' + escapeManualHtml(buf.join('\n')) + '</code></pre>');
+        continue;
+      }
+      if (/^\s*\|/.test(line)) {
+        const rows = [];
+        while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; }
+        const parseRow = (row) => row.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim());
+        const bodyRows = rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r));
+        if (bodyRows.length) {
+          const heads = parseRow(bodyRows[0]);
+          let html = '<table><thead><tr>' + heads.map((h) => '<th>' + renderManualInline(h) + '</th>').join('') + '</tr></thead><tbody>';
+          bodyRows.slice(1).forEach((r) => {
+            html += '<tr>' + parseRow(r).map((c) => '<td>' + renderManualInline(c) + '</td>').join('') + '</tr>';
+          });
+          html += '</tbody></table>';
+          out.push(html);
+        }
+        continue;
+      }
+      if (/^---+\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+      const hm = /^(#{1,3})\s+(.+)$/.exec(line);
+      if (hm) {
+        const level = hm[1].length;
+        const title = hm[2].trim();
+        out.push('<h' + level + ' id="' + githubSlug(title) + '">' + renderManualInline(title) + '</h' + level + '>');
+        i++;
+        continue;
+      }
+      if (/^>\s?/.test(line)) {
+        const buf = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) { buf.push(lines[i].replace(/^>\s?/, '')); i++; }
+        out.push('<blockquote>' + renderManualInline(buf.join(' ')) + '</blockquote>');
+        continue;
+      }
+      const ul = /^[-*]\s+(.+)$/.exec(line);
+      if (ul) {
+        const items = [];
+        while (i < lines.length) {
+          const m = /^[-*]\s+(.+)$/.exec(lines[i]);
+          if (!m) break;
+          items.push('<li>' + renderManualInline(m[1]) + '</li>');
+          i++;
+        }
+        out.push('<ul>' + items.join('') + '</ul>');
+        continue;
+      }
+      const ol = /^\d+\.\s+(.+)$/.exec(line);
+      if (ol) {
+        const items = [];
+        while (i < lines.length) {
+          const m = /^\d+\.\s+(.+)$/.exec(lines[i]);
+          if (!m) break;
+          items.push('<li>' + renderManualInline(m[1]) + '</li>');
+          i++;
+        }
+        out.push('<ol>' + items.join('') + '</ol>');
+        continue;
+      }
+      if (!line.trim()) { i++; continue; }
+      const buf = [line];
+      i++;
+      while (i < lines.length && lines[i].trim() && !/^(#{1,3}\s|```|>\s?|[-*]\s|\d+\.\s|---+\s*$|\s*\|)/.test(lines[i])) {
+        buf.push(lines[i]);
+        i++;
+      }
+      flushPara(buf);
+    }
+    return out.join('\n');
+  }
+  function manualAboutFooter() {
+    const ver = typeof appVersion === 'function' ? appVersion() : (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '3.6.21');
+    return '<h4>关于</h4><p>印章对比工具 <span id="manual-ver">v' + ver + '</span> · 开发者：李劲松（BI4IWN）。键盘快捷键：⌘O 导入、⌘E 导出、⌘⇧⌫ 清空、⌘1/⌘2 切换目标；Tab 与空格保留系统默认行为。</p>';
+  }
+  let manualRenderedFrom = '';
+  function paintOperationManual(md, source) {
+    const body = document.getElementById('manual-body');
+    if (!body || !md || !String(md).trim()) return false;
+    const text = String(md).trim();
+    body.innerHTML = renderManualMarkdown(text) + manualAboutFooter();
+    const toc = body.querySelector('h2, h1');
+    if (toc && /目录/.test(toc.textContent || '')) toc.classList.add('manual-toc');
+    manualRenderedFrom = source;
+    return true;
+  }
+  async function fetchLocalManual(url) {
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(String(resp.status));
+    const md = await resp.text();
+    if (!/印章对比工具/.test(md)) throw new Error('unexpected manual');
+    if (/版本记录|更新日志/.test(md)) throw new Error('guide must not contain changelog');
+    return md;
+  }
+  async function loadOperationManual() {
+    const embedded = document.getElementById('bundled-operation-manual');
+    if (!manualRenderedFrom && embedded && embedded.textContent.trim()) {
+      paintOperationManual(embedded.textContent, 'embedded');
+    }
+    if (location.protocol === 'file:') return;
+    const urls = ['/docs/usage-guide.md', 'usage-guide.md'];
+    for (const url of urls) {
+      try {
+        const md = await fetchLocalManual(url);
+        if (md && md.trim() !== (embedded && embedded.textContent.trim())) {
+          paintOperationManual(md, url);
+        } else if (!manualRenderedFrom) {
+          paintOperationManual(md, url);
+        }
+        return;
+      } catch (err) { /* 无网或非桌面服务时回退到随包内嵌文案 */ }
+    }
+    if (!manualRenderedFrom) {
+      const body = document.getElementById('manual-body');
+      if (body) body.innerHTML = '<p class="manual-error">未能载入本版使用说明。</p>' + manualAboutFooter();
+    }
+  }
+  function bindManualLinkClicks() {
+    const body = document.getElementById('manual-body');
+    if (!body || body.dataset.linkBound === '1') return;
+    body.dataset.linkBound = '1';
+    body.addEventListener('click', async (e) => {
+      const a = e.target.closest('a');
+      if (!a || !body.contains(a)) return;
+      const href = a.getAttribute('href') || '';
+      if (href.startsWith('#')) {
+        e.preventDefault();
+        const id = decodeURIComponent(href.slice(1));
+        const el = body.querySelector('#' + CSS.escape(id));
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (href.split('#')[0] === '/docs/README.md' || href.split('#')[0] === '/docs/operation-manual.md') {
+        e.preventDefault();
+        try {
+          const md = await fetchLocalManual(href.split('#')[0]);
+          const isReadme = href.indexOf('README.md') !== -1;
+          body.innerHTML = (isReadme ? '<p><button type="button" class="dt-btn" id="manual-back">返回使用说明</button></p>' : '') + renderManualMarkdown(md) + (isReadme ? '' : manualAboutFooter());
+          const back = document.getElementById('manual-back');
+          if (back) back.addEventListener('click', () => {
+            const embedded = document.getElementById('bundled-operation-manual');
+            if (embedded && embedded.textContent.trim()) paintOperationManual(embedded.textContent, 'embedded');
+            else loadOperationManual();
+          });
+          const hash = href.includes('#') ? decodeURIComponent(href.slice(href.indexOf('#') + 1)) : '';
+          if (hash) {
+            const el = body.querySelector('#' + CSS.escape(hash));
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else {
+            body.scrollTop = 0;
+          }
+        } catch (err) {
+          body.insertAdjacentHTML('afterbegin', '<p class="manual-error">未能打开该文档。</p>');
+        }
+        return;
+      }
+      if (/^https?:\/\//i.test(href)) {
+        e.preventDefault();
+        try {
+          const resp = await fetch('/open-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: href })
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || data.ok === false) throw new Error(data.error || 'open failed');
+        } catch (err) {
+          window.open(href, '_blank', 'noopener');
+        }
+      }
+    });
+  }
+  bindManualLinkClicks();
+  loadOperationManual();
 
   // ── 紧凑布局（v3.0.9）：双章就绪后自动折叠卡片区为一行摘要条，
   //    对比画布上移、主要操作一屏完成（客户端化交互）；展开按钮恢复 ──
@@ -14729,7 +15034,10 @@ statusBar.classList.add('visible');
     border-color: var(--border);
   }
 
-  #manual-overlay h4 {
+  #manual-overlay h4,
+  #manual-overlay .manual-body h1,
+  #manual-overlay .manual-body h2,
+  #manual-overlay .manual-body h3 {
     color: var(--text);
   }
 

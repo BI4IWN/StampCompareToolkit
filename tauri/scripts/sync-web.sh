@@ -1,5 +1,5 @@
 #!/bin/sh
-# 把仓库里的单文件前端同步进 Tauri 的 web 目录，并追加调试钩子（只在预览版生效）
+# 把仓库里的单文件前端同步进 Tauri 的 web 目录，并追加调试钩子（仅本地开发调试用）
 set -e
 here="$(cd "$(dirname "$0")" && pwd)"
 # 仓库根：优先 STAMP_REPO，其次 git 顶层目录（CI 里 checkout 的即仓库根），最后回落到本机默认路径
@@ -28,3 +28,6 @@ if extra:
 open(dst, 'w', encoding='utf-8').write(html)
 print(f'synced {len(html)} chars -> {dst}')
 PY
+
+# 随包带上当前版本的正式操作手册（离线可读，不走网络）
+python3 "$here/sync-operation-manual.py" --repo "$repo" --web-dir "$here/../web" --html "$dst"

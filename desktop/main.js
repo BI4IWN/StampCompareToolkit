@@ -173,7 +173,7 @@ function createWindow() {
     height: 960,
     minWidth: 1100,
     minHeight: 700,
-    title: '印章比对工具',
+    title: '印章对比工具 v3.6.21',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
