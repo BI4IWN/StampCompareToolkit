@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.25</title>
+<title>印章对比工具 v3.6.26</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.25">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.25</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.26</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5139,7 +5139,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.25';
+const APP_VERSION = '3.6.26';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -8580,6 +8580,14 @@ function ovDraw() {
     ctx.strokeStyle = 'rgba(199,72,58,0.95)'; ctx.lineWidth = 1.5; ctx.stroke();
     ctx.restore();
   }
+  // 圆形裁切：边调边看，右侧按当前边界实时重算（120ms 节流，避免拖动掉帧）
+  if (OV.mode === 'circle') {
+    const now = performance.now();
+    if (OV._forcePreview || now - _ovPreviewT > 120) {
+      _ovPreviewT = now; OV._forcePreview = false;
+      try { OV.previewCanvas = ovBuildPreview(); } catch (e) { OV.previewCanvas = null; }
+    }
+  } else if (OV.previewCanvas) { OV.previewCanvas = null; }
   if (OV.mode === 'crop' || OV.mode === 'circle' || OV.mode === 'pick') { try { ovDrawResult(); } catch (e) {} }
   if (OV.crop && OV.mode === 'crop') {
     const p1 = ovImageToScreen(OV.crop.x, OV.crop.y);
@@ -8783,6 +8791,31 @@ function closeOriginViewer() {
 }
 
 // 右侧「提取结果 · 实时」：把当前目标的墨迹画到第二块画布（取色/剔除时实时看效果）
+// 圆形裁切实时预览：把当前椭圆/控制点框出的区域按同一规则裁切并归一，
+// 用低分辨率快速渲染（仅用于右侧「提取结果」实时显示，不写回 state）
+let _ovPreviewT = 0, _ovPreviewKey = '';
+function ovBuildPreview() {
+  const st = state[OV.target];
+  if (!st || !st.baseExtracted) return null;
+  const pts = (OV.ptsEdited && OV.pts && OV.pts.length >= 6) ? OV.pts : null;
+  const el = OV.ell;
+  let poly = pts;
+  if (!poly && el && el.rx > 1) {
+    poly = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (-Math.PI / 2) + (i * 2 * Math.PI) / 16;
+      poly.push({ x: el.cx + Math.cos(a) * el.rx, y: el.cy + Math.sin(a) * el.ry });
+    }
+  }
+  if (!poly || poly.length < 6) return null;
+  // 预览只在原图上按比例取：把控制点从「提取画布坐标」映射到 baseExtracted
+  const base = st.baseExtracted;
+  const sc = base.width / (st.bbox && st.bbox.fitSize ? st.bbox.fitSize : base.width);
+  const bx = st.bbox ? st.bbox.x : 0, by = st.bbox ? st.bbox.y : 0;
+  const ptsBase = poly.map(q => ({ x: (q.x - bx) * sc, y: (q.y - by) * sc }));
+  try { return ovPtsCropCanvas(base, ptsBase, true); } catch (e) { return null; }
+}
+
 function ovDrawResult() {
   ovEls();
   const ctx = OV.ctx2;
@@ -8795,7 +8828,7 @@ function ovDrawResult() {
   ctx.clearRect(0, 0, r.width, r.height);
   const st = state[OV.target];
   if (!st || !st.extracted) return;
-  const src = st.extracted;
+  const src = (OV.mode === 'circle' && OV.previewCanvas) ? OV.previewCanvas : st.extracted;
   const s = Math.min((r.width - 24) / src.width, (r.height - 24) / src.height);
   const w = src.width * s, h = src.height * s;
   const x = (r.width - w) / 2, y = (r.height - h) / 2;
@@ -9462,7 +9495,7 @@ function ovPickAt(clientX, clientY, exclude) {
     if (!d) return;
     if (d.kind === 'pts') {
       const p = ovScreenToImage(e.clientX, e.clientY);
-      if (OV.pts && OV.pts[d.idx]) { OV.pts[d.idx] = { x: p.x, y: p.y }; OV.ptsEdited = true; ovDrawSoon(); }
+      if (OV.pts && OV.pts[d.idx]) { OV.pts[d.idx] = { x: p.x, y: p.y }; OV.ptsEdited = true; OV._forcePreview = true; ovDrawSoon(); }
       return;
     }
     if (d.kind === 'ellnew') {
@@ -9649,6 +9682,7 @@ function ovPtsCropCanvas(src, pts, norm) {
   const g = c.getContext('2d');
   ovSmoothPath(g, pts.map(q => ({ x: q.x - bx, y: q.y - by })));
   g.clip();
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, bw, bh);   // 与自动提取一致的白底，避免露出查看器深色背景
   g.drawImage(src, -bx, -by);
   if (!norm) return c;
   // 质心 + 面积等效半径，保证结果是一个标准正圆
@@ -9662,12 +9696,16 @@ function ovPtsCropCanvas(src, pts, norm) {
   area = Math.abs(area);
   const cx = (Math.abs(area) > 1 ? sx / (6 * area) : (x0 + x1) / 2) - bx;
   const cy = (Math.abs(area) > 1 ? sy / (6 * area) : (y0 + y1) / 2) - by;
-  const r = Math.max(8, Math.sqrt(Math.max(area, 1) / Math.PI));
+  // 用「最远控制点」作半径：手绘边界正好落在圆周上，不会因为面积等效半径偏小而切掉内容
+  let rMax = 8;
+  for (const q of pts) rMax = Math.max(rMax, Math.hypot(q.x - bx - cx, q.y - by - cy));
+  const r = rMax;
   const OUT = Math.max(480, Math.min(1200, Math.round(r * 2)));
   const o = document.createElement('canvas');
   o.width = o.height = OUT;
   const og = o.getContext('2d');
   og.beginPath(); og.arc(OUT / 2, OUT / 2, OUT / 2 - 1, 0, Math.PI * 2); og.clip();
+  og.fillStyle = '#ffffff'; og.fillRect(0, 0, OUT, OUT);
   og.drawImage(c, cx - r, cy - r, r * 2, r * 2, 0, 0, OUT, OUT);
   return o;
 }
@@ -14113,6 +14151,23 @@ statusBar.classList.add('visible');
 - **取错了直接改用途**：同一个颜色再点一次会切换「提取 / 排除」，以最后一次为准，不用删了重加。
 - **放大镜是 5.5×**：悬停即可看像素和 hex 值，点下去之前先确认这里确实是墨。
 - **取色标记**：取过的地方会留一个小圆点（排除色带斜杠），方便回看取过哪里。
+
+### 圆形裁切技巧
+- 打开「原图 → 圆形裁切」：椭圆是骨架，另有 **16 个控制点**，拖任一点只动它自己
+- 动过控制点后会显示绿色曲线，那就是真正会被裁下来的边界；应用时按曲线裁切并归一成正圆
+- 空白处点一下＝放弃当前选择重新开始；Alt/⌘ + 点控制点＝删点（至少 6 个）
+- 章外有表格线、正文压字、签名时，用它比改取色更快
+
+### 剔除技巧（把正文、背景、签名清掉）
+
+- **先看匹配模式**：默认「色相」适合剔掉"同类但深浅不一"的一整片（比如浅粉底纹）；只想剔掉某个精确色（防伪油墨、印刷网点）就切「**精确RGB**」。
+- **容差就是"剔多少"**：色相模式下 4% ≈ ±8° 色相窗，40% ≈ ±22°；精确RGB 下容差按颜色距离放大（39% ≈ 46.8）。**先小后大**，一点一点加，别一上来拉满——拉满等于把整枚章一起剔掉。
+- **点重复色不会白点**：同一个颜色再点一次，会按**当前容差和当前匹配模式**重新算一遍，状态栏直接告诉你「该色命中 N 像素」——所以"调完容差再点同色"就是最快的调参方式。
+- **命中 0 像素说明这个色不存在**：状态栏会说「未命中任何像素」，换一处笔画取色，或换匹配模式；这时别继续加同一个色。
+- **排除优先于提取**：同一像素既满足提取又满足排除时，按排除处理。所以别把章的主色加进排除列表。
+- **剔不干净的分层来**：先剔最大片的底色 → 再剔正文黑字 → 最后剔签名；每剔一层看一眼提取结果，避免叠加过头。
+- **剔错了用「停用」而不是删**：chip 上点「停用」暂时不起作用，保留色值方便再调；删掉就得重新取色。
+- **圆形裁切专治"章外的东西"**：正文压章、背景有格子、签名压边，用「圆形裁切」把区域框住比剔颜色更干净（见第五章）。
 - **颜色条上限 40 个**：点第 41 个会提示，先删掉不用的再加。
 - **深色章**：先点一处最深的地方，再点一处中间的灰度，两色叠加通常一次成型。
 
