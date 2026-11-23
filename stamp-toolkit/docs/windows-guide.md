@@ -1,6 +1,6 @@
 # Windows 版安装与使用
 
-> 版本：v3.6.22 文档 ｜ 适用系统：Windows 10 / 11（64 位）
+> 版本：v3.6.23 文档 ｜ 适用系统：Windows 10 / 11（64 位）
 
 印章比对工具（Stamp Compare Toolkit）在 Windows 与 macOS 上的**官方发行线统一为 Tauri + Rust**。Electron 版仅作中间版存档备选；本轮不提供 Windows Electron 包。
 
@@ -12,16 +12,16 @@
 
 | 文件 | 说明 | 适用场景 |
 |---|---|---|
-| `StampCompareToolkit-Tauri-3.6.22-win-x64-setup.exe` | Tauri NSIS 安装向导，可选安装目录，创建开始菜单/桌面快捷方式 | 正式线，长期使用 |
+| `StampCompareToolkit-Tauri-3.6.23-win-x64-setup.exe` | Tauri NSIS 安装向导，可选安装目录，创建开始菜单/桌面快捷方式 | 正式线，长期使用 |
 
 - 大小：16,895,288 B（约 16.1 MB）。
 - SHA-256：`e3b2ae25476c9c41d5a9180e25682387504e607d96fbdf45d6cca7116347038d`
-- 产品版本：FileVersion / ProductVersion = 3.6.22；bundle id `com.bi4iwn.stampcompare`；产品名「印章比对工具」。
+- 产品版本：FileVersion / ProductVersion = 3.6.23；bundle id `com.bi4iwn.stampcompare`；产品名「印章比对工具」。
 - 需系统自带 WebView2（Windows 10 1803+ / Windows 11 均内置）。
 - **未做代码签名**。Windows SmartScreen 可能提示「已保护你的电脑」→ 点「更多信息 → 仍要运行」。
-- 在已安装/可运行的环境中，本地服务 `http://127.0.0.1:18970/health` 应返回类似 `{"status":"ok","version":"3.6.22","ocr":true,"engine":"rust"}`。
+- 在已安装/可运行的环境中，本地服务 `http://127.0.0.1:18970/health` 应返回类似 `{"status":"ok","version":"3.6.23","ocr":true,"engine":"rust"}`。
 
-安装包见 [Release v3.6.22](https://github.com/BI4IWN/StampCompareToolkit/releases/tag/v3.6.22)。旧版 v3.6.17 的 Windows Tauri 包仍保留在对应 Release 中，新安装请改用 3.6.22。
+安装包见 [Release v3.6.23](https://github.com/BI4IWN/StampCompareToolkit/releases/tag/v3.6.23)。旧版 v3.6.17 的 Windows Tauri 包仍保留在对应 Release 中，新安装请改用 3.6.23。
 
 ## 二、系统要求
 

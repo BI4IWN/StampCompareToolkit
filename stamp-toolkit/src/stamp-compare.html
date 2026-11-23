@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.22</title>
+<title>印章对比工具 v3.6.23</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.22">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.22</span></h1>
+      <h1 title="印章对比工具 v3.6.23">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.23</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5138,7 +5138,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.22';
+const APP_VERSION = '3.6.23';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -9797,9 +9797,43 @@ function removeStamp(target) {
 /* ============================================================
    UI Visibility
    ============================================================ */
+  // 自绘确认框：WebView（Tauri/WKWebView）里 window.confirm 不可用，
+  // 一律走这里，避免点"清空/删除/替换"没有任何反应。
+  function dtConfirm(title, text, okLabel, opts) {
+    const o = opts || {};
+    return new Promise((resolve) => {
+      const ov = document.createElement('div');
+      ov.className = 'dt-overlay visible';
+      ov.innerHTML = '<div class="dt-modal" style="width:min(420px,92vw)">'
+        + '<div class="dt-modal-head"><h3></h3></div>'
+        + '<div class="dt-modal-body">'
+        + '<p class="dt-c-text" style="margin:0 0 16px;line-height:1.7"></p>'
+        + '<div style="display:flex;gap:8px;justify-content:flex-end">'
+        + '<button class="dt-btn dt-c-cancel">取消</button>'
+        + '<button class="dt-btn ' + (o.danger ? '' : 'primary') + ' dt-c-ok"' + (o.danger ? ' style="color:#fff;background:var(--danger);border-color:var(--danger)"' : '') + '></button>'
+        + '</div></div></div>';
+      ov.querySelector('h3').textContent = title || '确认';
+      ov.querySelector('.dt-c-text').textContent = text || '';
+      ov.querySelector('.dt-c-ok').textContent = okLabel || '确定';
+      ov.querySelector('.dt-c-cancel').textContent = o.cancelLabel || '取消';
+      const done = (v) => { document.removeEventListener('keydown', onKey, true); ov.remove(); resolve(v); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+        else if (e.key === 'Enter') { e.stopPropagation(); done(true); }
+      };
+      ov.querySelector('.dt-c-ok').addEventListener('click', () => done(true));
+      ov.querySelector('.dt-c-cancel').addEventListener('click', () => done(false));
+      ov.addEventListener('click', (e) => { if (e.target === ov) done(false); });
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(ov);
+      if (typeof makeModalDraggable === 'function') makeModalDraggable(ov);
+      setTimeout(() => { const b = ov.querySelector('.dt-c-ok'); if (b) b.focus(); }, 20);
+    });
+  }
+
 // 清空参考章 / 待验章及全部调整，回到空白状态开始新的比对
-function clearAllComparison() {
-  if (hasUnsavedWork() && !confirm('将清除两枚印章和所有对齐/取色，且不能撤销。')) return;
+async function clearAllComparison() {
+  if (hasUnsavedWork() && !(await dtConfirm('清空当前比对', '将清除两枚印章和所有对齐/取色，且不能撤销。', '清空', { danger: true }))) return;
   resetAlignment();
   ['ref', 'test'].forEach((t) => {
     const st = state[t];
@@ -9879,6 +9913,15 @@ function clearAllComparison() {
   updateVisibility();
   updateInspector();
   render();
+  // 迟到的自动折叠定时器可能把空状态的投放区重新收起，这里补一次复位
+  setTimeout(() => {
+    if (!state.ref.extracted && !state.test.extracted && typeof window.__resetStampCollapse === 'function') {
+      window.__resetStampCollapse();
+      document.body.classList.remove('ui-collapsed');
+      const bar = document.getElementById('collapse-bar');
+      if (bar) bar.style.display = 'none';
+    }
+  }, 1500);
   showStatus('已清空 —— 粘贴或拖入两枚印章即可开始新的比对');
 }
 
@@ -11347,7 +11390,7 @@ document.addEventListener('drop', (e) => {
   const box = document.getElementById('canvas-legend-actions');
   if (!box) return;
   box.querySelectorAll('button[data-action]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const target = btn.dataset.target === 'ref' ? 'ref' : 'test';
       if (btn.dataset.action === 'remove') {
@@ -11355,7 +11398,7 @@ document.addEventListener('drop', (e) => {
         return;
       }
       if (state[target].original &&
-          !confirm(`将替换${stampLabel(target)}，未存库的提取与对齐会丢失。`)) return;
+          !(await dtConfirm('替换印章', `将替换${stampLabel(target)}，未存库的提取与对齐会丢失。`, '替换'))) return;
       openImagePicker(target);
     });
   });
@@ -13408,7 +13451,7 @@ statusBar.classList.add('visible');
   }
 
   async function removeEngine() {
-    const confirmed = window.confirm('移除本地视觉模型并释放磁盘空间？基础识别功能不会受影响。');
+    const confirmed = await dtConfirm('移除本地视觉模型', '将释放磁盘空间，基础识别功能不受影响。', '移除', { danger: true });
     if (!confirmed) return;
     try {
       await postEngine('/engine/remove', { id: ENGINE_ID });
@@ -14698,7 +14741,7 @@ statusBar.classList.add('visible');
         b.addEventListener('click', async () => {
           const op = b.dataset.op;
           if (op === 'del') {
-            if (!confirm('删除印章「' + item.name + '」？文件将同时移除。')) return;
+            if (!(await dtConfirm('删除印章', '删除「' + item.name + '」？文件将同时移除。', '删除', { danger: true }))) return;
             await DT.libDelete(item.id);
             refreshLib($('#dt-lib-search').value.trim());
           } else if (op === 'rename') {
@@ -14850,7 +14893,7 @@ statusBar.classList.add('visible');
     while (finalName !== null) {
       const dup = (await DT.libSearch(finalName)).some((it) => it.name === finalName);
       if (!dup) break;
-      const go = confirm('印章库中已存在同名「' + finalName + '」。\n\n确定 = 仍保存为新条目（互不影响）\n取消 = 返回修改名称');
+      const go = await dtConfirm('名称重复', '印章库中已存在同名「' + finalName + '」。仍保存为新条目（互不影响），或返回修改名称。', '仍保存为新条目', { cancelLabel: '返回改名' });
       if (go) break;
       finalName = await dtPrompt('名称重复 —— 请修改印章名称', finalName + '_2', '保存');
     }
