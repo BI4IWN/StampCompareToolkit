@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.24</title>
+<title>印章对比工具 v3.6.25</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.24">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.24</span></h1>
+      <h1 title="印章对比工具 v3.6.25">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.25</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -4631,6 +4631,7 @@
         <button type="button" id="ai-test-btn">测试连接</button>
         <button type="button" class="primary" id="ai-save-btn">保存</button>
         <button type="button" id="ai-close-btn">关闭</button>
+        <button type="button" id="ai-clear-btn" title="删除当前服务商已保存的地址、模型与密钥">清除此配置</button>
       </div>
 
       <div class="ai-note">
@@ -5138,7 +5139,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.24';
+const APP_VERSION = '3.6.25';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -8528,6 +8529,19 @@ function ovDraw() {
       ctx.fillStyle = '#fff'; ctx.fill();
       ctx.strokeStyle = '#c7483a'; ctx.lineWidth = 1.3; ctx.stroke();
     });
+    // 可调控制点：小圆点，拖任一单独生效；动过之后用平滑曲线表示实际裁切边界
+    if (OV.pts && OV.pts.length >= 6) {
+      const ptsS = OV.pts.map(q => ovImageToScreen(q.x, q.y));
+      if (OV.ptsEdited) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3; ovSmoothPath(ctx, ptsS); ctx.stroke();
+        ctx.strokeStyle = '#1f9d55'; ctx.lineWidth = 1.5; ovSmoothPath(ctx, ptsS); ctx.stroke();
+      }
+      ptsS.forEach(q => {
+        ctx.beginPath(); ctx.arc(q.x, q.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = OV.ptsEdited ? '#1f9d55' : '#c7483a'; ctx.lineWidth = 1.4; ctx.stroke();
+      });
+    }
   }
   if (false) {
     const c = ovImageToScreen(0, 0);
@@ -8618,6 +8632,37 @@ function ovApplyCrop() {
     return;
   }
   if (OV.mode === 'circle') {
+    // 控制点被手动调过：以平滑曲线为准，裁完同样归一成正圆
+    if (OV.ptsEdited && OV.pts && OV.pts.length >= 6) {
+      const pts = OV.pts.map(q => ({ x: q.x, y: q.y }));
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const q of pts) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
+      const IW = st.original.width, IH = st.original.height;
+      if (x0 < 0 || y0 < 0 || x1 > IW || y1 > IH) { showStatus('裁切范围超出图片：把控制点往里收一点再应用'); return; }
+      const bx = Math.max(0, Math.floor(x0)), by = Math.max(0, Math.floor(y0));
+      const bw = Math.max(8, Math.ceil(x1) - bx), bh = Math.max(8, Math.ceil(y1) - by);
+      st.bbox = { x: bx, y: by, w: bw, h: bh, fitSize: Math.max(bw, bh) };
+      st.circleLock = null; st.circleCanvas = null; st._regionLocked = true; st._baseKey = null;
+      recomputeExtracted(OV.target);
+      const src = state[OV.target].extracted;
+      if (src) {
+        const sc = src.width / Math.max(bw, bh);
+        const dw = bw * sc, dh = bh * sc;
+        const ox = (src.width - dw) / 2, oy = (src.height - dh) / 2;
+        const ptsCanvas = pts.map(q => ({ x: ox + (q.x - bx) * sc, y: oy + (q.y - by) * sc }));
+        const norm = ovPtsCropCanvas(src, ptsCanvas, true);
+        st.polyCanvas = norm;
+        st.extracted = norm;
+        st.warpInfo = { manual: true, pts: pts.length };
+        drawExtractedPreview(OV.target, st.extracted);
+        updateVisibility();
+        render();
+        showStatus(`已按 ${pts.length} 个控制点裁切并归一成正圆 ${norm.width}px`);
+      }
+      ovDraw();
+      closeOriginViewer();
+      return;
+    }
     const el = OV.ell;
     if (!el || el.rx < 8 || el.ry < 8) { showStatus('先在章中心按下并往外拖出椭圆，再拖四个小方块分别贴合边缘'); return; }
     const rx = Math.round(el.rx), ry = Math.round(el.ry);
@@ -8709,7 +8754,21 @@ function ovSetMode(mode) {
   try { ovRenderColors(); } catch (e) { /* 查看器尚未完全初始化 */ }
   if (mode === 'browse') { OV.drag = null; }
   // 切换模式时把「已选框/已定椭圆」重置，避免两种模式的框互相干扰
-  if (mode === 'circle') OV.crop = null; else OV.ell = null;
+  if (mode === 'circle') {
+    OV.crop = null;
+    if (!OV.pts || OV.pts.length < 6) {
+      if (OV.ell) ovSyncPtsFromEll(16);
+      else if (OV.imgW && OV.imgH) {
+        const st0 = state[OV.target] || {};
+        const bb = st0.bbox;
+        const cx = bb ? bb.x + bb.w / 2 : OV.imgW / 2;
+        const cy = bb ? bb.y + bb.h / 2 : OV.imgH / 2;
+        const rr = bb ? Math.max(bb.w, bb.h) * 0.46 : Math.min(OV.imgW, OV.imgH) * 0.42;
+        OV.ell = { cx, cy, rx: rr, ry: rr };
+        ovSyncPtsFromEll(16);
+      }
+    }
+  } else { OV.ell = null; OV.pts = null; OV.ptsEdited = false; }
   if (typeof window.__ovSyncEnh === 'function') window.__ovSyncEnh();
   requestAnimationFrame(() => { ovResize(); });
   ovDraw();
@@ -8762,8 +8821,8 @@ function ovUpdateInfo() {
   const el = document.getElementById('ov-info');
   if (!el) return;
   if (OV.mode === 'circle') {
-    el.textContent = OV.ell && OV.ell.rx > 1
-      ? `椭圆 ${Math.round(OV.ell.rx * 2)}×${Math.round(OV.ell.ry * 2)} px · 拖四边小方块可单独拉宽/拉高，拖圆心可整体移动`
+    el.textContent = (OV.pts && OV.pts.length >= 6)
+      ? `${OV.pts.length} 个控制点 · 拖任一点只动它自己 · Alt/⌘+点删点 · 拖椭圆小方块改整体 · 空白拖动重新画`
       : '在章的中心按下并往外拖出椭圆，再拖四个小方块贴合印章边缘';
     return;
   }
@@ -8792,6 +8851,8 @@ function openOriginViewer(target, mode, exclude) {
   OV.zoom = 1; OV.panX = 0; OV.panY = 0;
   OV.crop = (st._regionLocked && st.bbox) ? { x: st.bbox.x, y: st.bbox.y, w: st.bbox.w, h: st.bbox.h } : null;
   OV.ell = null;
+  OV.pts = null;
+  OV.ptsEdited = false;
   OV.el.classList.add('visible');
   OV.el.querySelectorAll('#ov-targets button').forEach(b => b.classList.toggle('active', b.dataset.ovtarget === target));
   ovSetMode(mode || 'browse');
@@ -9330,6 +9391,16 @@ function ovPickAt(clientX, clientY, exclude) {
     if (OV.mode === 'circle') {
       const p = ovScreenToImage(e.clientX, e.clientY);
       const el = OV.ell;
+      // 控制点优先：命中就只拖这一个点，其他点不动
+      if (OV.pts && OV.pts.length >= 6) {
+        const ptol = 9 / ovScale();
+        const hitP = OV.pts.findIndex(q => Math.hypot(q.x - p.x, q.y - p.y) <= ptol);
+        if (hitP >= 0) {
+          if ((e.altKey || e.metaKey) && OV.pts.length > 6) { OV.pts.splice(hitP, 1); OV.ptsEdited = true; ovDraw(); return; }
+          OV.drag = { kind: 'pts', idx: hitP };
+          return;
+        }
+      }
       if (el && el.rx > 2) {
         // 已画好：先看是否抓住 4 个轴端手柄 / 圆心
         const tol = 10 / ovScale();
@@ -9350,8 +9421,10 @@ function ovPickAt(clientX, clientY, exclude) {
           return;
         }
       }
-      // 空白处按下：先挂起，只有真的拖动超过 6px 才新建（单击不再抹掉已画好的椭圆）
+      // 空白处按下：立即清掉当前形状，重新开始选择圆形（拖动超过 6px 才真正生成新圆）
+      OV.ell = null; OV.pts = null; OV.ptsEdited = false;
       OV.drag = { kind: 'ellnew', cx: p.x, cy: p.y };
+      ovDraw();
       return;
     }
     const hit = (OV.mode === 'crop' || OV.mode === 'circle') ? ovHitHandle(e.clientX, e.clientY) : null;
@@ -9387,11 +9460,17 @@ function ovPickAt(clientX, clientY, exclude) {
     // 悬停不需要重绘画布：放大镜是独立 DOM，十字光标交给 cursor 样式。
     // （此前这里每条 mousemove 都 ovDraw() 一次，Windows/WebView2 上会明显掉帧）
     if (!d) return;
+    if (d.kind === 'pts') {
+      const p = ovScreenToImage(e.clientX, e.clientY);
+      if (OV.pts && OV.pts[d.idx]) { OV.pts[d.idx] = { x: p.x, y: p.y }; OV.ptsEdited = true; ovDrawSoon(); }
+      return;
+    }
     if (d.kind === 'ellnew') {
       const p = ovScreenToImage(e.clientX, e.clientY);
       const r = Math.hypot(p.x - d.cx, p.y - d.cy);
       if (r * ovScale() < 6) return;   // 还没拖出 6px：不动已有椭圆
       OV.ell = { cx: d.cx, cy: d.cy, rx: r, ry: r };
+      ovSyncPtsFromEll();
       ovDrawSoon();
       return;
     }
@@ -9407,12 +9486,14 @@ function ovPickAt(clientX, clientY, exclude) {
       if (d.axis.includes('s')) { e2.ry = Math.max(4, (p.y - top) / 2); e2.cy = top + e2.ry; }
       if (d.axis.includes('n')) { e2.ry = Math.max(4, (bottom - p.y) / 2); e2.cy = bottom - e2.ry; }
       OV.ell = e2;
+      ovSyncPtsFromEll();
       ovDrawSoon();
       return;
     }
     if (d.kind === 'ellmove') {
       const p = ovScreenToImage(e.clientX, e.clientY);
       OV.ell = { ...d.orig, cx: d.orig.cx + (p.x - d.ax), cy: d.orig.cy + (p.y - d.ay) };
+      ovSyncPtsFromEll();
       ovDrawSoon();
       return;
     }
@@ -9523,6 +9604,73 @@ function ovPickAt(clientX, clientY, exclude) {
 
   window.addEventListener('resize', () => { if (ovIsOpen()) ovResize(); });
 })();
+
+// —— 圆形裁切的「可调控制点」—— //
+// 椭圆是骨架，控制点是可逐点微调的轮廓：拖任一点只动它自己，其他点保持不动；
+// 一旦动过控制点，绘制与应用都走这些点连成的平滑闭合曲线。
+function ovSyncPtsFromEll(n) {
+  const el = OV.ell;
+  if (!el || el.rx < 1 || el.ry < 1) { OV.pts = null; OV.ptsEdited = false; return; }
+  const cnt = n || (OV.pts && OV.pts.length >= 6 ? OV.pts.length : 16);
+  const pts = [];
+  for (let i = 0; i < cnt; i++) {
+    const a = (-Math.PI / 2) + (i * 2 * Math.PI) / cnt;
+    pts.push({ x: el.cx + Math.cos(a) * el.rx, y: el.cy + Math.sin(a) * el.ry });
+  }
+  OV.pts = pts;
+  OV.ptsEdited = false;
+}
+
+// 闭合平滑曲线：Catmull-Rom 转三次贝塞尔
+function ovSmoothPath(ctx, pts) {
+  const n = pts.length;
+  ctx.beginPath();
+  if (n < 4) { pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); return; }
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6,
+      p2.x, p2.y
+    );
+  }
+  ctx.closePath();
+}
+
+// 按控制点裁切：先按路径取 alpha，再（可选）按质心与等效半径归一成正圆
+function ovPtsCropCanvas(src, pts, norm) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const q of pts) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
+  const bx = Math.max(0, Math.floor(x0)), by = Math.max(0, Math.floor(y0));
+  const bw = Math.max(8, Math.ceil(x1) - bx), bh = Math.max(8, Math.ceil(y1) - by);
+  const c = document.createElement('canvas');
+  c.width = bw; c.height = bh;
+  const g = c.getContext('2d');
+  ovSmoothPath(g, pts.map(q => ({ x: q.x - bx, y: q.y - by })));
+  g.clip();
+  g.drawImage(src, -bx, -by);
+  if (!norm) return c;
+  // 质心 + 面积等效半径，保证结果是一个标准正圆
+  let sx = 0, sy = 0, area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const cr = a.x * b.y - b.x * a.y;
+    area += cr / 2;
+    sx += (a.x + b.x) * cr; sy += (a.y + b.y) * cr;
+  }
+  area = Math.abs(area);
+  const cx = (Math.abs(area) > 1 ? sx / (6 * area) : (x0 + x1) / 2) - bx;
+  const cy = (Math.abs(area) > 1 ? sy / (6 * area) : (y0 + y1) / 2) - by;
+  const r = Math.max(8, Math.sqrt(Math.max(area, 1) / Math.PI));
+  const OUT = Math.max(480, Math.min(1200, Math.round(r * 2)));
+  const o = document.createElement('canvas');
+  o.width = o.height = OUT;
+  const og = o.getContext('2d');
+  og.beginPath(); og.arc(OUT / 2, OUT / 2, OUT / 2 - 1, 0, Math.PI * 2); og.clip();
+  og.drawImage(c, cx - r, cy - r, r * 2, r * 2, 0, 0, OUT, OUT);
+  return o;
+}
 
 function ovCursorFor(handle) {
   if (handle === 'nw' || handle === 'se') return 'nwse-resize';
@@ -12334,9 +12482,8 @@ $('#ai-ocr-test').addEventListener('click', () => runStampOCR('test'));
 
 $('#btn-ai-cfg').addEventListener('click', aiOpenDialog);
 $('#ai-close-btn').addEventListener('click', () => $('#ai-dialog-overlay').classList.remove('visible'));
-$('#ai-dialog-overlay').addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) $('#ai-dialog-overlay').classList.remove('visible');
-});
+// 点遮罩不再关闭：只有「保存 / 关闭」两个按钮能退出，避免填了一半被误关
+
 
 // 服务商预设：填充地址/模型/推荐模式（保留已填 Key）
 document.querySelectorAll('#ai-providers button').forEach(b => {
@@ -12411,6 +12558,30 @@ $('#ai-save-btn').addEventListener('click', () => {
   showStatus(`AI 配置已保存：${label} · ${cfg.model || ''} — 在顶部「识别」中选择 AI 即可使用`);
   // AI 状态变化后重检服务（PaddleOCR 缺失时视觉模式可恢复识别按钮可用）
   if (window._retryOCRConnection) window._retryOCRConnection();
+});
+
+// 删除当前服务商已保存的 AI 配置
+$('#ai-clear-btn').addEventListener('click', () => {
+  const activeBtn = document.querySelector('#ai-providers button.active');
+  const provider = activeBtn ? activeBtn.dataset.provider : 'custom';
+  const label = (AI_PRESETS[provider] || {}).name || '自定义';
+  dtConfirm('清除 AI 配置', `将删除「${label}」已保存的地址、模型与密钥，之后需要重新填写。`, '清除', { danger: true })
+    .then((ok) => {
+      if (!ok) return;
+      const all = aiLoadAll();
+      delete all[provider];
+      aiSaveAll(all);
+      try {
+        const cur = localStorage.getItem(AI_PROVIDER_KEY);
+        if (cur === provider) localStorage.removeItem(AI_PROVIDER_KEY);
+      } catch (e) { /* 忽略 */ }
+      if (window._aiConfig && (window._aiConfig.provider || 'custom') === provider) window._aiConfig = aiLoadConfig();
+      $('#ai-key').value = '';
+      $('#ai-test-result').textContent = `已清除「${label}」的配置`;
+      $('#ai-test-result').className = 'ok';
+      aiUpdateButton();
+      showStatus(`已清除 AI 配置：${label}`);
+    });
 });
 
 // 初始化：载入已保存的配置

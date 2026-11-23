@@ -1,7 +1,7 @@
 {
   "name": "stamp-tauri-spike",
   "private": true,
-  "version": "3.6.24",
+  "version": "3.6.25",
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"
   },
