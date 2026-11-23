@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.23</title>
+<title>印章对比工具 v3.6.24</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.23">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.23</span></h1>
+      <h1 title="印章对比工具 v3.6.24">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.24</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5138,7 +5138,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.23';
+const APP_VERSION = '3.6.24';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6968,8 +6968,22 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
       _lastInkNotice = `颜色 ${dup.hex} 已在列表里，已重新启用`;
       return false;
     }
-    _lastInkNotice = `颜色 ${dup.hex} 已在列表里，不用重复添加`;
-    showStatus(_lastInkNotice);
+    // 已在用：仍然按当前容差/匹配模式重算一次。
+    // 之前这里直接 return，用户改过容差或切过匹配模式后再点同色，界面毫无反应，
+    // 看起来就像"提示已存在但没剔掉"。
+    _lastInkNotice = `颜色 ${dup.hex} 已在列表里，已按当前设置重新应用`;
+    applyInkSelection(target, `重新应用颜色 ${dup.hex}`, (d) => {
+      const hits = ((state[target] && state[target]._inkHits) || {})[dup.hex];
+      const moved = (hits !== undefined) ? hits : (exclude ? d.removed : d.added);
+      if (!moved) {
+        const hint = exclude
+          ? '未命中任何像素 —— 调大「剔除容差」或把匹配切到「精确RGB」再试'
+          : '未命中任何像素 —— 换一处笔画取色，或把匹配切到「精确RGB」再试';
+        _lastInkNotice = `颜色 ${dup.hex} ${hint}`;
+        return `${stampLabel(target)} · ${_lastInkNotice}`;
+      }
+      return `${stampLabel(target)}已重新应用 ${dup.hex}（该色命中 ${hits !== undefined ? hits : moved} 像素）`;
+    });
     return false;
   }
   // 到上限时先把「已停用」的颜色清掉，给新颜色腾位置（用户看不到它们，等于垃圾）
@@ -7773,6 +7787,8 @@ function recomputeExtracted(target) {
 
   let added = 0, removed = 0;
 
+  let excludeColors = [];
+  let hitCounts = [];
   if (customs.length) {
     const map = cropMapFor(st);
     const orig = getOrigData(st);
@@ -7808,8 +7824,10 @@ function recomputeExtracted(target) {
     const RGBMODE = inkMatchMode() === 'rgb';
     // 精确 RGB 的容差：不能直接用 tolV（它在下面才声明，会踩 TDZ）
     const rgbTolNow = () => Math.max(6, (state.ink[target].pickTol || 0.14) * 120);
-    const extractColors = customs.filter(c => !c.exclude);
-    const excludeColors = customs.filter(c => c.exclude);
+    const extractColors = customs.filter(c => !c.exclude && c.on !== false);
+    excludeColors = customs.filter(c => c.exclude && c.on !== false);
+    // 每个排除色实际命中多少像素：用于"点了同色却像没反应"时的准确反馈
+    hitCounts = new Array(excludeColors.length).fill(0);
     // 提取色的"主色"（用户实际点到的那一个）。颜色簇里可能混入正文/抗锯齿色，
     // 排除深色正文时只有主色才可靠地代表印章主体，用它做保护。
     const extractPrimary = extractColors.map(c => (c.set && c.set[0]) || null).filter(Boolean);
@@ -7852,7 +7870,7 @@ function recomputeExtracted(target) {
           const mx0 = Math.max(r, g, b), mn0 = Math.min(r, g, b);
           const vNow = mx0 / 255;
           const sNow = mx0 > 0 ? (mx0 - mn0) / mx0 : 0;
-          let hit = false;
+          let hit = false, hitIdx = -1;
           for (let ci = 0; ci < excludeColors.length; ci++) {
             const c = excludeColors[ci];
             const satPick = c.sat || 0;
@@ -7922,10 +7940,11 @@ function recomputeExtracted(target) {
               const dTol = Math.max(14, tolV * 150);   // 18% 容差 → 约 27
               if (dPix > dTol) continue;
             }
-            hit = true;
-            break;
+          hit = true; hitIdx = ci;
+          break;
           }
           if (hit) {
+            if (hitIdx >= 0) hitCounts[hitIdx]++;
             // 状态栏的"剔除 N 像素"要反映真实 ink 减少：此前只统计去孤立噪点，
             // 排除色直接清 alpha 不计入，导致 -59,257 被报成 138。
             if (img.data[i + 3] > 10) removed++;
@@ -8043,6 +8062,8 @@ function recomputeExtracted(target) {
   st.warpInfo = dw ? { ratio: dw.ell.ratio, a: dw.ell.a, b: dw.ell.b } : null;
   st.inkSpec = activeInkSpec(target);
   st._sig = (st._sig || 0) + 1;
+  st._inkHits = {};
+  excludeColors.forEach((c, i) => { if (c.hex) st._inkHits[c.hex] = hitCounts[i] || 0; });
   st._lastDelta = { added, removed };
   return st._lastDelta;
 }
@@ -8050,7 +8071,7 @@ function recomputeExtracted(target) {
 // 按当前墨色选择更新提取结果（参考章 / 待验章各自独立）
 // 预设变化 → 刷新基础自动提取；手工颜色 → 在基础上直接叠加/剔除
 const _inkTimers = {};
-function applyInkSelection(target, reasonMsg) {
+function applyInkSelection(target, reasonMsg, afterMsg) {
   const st = state[target];
   if (!st.original) {
     showStatus(`${reasonMsg}（未加载图片，加载后自动生效）`);
@@ -8067,7 +8088,9 @@ function applyInkSelection(target, reasonMsg) {
     renderCandidates(target);
     if (window._ocrAvailable) runStampOCR(target);
     render();
-    showStatus(`${stampLabel(target)}提取结果已更新（新增 ${delta.added} 像素 · 剔除 ${delta.removed} 像素）`);
+    showStatus(typeof afterMsg === 'function'
+      ? afterMsg(delta)
+      : `${stampLabel(target)}提取结果已更新（新增 ${delta.added} 像素 · 剔除 ${delta.removed} 像素）`);
   }, 250);
 }
 
