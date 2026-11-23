@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.26</title>
+<title>印章对比工具 v3.6.27</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.26</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.27</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5139,7 +5139,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.26';
+const APP_VERSION = '3.6.27';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6261,7 +6261,9 @@ function extractStamp(canvas, region, inkSpec) {
 
   octx.putImageData(td, 0, 0);
 
-  return { canvas: out, circular: region.circular, bbox: { x: srcX, y: srcY, w: srcW, h: srcH, fitSize } };
+  return { canvas: out, circular: region.circular, bbox: { x: srcX, y: srcY, w: srcW, h: srcH, fitSize },
+           // 原图坐标 → 画布坐标的映射：画布 = ((p - x) * sc + dx, (p - y) * sc + dy)
+           map: { x: srcX, y: srcY, sc: scaleRatio, dx: drawX, dy: drawY } };
 }
 
 /* ============================================================
@@ -7119,6 +7121,7 @@ function ensureBaseExtraction(target) {
   }
   const extracted = extractStamp(st.original, region, spec);
   st.baseExtracted = extracted.canvas;
+  st.extractMap = extracted.map || null;
   st.circular = extracted.circular;
   st.bbox = extracted.bbox;
   st._baseKey = lockedKey;
@@ -8193,6 +8196,7 @@ function applyAIExtraction(target, loc) {
 
   // AI 结果作为新的"基础提取"：替换颜色管线基础；手工取色仍可在其上增量叠加/剔除
   st.baseExtracted = out;
+  st.extractMap = { x: x0, y: y0, sc: OUT / side, dx: 0, dy: 0 };
   st._aiBase = true;
   st._baseKey = 'ai';
   st._baseOriginal = st.original;
@@ -8583,7 +8587,7 @@ function ovDraw() {
   // 圆形裁切：边调边看，右侧按当前边界实时重算（120ms 节流，避免拖动掉帧）
   if (OV.mode === 'circle') {
     const now = performance.now();
-    if (OV._forcePreview || now - _ovPreviewT > 120) {
+    if (!OV.previewCanvas || OV._forcePreview || now - _ovPreviewT > 120) {
       _ovPreviewT = now; OV._forcePreview = false;
       try { OV.previewCanvas = ovBuildPreview(); } catch (e) { OV.previewCanvas = null; }
     }
@@ -8810,9 +8814,9 @@ function ovBuildPreview() {
   if (!poly || poly.length < 6) return null;
   // 预览只在原图上按比例取：把控制点从「提取画布坐标」映射到 baseExtracted
   const base = st.baseExtracted;
-  const sc = base.width / (st.bbox && st.bbox.fitSize ? st.bbox.fitSize : base.width);
-  const bx = st.bbox ? st.bbox.x : 0, by = st.bbox ? st.bbox.y : 0;
-  const ptsBase = poly.map(q => ({ x: (q.x - bx) * sc, y: (q.y - by) * sc }));
+  const m = st.extractMap
+    || { x: (st.bbox ? st.bbox.x : 0), y: (st.bbox ? st.bbox.y : 0), sc: base.width / ((st.bbox && st.bbox.fitSize) || base.width), dx: 0, dy: 0 };
+  const ptsBase = poly.map(q => ({ x: (q.x - m.x) * m.sc + (m.dx || 0), y: (q.y - m.y) * m.sc + (m.dy || 0) }));
   try { return ovPtsCropCanvas(base, ptsBase, true); } catch (e) { return null; }
 }
 
