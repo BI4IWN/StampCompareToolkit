@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.27</title>
+<title>印章对比工具 v3.6.28</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4527,7 +4527,7 @@
         <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
         <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.27</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.28</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5139,7 +5139,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.27';
+const APP_VERSION = '3.6.28';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -8662,7 +8662,7 @@ function ovApplyCrop() {
         const dw = bw * sc, dh = bh * sc;
         const ox = (src.width - dw) / 2, oy = (src.height - dh) / 2;
         const ptsCanvas = pts.map(q => ({ x: ox + (q.x - bx) * sc, y: oy + (q.y - by) * sc }));
-        const norm = ovPtsCropCanvas(src, ptsCanvas, true);
+        const norm = ovRadialNormalize(src, ptsCanvas, 900);
         st.polyCanvas = norm;
         st.extracted = norm;
         st.warpInfo = { manual: true, pts: pts.length };
@@ -8817,7 +8817,7 @@ function ovBuildPreview() {
   const m = st.extractMap
     || { x: (st.bbox ? st.bbox.x : 0), y: (st.bbox ? st.bbox.y : 0), sc: base.width / ((st.bbox && st.bbox.fitSize) || base.width), dx: 0, dy: 0 };
   const ptsBase = poly.map(q => ({ x: (q.x - m.x) * m.sc + (m.dx || 0), y: (q.y - m.y) * m.sc + (m.dy || 0) }));
-  try { return ovPtsCropCanvas(base, ptsBase, true); } catch (e) { return null; }
+  try { return ovRadialNormalize(base, ptsBase, Math.max(480, Math.min(1000, Math.round(Math.max(base.width, base.height) * 1.0)))); } catch (e) { return null; }
 }
 
 function ovDrawResult() {
@@ -9676,6 +9676,81 @@ function ovSmoothPath(ctx, pts) {
 }
 
 // 按控制点裁切：先按路径取 alpha，再（可选）按质心与等效半径归一成正圆
+
+// 把任意闭合曲线「径向归一」成正圆：圆周上每个方向取到边界点的距离，
+// 这样边界上的笔画正好落在圆周，输出既没有额外白边、也不会多留边界外的内容。
+function ovSampleClosedPath(pts, n) {
+  const m = pts.length, out = [];
+  const at = i => pts[((i % m) + m) % m];
+  const segs = m;
+  const per = Math.max(1, Math.round(n / segs));
+  for (let i = 0; i < segs; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    for (let k = 0; k < per; k++) {
+      const t = k / per, t2 = t * t, t3 = t2 * t;
+      const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+      const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+      out.push({ x, y });
+    }
+  }
+  return out;
+}
+
+function ovRadialNormalize(src, pts, outSize) {
+  const OUT = Math.max(240, Math.min(1400, Math.round(outSize || 600)));
+  const sw = src.width, sh = src.height;
+  const sctx = src.getContext('2d');
+  const sd = sctx.getImageData(0, 0, sw, sh).data;
+  // 边界按角度分箱，得到每个方向的半径（线性插值，2° 一档）
+  const BINS = 180;
+  const R = new Float32Array(BINS).fill(0);
+  let cx = 0, cy = 0;
+  for (const q of pts) { cx += q.x; cy += q.y; }
+  cx /= pts.length; cy /= pts.length;
+  const dense = ovSampleClosedPath(pts, 720);
+  for (const q of dense) {
+    const a = Math.atan2(q.y - cy, q.x - cx);
+    const r = Math.hypot(q.x - cx, q.y - cy);
+    const b = Math.round(((a + Math.PI) / (Math.PI * 2)) * BINS) % BINS;
+    if (r > R[b]) R[b] = r;
+  }
+  for (let b = 0; b < BINS; b++) if (R[b] <= 0) R[b] = R[(b - 1 + BINS) % BINS] || 1;
+  const radAt = a => {
+    const f = ((a + Math.PI) / (Math.PI * 2)) * BINS;
+    const i0 = Math.floor(f) % BINS, i1 = (i0 + 1) % BINS;
+    const t = f - Math.floor(f);
+    return R[i0] * (1 - t) + R[i1] * t;
+  };
+  const o = document.createElement('canvas'); o.width = o.height = OUT;
+  const og = o.getContext('2d');
+  const img = og.createImageData(OUT, OUT);
+  const dst = img.data;
+  const half = OUT / 2;
+  for (let y = 0; y < OUT; y++) {
+    const dy = (y + 0.5) - half;
+    for (let x = 0; x < OUT; x++) {
+      const dx = (x + 0.5) - half;
+      const rho = Math.hypot(dx, dy);
+      if (rho > half) continue;                       // 圆外保持透明
+      const a = Math.atan2(dy, dx);
+      const rr = radAt(a) * (rho / half);             // 归一：圆周 ↔ 边界点
+      const sx = cx + Math.cos(a) * rr;
+      const sy = cy + Math.sin(a) * rr;
+      const x0 = Math.floor(sx), y0 = Math.floor(sy);
+      if (x0 < 0 || y0 < 0 || x0 >= sw - 1 || y0 >= sh - 1) continue;
+      const fx = sx - x0, fy = sy - y0;
+      const i00 = (y0 * sw + x0) * 4, i10 = i00 + 4, i01 = i00 + sw * 4, i11 = i01 + 4;
+      const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+      const di = (y * OUT + x) * 4;
+      for (let c = 0; c < 4; c++) {
+        dst[di + c] = sd[i00 + c] * w00 + sd[i10 + c] * w10 + sd[i01 + c] * w01 + sd[i11 + c] * w11;
+      }
+    }
+  }
+  og.putImageData(img, 0, 0);
+  return o;
+}
+
 function ovPtsCropCanvas(src, pts, norm) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const q of pts) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
