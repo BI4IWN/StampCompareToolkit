@@ -1020,3 +1020,94 @@ score = (1 - max/255) * ((max - min) / max)   // 深 × 艳
 Rust 侧路由：`/ocr`、`/ai-ocr`、`/ai/test`、`/ai/stamp`、`/dewarp`、`/settings`、`/lib/*`、`/capture/*`、`/diag`。前端通过 `web/desktop-shim.html` 伪装 `window.stampDesktop`，注入必须在 `<body>` 起始之后、且每次改前端要 `npm run sync-web`（`include_str!` 内嵌）。
 
 识别管线：`ink_strength` → 椭圆拟合 + 可信度门 → `dewarp_iterative` → 极坐标展开 `0.42R–0.905R` → 切分（列投影最小处吸附）→ 批识别 → `postprocess`（机构名/编码/类型）。字覆盖 0.796（1/4 线程一致），4 线程 84–91 ms/枚。
+
+## 二十二、v3.6.24 – v3.6.28 补记（圆形裁切与取色链路）
+
+### 22.1 圆形裁切的四代演进
+
+| 代 | 版本 | 交互 | 裁切算法 | 问题 |
+|---|---|---|---|---|
+| 一代 | v0.3.x / v3.6.22 | 椭圆 + 8 手柄 | 椭圆外接框 → 等比归一 | 只能整体缩放，压字区没法绕开 |
+| 二代 | v3.6.25 | 椭圆骨架 + 16 控制点（逐点独立） | 曲线路径 `clip` → 外接半径归一 | 归一半径取最远点，其他方向留白 |
+| 三代 | v3.6.26–27 | 同上 + 右侧实时预览 | 同上 + `extractMap` 精确坐标映射 | 边界内的空白带、边界外残留 |
+| 四代 | **v3.6.28** | 同上 | **按边界的径向归一**（本项目最终方案） | — |
+
+**为什么必须做径向归一**
+
+任意闭合曲线 `C(θ)` 到正圆的映射，本质是径向重采样：以边界质心 `O` 为中心，对输出圆上任一点 `(θ, ρ∈[0,1])`，取源图 `O + ρ·R(θ)·(cosθ, sinθ)`，其中 `R(θ)` 是边界在该方向的半径。这样：
+
+- 边界上的笔画（`ρ=1`）正好落在圆周 → 不会出现"边界到圆周之间的一圈白"；
+- 边界外（`ρ>1`）不采样 → 边界外的正文、签名、表格线彻底丢弃；
+- 形状归一为正圆，可直接作为两枚章的叠比基准。
+
+实现要点（`ovRadialNormalize`，`stamp-toolkit/src/stamp-compare.html`）：
+
+1. 用 Catmull-Rom 采样边界 720 点（与绘制曲线同一参数，保证"看到的边界"就是"裁切的边界"）；
+2. 按角度分 180 个 bin 取每方向最大半径 `R[b]`，空 bin 用相邻补；
+3. 输出逐像素反向映射 + 双线性采样（RGBA 一起插值，保留 alpha）；
+4. 圆外像素保持透明，再由归一画布补白底（与自动提取一致，避免透出查看器深色背景）。
+
+代价：480×480 输出约 8–12 ms（M1 / JS），预览 120 ms 节流 + 拖动时 rAF 合并，交互无感。
+
+**坐标映射坑（v3.6.26 修）**
+
+提取画布不是原图的等比缩放，而是"区域裁剪 + 居中放置"：
+
+```
+x' = (x - srcX) * scaleRatio + drawX
+y' = (y - srcY) * scaleRatio + drawY
+```
+
+`scaleRatio = OUT / max(srcW, srcH)`，`drawX/drawY` 是居中偏移。控制点存的是**原图坐标**，映射到提取画布必须带上 `drawX/drawY`，否则边界与画布错位，表现为"裁出来的范围比画的边界大一圈"。`extractStamp` 现在直接返回 `map:{x,y,sc,dx,dy}` 并存进 `st.extractMap`，预览与应用共用。
+
+**预览的生成时机（v3.6.27）**
+
+只按 120 ms 节流会在"刚进入模式、还没拖动"时没有预览（右栏仍是旧提取结果）。条件改为 `!OV.previewCanvas || OV._forcePreview || now - _ovPreviewT > 120`：进模式即生成一次，拖动中按帧合并，松手强制刷新一次。
+
+### 22.2 剔除链路的三处修复
+
+| 现象 | 根因 | 修复 |
+|---|---|---|
+| 剔除后重新加色加不上 | 灰剔除只按亮度 `|V−V0| ≤ tol` 判定，把相近亮度的深红笔画一起剔了 | 剔除改为与被剔颜色的 **RGB 距离** `d ≤ max(14, tol×150)`；深色分支再加 `|V−V0| > 0.62` 不剔 |
+| 提示"已在列表里"但结果没变 | 重复色命中后直接 `return`，从不重算 | 命中 `on=true` 也走 `applyInkSelection` 重算一次；`recomputeExtracted` 统计每色命中数存 `st._inkHits`，状态栏回报"命中 N 像素"或"未命中任何像素" |
+| 剔一个色把别的色也剔了 | 判定读错字段：颜色条目存 `hue`，代码读 `c.h` → `NaN` 比较恒 `false`，彩色排除色命中所有彩色像素 | 统一 `c.hue ?? c.h`；同时给 `customs.filter` 补 `c.on !== false`，被停用的色不再参与 |
+
+另有一个 JS 细节值得记：`const RGBTOL = Math.max(6, tolV * 120)` 若写在 `tolV` 声明之前，会抛 `ReferenceError: Cannot access 'tolV' before initialization`，被上层 `try/catch` 吞掉后表现为"剔除静默失效"。现改为惰性取值 `rgbTolNow()`。
+
+### 22.3 取色卡顿的三层根因（Windows / WebView2）
+
+按修复顺序：
+
+1. 查看器 `mousemove` 在取色模式下每条事件都 `ovDraw()` 整块重绘（`clearRect` + 整图 `drawImage` + 标记）→ 悬停直接 `return`，拖动走 `ovDrawSoon()`（rAF 合并）；
+2. 放大镜用 `<canvas>` + 每帧 `drawImage`，且移动元素带 `filter: drop-shadow`（WebView2 逐帧模糊极贵）→ 改 `background-image` + `background-position`、`box-shadow`、`translate3d`；
+3. 真正的元凶是 `.origin-viewer{backdrop-filter: blur(6px)}`：全屏背景模糊叠加每帧移动的放大镜，等于每帧重算整屏模糊 → 改为半透明纯色遮罩。
+
+量化：悬停 30 次 `mousemove` 期间 `ovDraw` 调用 30 → **0**；`ovLoupeMove` 40 次 **2.7 ms**（0.07 ms/次）。
+
+### 22.4 WebView 里没有 `window.confirm`
+
+桌面版跑在 WKWebView（macOS）/ WebView2（Windows），`window.confirm` 不可用，调用会抛 `TypeError: dialog not implemented`。原有「清空比对」首行 `if (hasUnsavedWork() && !confirm(...)) return;` 因此**直接中断**，表现为"点了没反应"。
+
+现在统一用自绘确认框 `dtConfirm(title, text, okLabel, { danger })`（返回 Promise，Enter 确认 / Esc 取消 / 遮罩取消），五处调用点全部迁移：清空比对、替换印章、删除印章、移除本地视觉模型、印章重名另存。注意 `dtConfirm` 必须定义在主 `<script>` 的全局作用域，放进末尾 IIFE 会 `ReferenceError`。
+
+### 22.5 AI 识别的四类失败
+
+| 症状 | 根因 | 处理 |
+|---|---|---|
+| `AI 未返回可解析的 JSON`（响应体为空） | 地址填的是 Anthropic 兼容端点，代理却按 OpenAI 拼 `/chat/completions` | 地址含 `/anthropic` 时走 `/v1/messages`，头 `x-api-key` + `anthropic-version`，图片块 `image.source.type=base64` |
+| 同上，但有 `reasoning_content` | 推理模型（`deepseek-flash`、`glm-5.3-flash`）正文在推理段，`max_tokens` 不足时 `content` 恒空 | `max_tokens` 抬到 4096–8192；`text_of` 回退 `reasoning_content`；请求体带 `thinking:{type:disabled}` 提速 |
+| 同上 + 图发出去报参数错 | `parse`（文本解析）模式仍把图片塞给纯文本模型 | 前端先调本地 `/ocr` 取文字，再以 `text` 提交 |
+| `401` / `限流` | Key 无效 / 调用过频 | 面板与状态栏直接写原因；`/tmp/stamp-ai.log` 落盘 base、model、HTTP 状态与响应前 400 字 |
+
+`/ai/ocr` 与 `/ai/stamp` 的配置字段名是 `base_url` / `api_key` / `model`（写成 `base` / `key` 会返回「AI 配置不完整」）。
+
+### 22.6 版本与体积（3.6.28 实测）
+
+| 资产 | 大小 |
+|---|---|
+| `StampCompareToolkit-Tauri-3.6.28-win-x64-setup.exe` | 16,990,740 B |
+| `StampCompareToolkit-Tauri-3.6.28-mac-arm64.dmg` | 25,149,631 B |
+| `StampCompareToolkit-3.6.28-mac-arm64.dmg`（Electron 兼容） | 228,794,847 B |
+| `StampCompareToolkit-3.6.28-mac-x64.dmg`（Electron 兼容） | 234,720,000 B |
+
+构建链：`npm run sync-web`（仓库 HTML → `web/index.html`，`include_str!` 内嵌）→ `cargo build --release` → `npm run build --bundles dmg`；Windows 由 CI `.github/workflows/tauri-windows.yml` 产出（约 12 分钟）。注意 `sync-web` 会用仓库 HTML 覆盖 `tauri/web/index.html`，改完手册要再单独跑一次 `sync-operation-manual.py`。

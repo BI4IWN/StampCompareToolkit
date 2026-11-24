@@ -1,4 +1,4 @@
-# 印章对比工具 (Stamp Compare Toolkit) v3.6.24
+# 印章对比工具 (Stamp Compare Toolkit) v3.6.28
 
 一款面向法务合规与文档核验场景的本地印章对比工具，支持将单据印章与合同印章进行可视化对比和文字识别。
 
@@ -31,14 +31,14 @@
 
 | 平台 | 安装包 | 说明 |
 |---|---|---|
-| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.21-mac-arm64.dmg` | **推荐**；正式线，Rust 内核，约 24 MB |
-| Windows（x64） | `StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe` | **推荐**；正式线，Rust 内核，NSIS 安装包，16,895,288 B |
-| macOS（Apple Silicon） | `StampCompareToolkit-3.6.21-mac-arm64.dmg` | Electron 存档备选；内置 Python + RapidOCR，本地视觉模型可选 |
+| macOS（Apple Silicon） | `StampCompareToolkit-Tauri-3.6.28-mac-arm64.dmg` | **推荐**；正式线，Rust 内核，25,149,631 B |
+| Windows（x64） | `StampCompareToolkit-Tauri-3.6.28-win-x64-setup.exe` | **推荐**；正式线，Rust 内核，NSIS 安装包，16,990,740 B |
+| macOS（Apple Silicon / Intel） | `StampCompareToolkit-3.6.28-mac-arm64.dmg` / `-mac-x64.dmg` | Electron 存档备选；内置 Python + RapidOCR，本地视觉模型可选 |
 
-- **SHA-256（Windows Tauri）**：`e3b2ae25476c9c41d5a9180e25682387504e607d96fbdf45d6cca7116347038d`
+- **SHA-256（Windows Tauri 3.6.28）**：见 Release 页附件旁说明；如需校验请执行 `shasum -a 256 <安装包>` 与 Release 说明比对。
 - **Windows 包未做代码签名**：首次运行如遇 SmartScreen「已保护你的电脑」，请点「更多信息 → 仍要运行」。
 - **macOS 包未做 Developer ID 签名与公证**：首次打开请右键「打开」，或到「系统设置 → 隐私与安全性」允许。
-- **macOS Intel（x64）3.6.21 未发布**：本机 Electron x64 产物只带 `python-mac-arm64` 运行时，Intel 机器上 OCR 后端不可用，核验不通过，故不列入下载表。
+- **macOS Intel（x64）**：3.6.28 起 Electron 兼容包同时提供 arm64 与 x64（Tauri 正式线仍只出 arm64）。
 - **Tauri 版**：无需安装 Python，Rust OCR 模型随包分发，离线可用。Windows 需系统自带 WebView2（Windows 10 1803+ / Windows 11 均内置）。
 - **Electron 版**：仅作存档备选；内置便携 Python 运行时与 RapidOCR（onnxruntime），离线可用；本地视觉大模型为可选件（仅 Apple Silicon，首次启动探测硬件后再询问是否下载，约 1.5 GB，不随包分发）。
 - **构建**：正式线在 `tauri/`。macOS：`cd tauri && npm run build`。Windows 须在 Windows 主机或 CI 上执行 `npx tauri build --target x86_64-pc-windows-msvc --bundles nsis`（见 `.github/workflows/tauri-windows.yml`），不要从 macOS 交叉编译。Electron 备选：`cd desktop && npm run dist:mac`。
@@ -51,6 +51,22 @@
 - **设置面板**：截图快捷键录制、截图完成后动作、OCR 后端开关、印章库路径
 - 安全模型：contextIsolation + preload 受控桥（无 nodeIntegration）；桌面功能入口仅在 Electron 环境注入
 - **OCR 开箱即用**：安装包内置便携 Python 运行时与 RapidOCR（onnxruntime）组件，模型随包分发、离线可用，启动自动加载，无需用户安装 Python；系统装有 PaddleOCR 时自动作为回退引擎
+
+## v3.6.28
+- **圆形裁切改为「按边界的径向归一」**：以你画的边界质心为中心，圆周每个方向取到边界的真实半径做双倍线性重采样 —— 边界上的笔画正好落在圆周，**不再有外圈白边**，边界外内容彻底丢弃（正文、签名、表格线）。右侧预览与应用结果由同一算法产出。
+- 顺手把裁切结果统一补白底，四周不再透出查看器的深色背景。
+
+## v3.6.27
+- **进入「圆形裁切」立刻出预览**：此前只有拖动过才会重算，静置时右侧仍是旧的自动提取结果，看起来"没跟着边界走"。
+- 调整控制点后 120ms 内跟随刷新，松手强制刷新一次。
+
+## v3.6.26
+- **裁切坐标映射修正**：提取画布是"区域裁剪 + 居中放置"，映射漏了 `drawX/drawY` 与真实缩放比，导致裁切范围比画的边界大一圈。现在 `extractStamp` 直接返回 `map{x,y,sc,dx,dy}`，预览与应用共用。
+- 归一半径改为外接半径，边界点落在圆周上，边缘内容不再被切掉。
+
+## v3.6.25
+- **圆形裁切支持逐点微调**：椭圆骨架 + 16 个控制点，拖任一点只动它自己；动过控制点后显示绿色平滑曲线，即为真实裁切边界；空白处点一下可重新开始，`Alt/⌘`+点删点（≥6）。
+- **AI 配置**：点遮罩不再关闭配置框（只有「保存/关闭」能退出）；新增「清除此配置」，只删当前服务商的保存项。
 
 ## v3.6.24
 - **修「剔除时提示已在列表里，但实际没剔除」**：重复命中同一颜色时，过去只弹一句"已在列表里"就 return，等于**不给重算**——用户改过容差或切过匹配模式后再点同色，界面自然毫无变化。现在重复点会**按当前设置真正重算一次**，并在状态栏给出该色的实际命中像素数（如「已重新应用 #ffc4c6（该色命中 12014 像素）」）。
@@ -88,7 +104,7 @@
 - D08：阳谷两拍自动对齐后仍约 **50.2%**（缩放 107.8%，偏移 -9,3，geom 87%）；同文件手动归零约 12.8%，再自动 100%；负例东元 vs 洪家楼约 3.3%。本轮未改相似度公式。
 - D04：枣庄深色取色仅部分减轻（42,317 → 46,458，+9.8%），默认底图里已有的签名/表格线/邻章仍在。
 - P2「开关就地说明」未做，列为后续改进，不阻塞本版发行。
-- macOS 包无 Developer ID 签名与公证，首次请右键「打开」。Windows 3.6.21 Tauri 安装包已核验（`StampCompareToolkit-Tauri-3.6.21-win-x64-setup.exe`），未做代码签名，首次运行如遇 SmartScreen 请选择「仍要运行」。
+- macOS 包无 Developer ID 签名与公证，首次请右键「打开」。Windows 3.6.28 Tauri 安装包已核验（`StampCompareToolkit-Tauri-3.6.28-win-x64-setup.exe`），未做代码签名，首次运行如遇 SmartScreen 请选择「仍要运行」。
 
 ## v3.6.17
 
