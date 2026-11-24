@@ -50,8 +50,8 @@ def main() -> int:
     if not src.is_file():
         raise SystemExit(f"usage-guide.md not found: {src}")
     md = src.read_text(encoding="utf-8")
-    if "正式桌面版为 **Tauri + Rust**" not in md:
-        raise SystemExit("usage-guide.md 缺少正式线口径，拒绝同步")
+    if not md.lstrip().startswith("# "):
+        raise SystemExit("usage-guide.md 缺少一级标题，拒绝同步")
     for bad in ("版本记录", "更新日志", "变更记录"):
         if bad in md:
             raise SystemExit(f"usage-guide.md 不应包含「{bad}」段落")

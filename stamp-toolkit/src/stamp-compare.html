@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.29</title>
+<title>印章对比工具 v3.6.30</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -1995,7 +1995,10 @@
   }
   .product-mark {
     flex-shrink: 0;
-    opacity: 0.9;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    opacity: 0.98;
     transition: all 0.3s;
   }
   .product-mark:hover {
@@ -4522,12 +4525,13 @@
 <div class="app">
   <header>
     <div class="header-row">
-      <svg class="product-mark" width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具">
-        <circle cx="13" cy="13" r="11.1" fill="none" stroke="currentColor" stroke-width="1.7"/>
-        <circle cx="13" cy="13" r="8.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".72"/>
-        <path d="M13 7.55l1.28 3.9h4.1l-3.32 2.4 1.27 3.9L13 15.36l-3.33 2.39 1.27-3.9-3.32-2.4h4.1z" fill="currentColor" stroke="none"/>
+      <svg class="product-mark" width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" aria-label="印章对比工具" role="img">
+        <rect x="0" y="0" width="26" height="26" rx="6" fill="#ffffff"/>
+        <circle cx="13" cy="13.4" r="8.1" fill="none" stroke="#d92b2b" stroke-width="2.4"/>
+        <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
+        <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.29</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.30</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5139,7 +5143,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.29';
+const APP_VERSION = '3.6.30';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -14169,9 +14173,6 @@ statusBar.classList.add('visible');
 </div>
 <script type="text/plain" id="bundled-operation-manual">
 # 印章对比工具 · 使用说明与技巧
-
-> 正式桌面版为 **Tauri + Rust** 内核（macOS / Windows），网页版同源。界面三栏：左边工具栏与画布、右边「判定 / 识别 / 候选」检查器、底部状态栏显示进度。
-> 这份说明只讲怎么用、怎么用好；不记录版本变化。
 
 ## 目录
 
