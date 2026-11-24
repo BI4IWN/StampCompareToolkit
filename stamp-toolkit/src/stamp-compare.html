@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.30</title>
+<title>印章对比工具 v3.6.31</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2005,6 +2005,9 @@
     opacity: 1;
     transform: rotate(8deg) scale(1.08);
   }
+
+  .ov-tol.disabled { opacity: .45; pointer-events: none; }
+  .ov-tol.on { color: #c44133; }
 
   /* 页面左上角：识别方式切换（本地 / AI） */
   .header-rec-mode {
@@ -4531,7 +4534,7 @@
         <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
         <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.30</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.31</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5044,9 +5047,17 @@
           </div>
           <span class="ov-vsep" aria-hidden="true"></span>
           <div class="ov-group ov-params-group">
+            <label class="ov-tol ov-enh" id="ov-manual-wrap" title="纯手工模式：只按所选 RGB 保留/删除颜色，不做色相、背景、加深等任何额外计算；开关与配色会记住，清空比对也不会丢">
+              <span>纯手工</span>
+              <input type="checkbox" id="ov-manual">
+            </label>
+            <label class="ov-tol ov-enh" id="ov-manual-blank-wrap" title="空白模式（需先开纯手工）：不做任何自动取色，从一张空白画布开始，完全靠手工取色画出印章">
+              <span>空白</span>
+              <input type="checkbox" id="ov-manual-blank">
+            </label>
             <label class="ov-tol" id="ov-tol-wrap" title="剔除容差：越大越能把相邻的深浅笔画一起去掉">
               <span>剔除容差</span>
-              <input type="range" id="ov-tol" min="4" max="40" step="1" value="14">
+              <input type="range" id="ov-tol" min="4" max="80" step="1" value="14">
               <b id="ov-tol-val">14%</b>
             </label>
             <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
@@ -5143,7 +5154,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.30';
+const APP_VERSION = '3.6.31';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6428,7 +6439,11 @@ function processStamp(img, target) {
   // === 阶段 2：自动提取（预设色管线为"基础"；手工颜色在其上增量叠加/剔除）===
   // 新图重置墨色选择（自动提取默认红章，手工颜色清空）
   const prevEnhance = (state.ink[target] && state.ink[target].enhance) || { auto: true, factor: 1 };
-  state.ink[target] = { presets: ['red'], customs: [], grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: prevEnhance };
+  // 纯手工模式下配色是"设置"：换图也沿用上次选好的颜色
+  const prevCustoms = manualInkOn() ? ((state.ink[target] && state.ink[target].customs) || []) : [];
+  const prevTol = manualInkOn() ? (state.ink[target] && state.ink[target].pickTol) : undefined;
+  state.ink[target] = { presets: ['red'], customs: prevCustoms, grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: prevEnhance };
+  if (prevTol !== undefined) state.ink[target].pickTol = prevTol;
   renderInkPanel(target);
 
   state[target] = {
@@ -6955,6 +6970,135 @@ function collectColorSet(base, pixels) {
 // colorSet：点选位置邻域采集的颜色簇 [[r,g,b],...]，精确匹配用
 let _lastInkNotice = '';   // 取色失败/被合并时的原因，供查看器就地提示
 function inkNotice() { return _lastInkNotice; }
+
+// ===== 纯手工取色模式 =====
+// 只按所选 RGB 对整幅提取图做"保留/删除"，不参与色相、局部背景、墨迹评分、颜色加深等任何额外计算。
+// 开关与颜色配置都记在本机，清空比对不会抹掉，下次打开沿用上次的配置。
+function manualInkOn() {
+  try { return localStorage.getItem('stamp.manualInk') === '1'; } catch (e) { return false; }
+}
+
+function manualBlankOn() {
+  try { return manualInkOn() && localStorage.getItem('stamp.manualBlank') === '1'; } catch (e) { return false; }
+}
+
+function setManualBlank(v) {
+  try { localStorage.setItem('stamp.manualBlank', v ? '1' : '0'); } catch (e) {}
+  syncManualUi();
+  ['ref', 'test'].forEach((t) => {
+    if (state[t] && state[t].original) {
+      state[t].baseExtracted = null;   // 空白模式不沿用自动提取结果
+      state[t]._baseKey = null;
+      try { recomputeExtracted(t); } catch (e) {}
+    }
+  });
+  try { ovRenderColors(); } catch (e) {}
+  showStatus(v ? '已切到空白模式：不再自动取色，全部靠手工取色画出印章' : '已退出空白模式：恢复自动提取 + 手工微调');
+}
+
+function syncManualUi() {
+  const on = manualInkOn();
+  const blank = manualBlankOn();
+  const blankCb = document.getElementById('ov-manual-blank');
+  if (blankCb) { blankCb.checked = blank; blankCb.disabled = !on; }
+  const blankWrap = document.getElementById('ov-manual-blank-wrap');
+  if (blankWrap) blankWrap.classList.toggle('disabled', !on);
+  const cb = document.getElementById('ov-manual');
+  if (cb) cb.checked = on;
+  const wrap = document.getElementById('ov-manual-wrap');
+  if (wrap) wrap.classList.toggle('on', on);
+  // 纯手工时把「匹配 / 颜色加深」置灰：这套模式下它们不生效
+  ['ov-match-wrap', 'ov-enh-wrap'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('disabled', on);
+  });
+  const info = document.getElementById('ov-info');
+  if (info && OV && (OV.mode === 'pick' || OV.mode === 'circle')) {
+    info.textContent = on
+      ? '纯手工模式：只按所选 RGB 保留/删除颜色，不做其它计算 · 配置已记住'
+      : info.textContent;
+  }
+}
+
+function setManualInk(v) {
+  try { localStorage.setItem('stamp.manualInk', v ? '1' : '0'); } catch (e) {}
+  syncManualUi();
+  ['ref', 'test'].forEach((t) => {
+    if (state[t] && (state[t].original || state[t].extracted)) {
+      try { recomputeExtracted(t); } catch (e) {}
+    }
+  });
+  try { ovRenderColors(); } catch (e) {}
+  showStatus(v ? '已开启纯手工取色：只按所选 RGB 增删颜色（配置会记住）' : '已关闭纯手工取色：恢复自动提取 + 智能匹配');
+}
+
+function recomputeManual(target) {
+  const st = state[target];
+  const blank = manualBlankOn();
+  let base = null;
+  if (blank) {
+    // 空白模式：不跑自动提取，直接从原图画一张方形底图（等比 contain，居中留白）
+    const src = st.original;
+    if (!src) return { added: 0, removed: 0 };
+    const side = Math.max(480, Math.min(1200, Math.round(Math.max(src.width, src.height))));
+    const c0 = document.createElement('canvas');
+    c0.width = side; c0.height = side;
+    const g0 = c0.getContext('2d');
+    const k = Math.min(side / src.width, side / src.height);
+    const dw = Math.round(src.width * k), dh = Math.round(src.height * k);
+    g0.drawImage(src, Math.round((side - dw) / 2), Math.round((side - dh) / 2), dw, dh);
+    base = c0;
+  } else {
+    base = st.baseExtracted || ensureBaseExtraction(target);
+  }
+  if (!base) return { added: 0, removed: 0 };
+  const OUT = base.width;
+  const cur = document.createElement('canvas');
+  cur.width = OUT; cur.height = OUT;
+  const g = cur.getContext('2d');
+  g.drawImage(base, 0, 0);
+  const img = g.getImageData(0, 0, OUT, OUT);
+  const d = img.data;
+  const ink = state.ink[target];
+  // 纯手工：容差＝每个通道允许多大偏差（盒式判定，比"球"更符合"同族颜色"的直觉）
+  // 4%→11、14%→38、40%→108、80%→216
+  const tolPct = Math.round((ink.pickTol || 0.14) * 100);
+  const tol = Math.max(8, Math.round(tolPct * 2.7));
+  const ex = ink.customs.filter((c) => c.on && c.exclude);
+  const ad = ink.customs.filter((c) => c.on && !c.exclude);
+  const near = (c, r, g2, b2) => {
+    if (!c.set) return false;
+    for (const q of c.set) {
+      if (Math.abs(r - q[0]) <= tol && Math.abs(g2 - q[1]) <= tol && Math.abs(b2 - q[2]) <= tol) return true;
+    }
+    return false;
+  };
+  const hits = {};
+  ink.customs.forEach((c) => { hits[c.hex] = 0; });
+  let added = 0, removed = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g2 = d[i+1], b2 = d[i+2];
+    let hitEx = null;
+    for (const c of ex) { if (near(c, r, g2, b2)) { hitEx = c; break; } }
+    if (hitEx) { hits[hitEx.hex] = (hits[hitEx.hex] || 0) + 1; if (d[i+3] !== 0) { d[i+3] = 0; removed++; } continue; }
+    let hitAd = null;
+    for (const c of ad) { if (near(c, r, g2, b2)) { hitAd = c; break; } }
+    if (hitAd) {
+      hits[hitAd.hex] = (hits[hitAd.hex] || 0) + 1;
+      if (d[i+3] !== 255) { d[i+3] = 255; added++; }
+    } else if (blank && d[i+3] !== 0) {
+      // 空白模式：基底就是"什么都没选中"，所以没被提取色选中的一律去掉
+      d[i+3] = 0; removed++;
+    }
+    // 非空白模式：基底是自动提取的结果，没选中就保持原样（纯手工只做"按 RGB 增/删"）
+  }
+  g.putImageData(img, 0, 0);
+  st.extracted = cur;
+  st.enhanceFactor = 1;
+  st._inkHits = hits;
+  drawExtractedPreview(target, cur);
+  return { added, removed };
+}
 
 function addCustomInk(target, r, g, b, exclude, colorSet) {
   const { h, s, v } = rgbToHsv(r, g, b);
@@ -7781,6 +7925,9 @@ function recomputeExtracted(target) {
     st.enhanceFactor = 1;
     drawExtractedPreview(target, st.extracted);
     return { added: 0, removed: 0 };
+  }
+  if (manualInkOn() && (manualBlankOn() || state.ink[target].customs.some((c) => c.on))) {
+    return recomputeManual(target);
   }
   const base = ensureBaseExtraction(target);
   if (!base) return { added: 0, removed: 0 };
@@ -8917,6 +9064,25 @@ function syncEnh() {
   if (val) val.textContent = enh.auto ? '自动' : (Number(enh.factor || 1).toFixed(1) + '×');
 }
 
+// 纯手工开关：记住上次选择，打开查看器即同步
+function bindManualToggle() {
+  const cb = document.getElementById('ov-manual');
+  if (!cb) return;
+  cb.checked = manualInkOn();
+  if (!cb._bound) {
+    cb.addEventListener('change', (e) => setManualInk(e.target.checked));
+    cb._bound = true;
+  }
+  const blankCb = document.getElementById('ov-manual-blank');
+  if (blankCb && !blankCb._bound) {
+    blankCb.checked = manualBlankOn();
+    blankCb.disabled = !manualInkOn();
+    blankCb.addEventListener('change', (e) => setManualBlank(e.target.checked));
+    blankCb._bound = true;
+  }
+  syncManualUi();
+}
+
 function applyEnhFromViewer() {
   const ink = state.ink[OV.target];
   if (!ink) return;
@@ -8929,7 +9095,7 @@ function applyEnhFromViewer() {
   applyInkSelection(OV.target);
   setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
 }
-window.__ovSyncEnh = function () { try { syncEnh(); } catch (e) {} };
+window.__ovSyncEnh = function () { try { syncEnh(); } catch (e) {} try { bindManualToggle(); } catch (e) {} };
 
 // 查看器底部：已选颜色列表（可开关、可删除）
   // 取色标记：在图上画出每次取样的位置（提取=实心圆，排除=空心圆 + 斜杠）
@@ -9332,6 +9498,7 @@ function ovPickAt(clientX, clientY, exclude) {
       render();
       if (ovIsOpen()) ovDraw();
       syncEnh();
+      try { bindManualToggle(); } catch (e) {}
       showStatus(`${stampLabel(OV.target)}颜色加深已更新（增强 ${(state[OV.target].enhanceFactor || 1).toFixed(2)}×）`);
     }, 200);
   };
@@ -10167,7 +10334,12 @@ async function clearAllComparison() {
       extCanvas.getContext('2d').clearRect(0, 0, extCanvas.width, extCanvas.height);
       extCanvas.style.width = ''; extCanvas.style.height = '';
     }
-    state.ink[t] = { presets: ['red'], customs: [], grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: { auto: true, factor: 1 } };
+    // 纯手工模式的配色是"设置"而不是"本次比对的数据"：清空时保留
+    const keepInk = manualInkOn()
+      ? { customs: (state.ink[t].customs || []), pickTol: state.ink[t].pickTol, matchMode: state.ink[t].matchMode }
+      : { customs: [] };
+    state.ink[t] = { presets: ['red'], customs: keepInk.customs, grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: { auto: true, factor: 1 } };
+    if (keepInk.pickTol !== undefined) state.ink[t].pickTol = keepInk.pickTol;
     renderInkPanel(t);
   });
 
@@ -14240,6 +14412,27 @@ statusBar.classList.add('visible');
 - `Alt/⌘` + 点控制点＝删点（至少保留 6 个）；方向键仍可微调整体框。
 - 只想裁掉章外杂物、章本身是正圆时，直接拖出椭圆、四个轴端手柄贴边即可，不必动控制点。
 - 裁完如果还想调颜色，关掉查看器后用「点选取色」继续，两者互不覆盖。
+
+### 纯手工模式（只要颜色，不要算法）
+
+查看器底部有「**纯手工**」开关。打开后：
+
+- **只按你选的 RGB 说话**：选中的颜色保留、标成排除的颜色删掉、**没选中的一律删掉**；不再跑色相、局部背景、墨迹评分、颜色加深这些判断。
+- **配置会记住**：开关状态和配色存本机，换图、清空比对、重开 App 都还是上次那一套。
+- **适合**：自动提取怎么调都不满意、或者你要的是"精确复刻某几个色阶"而不是"像章就算"。
+- **代价**：一次取色只覆盖很窄的颜色带。要"一次剔干净"，把「剔除容差」往右拉：约 40% 能带走同族大部分的深浅（实测同一张图从 1.4k 像素涨到 15k），80% 基本等于清空；也可以分几次点深、中、浅三处。
+- 容差在纯手工下的含义很直白：**每个通道允许多大偏差**（盒式判定），不再受色相/彩度门控影响。
+
+### 空白模式（从零画出来）
+
+纯手工旁边还有「**空白**」开关（要先开纯手工）。打开后：
+
+- **不做任何自动取色**：一进查看器，提取结果是全空的，没有任何红章预设、没有自动检测。
+- **全靠手工取色画**：在原图上点几处笔画颜色，选中的像素就留下来，没选中的一律不在。
+- **适合**：底色杂乱、正文压章、扫描彩色背景——自动管线怎么调都带进来一堆杂物时，用空白模式最干净。
+- **代价**：要自己点 5–15 处颜色（深、中、浅 + 各字颜色），耗时多于自动。
+
+小贴士：纯手工时「匹配」「颜色加深」会置灰（这几项在该模式下不参与计算），关掉开关即恢复。空白模式的开关与配色同样会记住，下次打开沿上次的设置。
 
 ### 剔除技巧（把正文、背景、签名清掉）
 
