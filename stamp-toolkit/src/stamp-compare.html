@@ -5062,6 +5062,10 @@
               <input type="range" id="ov-tol" min="15" max="65" step="1" value="30">
               <b id="ov-tol-val">30%</b>
             </label>
+            <label class="ov-tol ov-enh" id="ov-morph-wrap" title="去网点：去掉细碎的点状杂色（扫描网点、红底网点、纸张颗粒），只保留成片的笔画">
+              <span>去网点</span>
+              <input type="checkbox" id="ov-morph">
+            </label>
             <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
               <span>颜色加深</span>
               <input type="checkbox" id="ov-enh-auto" checked>
@@ -6446,10 +6450,12 @@ function processStamp(img, target) {
   const prevTol = manualInkOn() ? (state.ink[target] && state.ink[target].pickTol) : undefined;
   const prevFloor = manualInkOn() ? (state.ink[target] && state.ink[target].floor) : undefined;
   const prevPaper = manualInkOn() ? (state.ink[target] && state.ink[target].paperRGB) : undefined;
+  const prevMorph = manualInkOn() ? (state.ink[target] && state.ink[target].morph) : undefined;
   state.ink[target] = { presets: ['red'], customs: prevCustoms, grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: prevEnhance };
   if (prevTol !== undefined) state.ink[target].pickTol = prevTol;
   if (prevFloor !== undefined) state.ink[target].floor = prevFloor;
   if (prevPaper !== undefined) state.ink[target].paperRGB = prevPaper.slice();
+  if (prevMorph !== undefined) state.ink[target].morph = prevMorph;
   renderInkPanel(target);
 
   state[target] = {
@@ -6460,6 +6466,8 @@ function processStamp(img, target) {
     _baseKey: null,
     _baseOriginal: null,
     _origData: null,
+    _paperCache: null,
+    _inkPaper: null,
     _aiBase: false,
     _regionLocked: false,
     circular: false,
@@ -7360,6 +7368,18 @@ function recomputeInkModel(target) {
     }
   }
 
+  // 去网点（可选）：把细碎的点状杂色当作噪声去掉，只留成片的笔画
+  if (ink.morph) {
+    const bin = new Uint8Array(N);
+    for (let i = 0; i < N; i++) bin[i] = img.data[i * 4 + 3] >= 128 ? 1 : 0;
+    const opened = inkMOpening(bin, OUT, OUT, 2);
+    let cut = 0;
+    for (let i = 0; i < N; i++) {
+      if (!opened[i] && img.data[i * 4 + 3] > 0) { img.data[i * 4 + 3] = 0; cut++; }
+    }
+    if (cut) removed += cut;
+  }
+
   g.putImageData(img, 0, 0);
   st.enhanceFactor = 1;                                  // 分解结果自带软边，不再做颜色加深
   st._inkHits = res.hits;
@@ -7378,6 +7398,58 @@ function recomputeInkModel(target) {
   st._lastDelta = { added, removed };
   drawExtractedPreview(target, st.extracted);
   return st._lastDelta;
+}
+
+// 二值形态学开运算（先腐蚀后膨胀）：去掉细碎的点状结构（扫描网点、红底网点），保留笔画。
+// 用可分离的最小/最大滤波，复杂度 O(N·r)，r 一般取 1~2 像素。
+function inkMOpening(mask, W, H, r) {
+  const tmp = new Uint8Array(W * H), out = new Uint8Array(W * H);
+  // 腐蚀（水平 → 垂直）：某像素及其左右 r 内全为 1
+  for (let y = 0; y < H; y++) {
+    const row = y * W;
+    for (let x = 0; x < W; x++) {
+      let v = 1;
+      for (let dx = -r; dx <= r; dx++) {
+        const xx = x + dx;
+        if (xx < 0 || xx >= W || !mask[row + xx]) { v = 0; break; }
+      }
+      tmp[row + x] = v;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) {
+      let v = 1;
+      for (let dy = -r; dy <= r; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= H || !tmp[yy * W + x]) { v = 0; break; }
+      }
+      out[y * W + x] = v;
+    }
+  }
+  // 膨胀（水平 → 垂直）：某像素 r 内有任一 1
+  const t2 = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const row = y * W;
+    for (let x = 0; x < W; x++) {
+      let v = 0;
+      for (let dx = -r; dx <= r; dx++) {
+        const xx = x + dx;
+        if (xx >= 0 && xx < W && out[row + xx]) { v = 1; break; }
+      }
+      t2[row + x] = v;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) {
+      let v = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        const yy = y + dy;
+        if (yy >= 0 && yy < H && t2[yy * W + x]) { v = 1; break; }
+      }
+      out[y * W + x] = v;
+    }
+  }
+  return out;
 }
 
 function recomputeManual(target) {
@@ -7446,6 +7518,34 @@ function recomputeManual(target) {
   st._inkHits = hits;
   drawExtractedPreview(target, cur);
   return { added, removed };
+}
+
+// 取色后提示：所选颜色离纸底太近时，模型会"至少这么浓"，容易把纸底/正文一起带进来
+// 纸底色：优先用模型给出的全图纸色；还没跑过模型时，用 200px 缩略图快速估一个（结果缓存）
+function inkPaperOf(st) {
+  if (!st || !st.original) return null;
+  if (st._inkPaper) return st._inkPaper;
+  if (st._paperCache) return st._paperCache;
+  const src = st.original;
+  const k = Math.min(1, 200 / Math.max(src.width, src.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(8, Math.round(src.width * k)); c.height = Math.max(8, Math.round(src.height * k));
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0, c.width, c.height);
+  const d = g.getImageData(0, 0, c.width, c.height).data, n = c.width * c.height;
+  const C = new Float32Array(n * 3), inImg = new Uint8Array(n).fill(1);
+  for (let i = 0; i < n; i++) { C[i * 3] = d[i * 4]; C[i * 3 + 1] = d[i * 4 + 1]; C[i * 3 + 2] = d[i * 4 + 2]; }
+  st._paperCache = Array.from(inkMPaperGlobal(C, inImg, n));
+  return st._paperCache;
+}
+
+function inkPickPaperHint(target, r, g, b) {
+  const paper = inkPaperOf(state[target]);
+  if (!paper) return '';
+  const pl = paper[0] * 0.299 + paper[1] * 0.587 + paper[2] * 0.114;
+  const cl = r * 0.299 + g * 0.587 + b * 0.114;
+  if (pl - cl >= 60) return '';
+  return ' · ⚠ 该色很接近纸底（亮度差 ' + Math.round(pl - cl) + '），可能把纸底带进来，建议点笔画的深色部分';
 }
 
 function addCustomInk(target, r, g, b, exclude, colorSet) {
@@ -7570,7 +7670,8 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
                      set: colorSet && colorSet.length ? colorSet : [[r, g, b]] });
   renderInkPanel(target);
   try { ovRenderColors(); } catch (e) { /* 查看器未初始化 */ }
-  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（精确匹配该颜色）`);
+  ink._pickHint = exclude ? '' : inkPickPaperHint(target, r, g, b);
+  applyInkSelection(target, `已为${stampLabel(target)}${exclude ? '排除' : '添加'}墨色 ${hex}（浓度匹配）`);
   return true;
 }
 
@@ -9265,6 +9366,7 @@ function ovHitHandle(clientX, clientY) {
 function ovSetMode(mode) {
   try { window.__ovSyncMatch && window.__ovSyncMatch(); } catch (e) {}
   try { window.__ovSyncTol && window.__ovSyncTol(); } catch (e) {}
+  try { window.__ovSyncMorph && window.__ovSyncMorph(); } catch (e) {}
   OV.mode = mode;
   const el = OV.el || document.getElementById('origin-viewer');
   if (el) el.dataset.mode = mode;
@@ -9781,7 +9883,8 @@ function ovPickAt(clientX, clientY, exclude) {
   }
   if (ok) {
     const hex = '#' + best.map(v => v.toString(16).padStart(2, '0')).join('');
-    document.getElementById('ov-info').textContent = `已${exclude ? '排除' : '提取'} ${hex} · 继续点选其他颜色`;
+    document.getElementById('ov-info').textContent = `已${exclude ? '排除' : '提取'} ${hex} · 继续点选其他颜色`
+      + (state.ink[OV.target]._pickHint || '');
     ovDraw();   // 右侧「提取结果」立即刷新
     // applyInkSelection 有 250ms 防抖，重算完成后再刷一次，保证右侧是最终结果
     setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
@@ -9883,6 +9986,21 @@ function ovPickAt(clientX, clientY, exclude) {
       showStatus(`${stampLabel(OV.target)}颜色加深已更新（增强 ${(state[OV.target].enhanceFactor || 1).toFixed(2)}×）`);
     }, 200);
   };
+  const morphCb = document.getElementById('ov-morph');
+  const syncMorph = () => {
+    const inkNow = state.ink[OV.target] || {};
+    if (morphCb) morphCb.checked = !!inkNow.morph;
+  };
+  window.__ovSyncMorph = syncMorph;
+  if (morphCb && !morphCb._bound) {
+    morphCb._bound = true;
+    syncMorph();
+    morphCb.addEventListener('change', () => {
+      state.ink[OV.target].morph = morphCb.checked;
+      applyInkSelection(OV.target, morphCb.checked ? '已开启去网点' : '已关闭去网点');
+      setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
+    });
+  }
   if (enhAuto) enhAuto.addEventListener('change', () => {
     const inkNow = state.ink[OV.target];
     if (!inkNow.enhance) inkNow.enhance = { auto: true, factor: 1 };
