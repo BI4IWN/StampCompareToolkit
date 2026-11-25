@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.31</title>
+<title>印章对比工具 v3.6.32</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4534,7 +4534,7 @@
         <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
         <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.31</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.32</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5037,11 +5037,13 @@
               <button type="button" class="active" data-pick="add">提取</button>
               <button type="button" data-pick="exclude">排除</button>
             </div>
-            <label class="ov-tol" id="ov-match-wrap" title="匹配方式：色相＝按色相+彩度抓相邻深浅；精确RGB＝只认和所选颜色相近的像素">
+            <button type="button" class="btn" id="ov-pick-paper" title="点一下纸面：指定纸底色（纸底深浅不均、或自动判定偏亮/偏暗时用）">🖱 取纸底</button>
+            <label class="ov-tol" id="ov-match-wrap" title="匹配方式：墨量分解＝按“纸底→墨色”的浓度判墨（淡章不丢、纸底不吃，推荐）；色相/精确RGB 为旧方式">
               <span>匹配</span>
               <select id="ov-match">
-                <option value="hue">色相</option>
-                <option value="rgb">精确RGB</option>
+                <option value="ink">墨量分解</option>
+                <option value="hue">色相（旧）</option>
+                <option value="rgb">精确RGB（旧）</option>
               </select>
             </label>
           </div>
@@ -5055,10 +5057,10 @@
               <span>空白</span>
               <input type="checkbox" id="ov-manual-blank">
             </label>
-            <label class="ov-tol" id="ov-tol-wrap" title="剔除容差：越大越能把相邻的深浅笔画一起去掉">
-              <span>剔除容差</span>
-              <input type="range" id="ov-tol" min="4" max="80" step="1" value="14">
-              <b id="ov-tol-val">14%</b>
+            <label class="ov-tol" id="ov-tol-wrap" title="浓度下限：笔画比纸底“浓”到多少才算墨。调大 → 更干净（淡笔画会被舍去）；调小 → 抓得更全（纸底噪点可能浮现）。提取与剔除同时生效">
+              <span>浓度下限</span>
+              <input type="range" id="ov-tol" min="15" max="65" step="1" value="30">
+              <b id="ov-tol-val">30%</b>
             </label>
             <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
               <span>颜色加深</span>
@@ -5154,7 +5156,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.31';
+const APP_VERSION = '3.6.32';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6442,8 +6444,12 @@ function processStamp(img, target) {
   // 纯手工模式下配色是"设置"：换图也沿用上次选好的颜色
   const prevCustoms = manualInkOn() ? ((state.ink[target] && state.ink[target].customs) || []) : [];
   const prevTol = manualInkOn() ? (state.ink[target] && state.ink[target].pickTol) : undefined;
+  const prevFloor = manualInkOn() ? (state.ink[target] && state.ink[target].floor) : undefined;
+  const prevPaper = manualInkOn() ? (state.ink[target] && state.ink[target].paperRGB) : undefined;
   state.ink[target] = { presets: ['red'], customs: prevCustoms, grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: prevEnhance };
   if (prevTol !== undefined) state.ink[target].pickTol = prevTol;
+  if (prevFloor !== undefined) state.ink[target].floor = prevFloor;
+  if (prevPaper !== undefined) state.ink[target].paperRGB = prevPaper.slice();
   renderInkPanel(target);
 
   state[target] = {
@@ -6971,6 +6977,232 @@ function collectColorSet(base, pixels) {
 let _lastInkNotice = '';   // 取色失败/被合并时的原因，供查看器就地提示
 function inkNotice() { return _lastInkNotice; }
 
+// ===== 墨量分解匹配（v3.6.32）=====
+// 为什么不用"颜色范围"：淡章墨色与纸底只差几十级，容差小则笔画只剩芯、大则连纸一起要；
+// 且不同深浅的笔画是"纸→墨"的渐变，本就不是同一个颜色。
+// 做法：把每个像素拆成"几分纸 + 几分墨"：
+//     像素 ≈ 纸底 + 墨量 × (墨色 − 纸底)，墨量取 [0, 1]（超过 1 表示比所点的颜色更浓，按 1 计）
+//   - 墨色 = 用户点下的那一个像素（所见即所得）；纸底 = 自动估计（全图主导的亮色 + 局部光照场），也可手动指定
+//   - 同一笔画的深浅渐变都落在"纸底 → 墨色"这条线上，只是墨量不同：淡笔画不会丢，纸底不会被当成墨
+//   - 「排除」的颜色当作另一种墨一起分解：与印墨重叠处按比例分开，不会"剔一个、带走一片"
+//   - 不在任何"纸底 → 墨色"线上的像素（第三种颜色）残差大，不计入
+// 本节只依赖类型数组、不碰 DOM，便于单独测试。
+const INK_M_FLOOR = 0.30;   // 浓度下限默认值：墨量低于它的像素既不算墨迹，也不算被剔除
+const INK_M_RAMP = 0.15;      // 下限以上的过渡带宽度：抗锯齿边缘在这里由透明渐变到不透明
+
+function inkMSmoothstep(a, b, x) {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+// 全图纸底色：数量最多的 8 个色桶里取最亮的一桶，再对该桶附近的像素求均值。
+// 纸面有渐变时会散成几个相邻桶；印章特写时墨色可能比纸还多 —— 但纸总比墨亮，所以取"主导色里最亮的"
+function inkMPaperGlobal(C, inImg, N) {
+  const hist = new Uint32Array(32768);            // 每通道 32 级（8 级一桶）
+  const step = Math.max(1, Math.floor(N / 300000));
+  let total = 0;
+  for (let i = 0; i < N; i += step) {
+    if (!inImg[i]) continue;
+    const i3 = i * 3;
+    hist[((C[i3] >> 3) << 10) | ((C[i3 + 1] >> 3) << 5) | (C[i3 + 2] >> 3)]++;
+    total++;
+  }
+  const P0 = new Float32Array(3);
+  if (!total) { P0[0] = P0[1] = P0[2] = 255; return P0; }
+  const bins = [];
+  for (let q = 0; q < hist.length; q++) if (hist[q]) bins.push(q);
+  bins.sort((a, b) => hist[b] - hist[a]);
+  let best = bins[0], bestLum = -1;
+  for (let k = 0; k < Math.min(8, bins.length); k++) {
+    const q = bins[k];
+    const lum = ((q >> 10) & 31) * 0.299 + ((q >> 5) & 31) * 0.587 + (q & 31) * 0.114;
+    if (lum > bestLum) { bestLum = lum; best = q; }
+  }
+  const cr = ((best >> 10) & 31) * 8 + 4, cg = ((best >> 5) & 31) * 8 + 4, cb = (best & 31) * 8 + 4;
+  let sr = 0, sg = 0, sb = 0, n = 0;
+  for (let i = 0; i < N; i += step) {
+    if (!inImg[i]) continue;
+    const i3 = i * 3;
+    const dr = C[i3] - cr, dg = C[i3 + 1] - cg, db = C[i3 + 2] - cb;
+    if (dr * dr + dg * dg + db * db > 28 * 28) continue;
+    sr += C[i3]; sg += C[i3 + 1]; sb += C[i3 + 2]; n++;
+  }
+  if (n) { P0[0] = sr / n; P0[1] = sg / n; P0[2] = sb / n; }
+  else { P0[0] = cr; P0[1] = cg; P0[2] = cb; }
+  return P0;
+}
+
+// 积分图盒式模糊（边缘按 0 补齐：分子分母用同一个核，归一化后不引入偏差）
+function inkMBoxBlur(src, w, h, r) {
+  const W1 = w + 1;
+  const ii = new Float64Array(W1 * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    for (let x = 0; x < w; x++) {
+      rowSum += src[y * w + x];
+      ii[(y + 1) * W1 + x + 1] = ii[y * W1 + x + 1] + rowSum;
+    }
+  }
+  const out = new Float64Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r) + 1;
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r) + 1;
+      out[y * w + x] = ii[y1 * W1 + x1] - ii[y0 * W1 + x1] - ii[y1 * W1 + x0] + ii[y0 * W1 + x0];
+    }
+  }
+  return out;
+}
+
+// 纸底估计用的权重：越像纸越大。
+//   - "像墨"的像素（按上一轮分解，任一所选颜色的量足够大且残差小）权重为 0 —— 淡墨离纸色很近，面积一大就会把纸底估计带偏
+//   - 离纸底估计太远的像素（别的颜色的章、贴纸、污渍）也不参与
+// P 可传 3 个数（全图纸色，对每个像素相同）或逐像素的场
+function inkMPaperWeights(C, inImg, N, P, dec, dLo, dHi) {
+  const wt = new Float32Array(N);
+  const single = P.length === 3;
+  const { aIn, bOt, conf } = dec;
+  for (let i = 0; i < N; i++) {
+    if (!inImg[i]) continue;
+    const i3 = i * 3;
+    const o = single ? 0 : i3;
+    const dr = C[i3] - P[o], dg = C[i3 + 1] - P[o + 1], db = C[i3 + 2] - P[o + 2];
+    // 只排除"确实是墨"的像素：墨量大 且 分解可信（阴影/渐变可信度低，仍可当纸底样本，否则纸底会被系统性低估）
+    const ink = Math.min(1, aIn[i] + bOt[i]);
+    const stronglyInk = inkMRamp(ink, 0.45) * inkMSmoothstep(0.55, 0.85, conf[i]);
+    wt[i] = (1 - stronglyInk) * (1 - inkMSmoothstep(dLo, dHi, Math.sqrt(dr * dr + dg * dg + db * db)));
+  }
+  return wt;
+}
+
+// 局部纸底场：按权重做归一化模糊。先细尺度（跟随光照渐变），窗口里纸底太少再退到粗尺度，最后退到全图 P0。
+// 纸底变化平缓，在降采样网格上计算（快，且更稳），再放大回每个像素。
+function inkMPaperField(C, inImg, wt, W, H, P0) {
+  const ds = Math.max(W, H) > 640 ? 4 : 2;
+  const gw = Math.ceil(W / ds), gh = Math.ceil(H / ds), G = gw * gh;
+  const den = new Float64Array(G);
+  const num = [new Float64Array(G), new Float64Array(G), new Float64Array(G)];
+  for (let y = 0; y < H; y++) {
+    const grow = ((y / ds) | 0) * gw;
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (!inImg[i]) continue;
+      const w = wt[i];
+      if (w <= 0) continue;
+      const g = grow + ((x / ds) | 0), i3 = i * 3;
+      den[g] += w;
+      num[0][g] += w * C[i3];
+      num[1][g] += w * C[i3 + 1];
+      num[2][g] += w * C[i3 + 2];
+    }
+  }
+  // 多尺度：窗口里纸底样本不够时逐级放宽，避免"局部纸偏暗 → 退回全图纸色 → 那片纸被算成墨"
+  const r0 = Math.max(2, Math.round(Math.max(W, H) * 0.016 / ds));
+  const levels = [r0, r0 * 3, r0 * 9].map((r) => {
+    const rad = Math.max(1, Math.round(r));
+    const d = inkMBoxBlur(inkMBoxBlur(den, gw, gh, rad), gw, gh, rad);
+    const n = num.map((a) => inkMBoxBlur(inkMBoxBlur(a, gw, gh, rad), gw, gh, rad));
+    return { d, n, area: (2 * rad + 1) * (2 * rad + 1) };
+  });
+  const P = new Float32Array(W * H * 3);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const g = ((y / ds) | 0) * gw + ((x / ds) | 0), o = (y * W + x) * 3;
+      let picked = null;
+      for (let k = 0; k < levels.length; k++) {
+        const L = levels[k];
+        if (L.d[g] / L.area >= (k === 0 ? 0.08 : 0.02)) { picked = L; break; }
+      }
+      if (!picked) { P[o] = P0[0]; P[o + 1] = P0[1]; P[o + 2] = P0[2]; continue; }
+      const d0 = picked.d[g];
+      P[o] = picked.n[0][g] / d0; P[o + 1] = picked.n[1][g] / d0; P[o + 2] = picked.n[2][g] / d0;
+    }
+  }
+  return P;
+}
+
+// 浓度 → 不透明度：下限以下为 0，过渡带内线性上升，之上为 1
+function inkMRamp(x, floor) {
+  return Math.max(0, Math.min(1, (x - floor) / INK_M_RAMP));
+}
+
+// 逐像素分解。inks / others：[[r,g,b], ...]，分别为「提取」「排除」的颜色；hexes：对应的色号（统计命中数用）。
+// 返回：aIn = 印墨墨量，bOt = 被排除颜色的量，conf = 该像素被"纸底 + 所选墨色"解释的程度（0~1），hits = 每个色号的命中像素数
+function inkMDecompose(C, inImg, P, N, inks, others, hexes, floor, countHits) {
+  const n = inks.length + others.length;
+  const aIn = new Float32Array(N), bOt = new Float32Array(N), conf = new Float32Array(N);
+  const hits = {};
+  hexes.forEach((h) => { hits[h] = 0; });
+  if (!n) return { aIn, bOt, conf, hits };
+  const single = P.length === 3;                   // 传入 3 个数 = 全图使用同一个纸底色
+  const isOther = new Uint8Array(n);
+  for (let e = 0; e < n; e++) isOther[e] = e >= inks.length ? 1 : 0;
+  const projJ = new Float64Array(n), resJ = new Float64Array(n);
+  for (let i = 0; i < N; i++) {
+    if (!inImg[i]) continue;
+    const i3 = i * 3;
+    const o = single ? 0 : i3;
+    const pr = P[o], pg0 = P[o + 1], pb0 = P[o + 2];
+    const vr = C[i3] - pr, vg = C[i3 + 1] - pg0, vb = C[i3 + 2] - pb0;
+    // 每个端元单独看：沿"纸底 → 该颜色"方向的投影 = 它的量；垂直距离 = 这段变化里它解释不了的部分
+    let b1 = -1, b2 = -1, r1 = Infinity, r2 = Infinity;
+    for (let e = 0; e < n; e++) {
+      const K = isOther[e] ? others[e - inks.length] : inks[e];
+      const ur = K[0] - pr, ug = K[1] - pg0, ub = K[2] - pb0;
+      const uu = ur * ur + ug * ug + ub * ub;
+      if (uu < 36) continue;                       // 该颜色与此处纸底几乎相同，方向没有意义
+      const proj = (vr * ur + vg * ug + vb * ub) / uu;
+      if (proj <= 0) continue;                     // 比纸底还亮：不是这种墨
+      const xr = vr - proj * ur, xg = vg - proj * ug, xb = vb - proj * ub;
+      const res = Math.sqrt(xr * xr + xg * xg + xb * xb);
+      projJ[e] = proj; resJ[e] = res;
+      if (res < r1) { r2 = r1; b2 = b1; r1 = res; b1 = e; }
+      else if (res < r2) { r2 = res; b2 = e; }
+    }
+    if (b1 < 0) continue;
+    // 单端元解 (b1)；若第二贴合的端元能明显降低残差（两种墨重叠），改用两端元的非负最小二乘解
+    const K1 = isOther[b1] ? others[b1 - inks.length] : inks[b1];
+    const u1r = K1[0] - pr, u1g = K1[1] - pg0, u1b = K1[2] - pb0;
+    const g11 = u1r * u1r + u1g * u1g + u1b * u1b;
+    let c1 = projJ[b1], c2 = 0, res = r1, b2u = -1;
+    if (b2 >= 0) {
+      const K2 = isOther[b2] ? others[b2 - inks.length] : inks[b2];
+      const u2r = K2[0] - pr, u2g = K2[1] - pg0, u2b = K2[2] - pb0;
+      const g22 = u2r * u2r + u2g * u2g + u2b * u2b;
+      const g12 = u1r * u2r + u1g * u2g + u1b * u2b;
+      const det = g11 * g22 - g12 * g12;
+      if (det > 1e-4 * g11 * g22) {
+        const d1 = projJ[b1] * g11, d2 = projJ[b2] * g22;
+        const x1 = (d1 * g22 - d2 * g12) / det, x2 = (d2 * g11 - d1 * g12) / det;
+        if (x1 >= 0 && x2 >= 0) {
+          const res2sq = (vr * vr + vg * vg + vb * vb) - x1 * d1 - x2 * d2;
+          if (res2sq < r1 * r1 * 0.7) { c1 = x1; c2 = x2; b2u = b2; res = Math.sqrt(Math.max(0, res2sq)); }
+        }
+      }
+    }
+    // 残差门槛随"纸底 → 墨色"的长度放宽：浓墨允许更大的噪声，淡墨则卡得更紧
+    const um = Math.sqrt(g11);
+    conf[i] = 1 - inkMSmoothstep(Math.max(10, 0.08 * um), Math.max(24, 0.25 * um), res);
+    if (isOther[b1]) bOt[i] += c1; else aIn[i] += c1;
+    if (b2u >= 0 && c2 > 0) { if (isOther[b2u]) bOt[i] += c2; else aIn[i] += c2; }
+    if (countHits) {
+      if (c1 >= floor) hits[hexes[b1]]++;
+      if (b2u >= 0 && c2 >= floor) hits[hexes[b2u]]++;
+    }
+  }
+  return { aIn, bOt, conf, hits };
+}
+
+// 完整流程：全图纸色 → 粗分解 → 局部纸底（两遍，逐遍剔除像墨的像素）→ 最终分解。
+// paperRGB：手动指定的纸底色（可空）；返回逐像素的印墨量 / 排除量 / 可信度，以及每个色号的命中数
+function inkMRun(C, inImg, W, H, N, inks, others, hexes, floor, paperRGB) {
+  const P0 = paperRGB ? new Float32Array(paperRGB) : inkMPaperGlobal(C, inImg, N);
+  const dA = inkMDecompose(C, inImg, P0, N, inks, others, hexes, floor, false);
+  const P1 = inkMPaperField(C, inImg, inkMPaperWeights(C, inImg, N, P0, dA, 28, 110), W, H, P0);
+  const d = inkMDecompose(C, inImg, P1, N, inks, others, hexes, floor, true);
+  return { P0, P1, aIn: d.aIn, bOt: d.bOt, conf: d.conf, hits: d.hits };
+}
+
 // ===== 纯手工取色模式 =====
 // 只按所选 RGB 对整幅提取图做"保留/删除"，不参与色相、局部背景、墨迹评分、颜色加深等任何额外计算。
 // 开关与颜色配置都记在本机，清空比对不会抹掉，下次打开沿用上次的配置。
@@ -7030,6 +7262,122 @@ function setManualInk(v) {
   });
   try { ovRenderColors(); } catch (e) {}
   showStatus(v ? '已开启纯手工取色：只按所选 RGB 增删颜色（配置会记住）' : '已关闭纯手工取色：恢复自动提取 + 智能匹配');
+}
+
+// ===== 墨量分解的提取实现（v3.6.32）=====
+// 在"基础自动提取"之上，用墨量分解结果决定每个像素的不透明度：
+//   非空白模式：a = max(基础提取, 分解) × (1 − 被排除色的量)  —— 分解只加不减，不会把自动提取的结果抹掉
+//   空白模式  ：a = 分解 × (1 − 被排除色的量)                  —— 完全按所选颜色画出印章
+// 基础画布的透明留边（letterbox）不参与分解，因此不会再出现"留边被填成黑条"
+function inkMFloorOf(target) {
+  const v = state.ink[target] && state.ink[target].floor;
+  return (typeof v === 'number' && v > 0) ? v : INK_M_FLOOR;
+}
+
+function inkMBlankBase(st) {
+  const src = st.original;
+  if (!src) return null;
+  const side = Math.max(480, Math.min(1200, Math.round(Math.max(src.width, src.height))));
+  const c0 = document.createElement('canvas');
+  c0.width = side; c0.height = side;
+  const g0 = c0.getContext('2d');
+  const k = Math.min(side / src.width, side / src.height);
+  const dw = Math.round(src.width * k), dh = Math.round(src.height * k);
+  g0.drawImage(src, Math.round((side - dw) / 2), Math.round((side - dh) / 2), dw, dh);
+  c0._fit = { ratio: k, dx: Math.round((side - dw) / 2), dy: Math.round((side - dh) / 2), w: dw, h: dh };
+  return c0;
+}
+
+function recomputeInkModel(target) {
+  const st = state[target];
+  const blank = manualBlankOn();
+  const base = blank ? inkMBlankBase(st) : (st.baseExtracted || ensureBaseExtraction(target));
+  if (!base) return { added: 0, removed: 0 };
+  const OUT = base.width;
+  const cur = document.createElement('canvas');
+  cur.width = OUT; cur.height = OUT;
+  const g = cur.getContext('2d');
+  g.drawImage(base, 0, 0);
+  const img = g.getImageData(0, 0, OUT, OUT);
+
+  const ink = state.ink[target];
+  const customs = ink.customs.filter((c) => c.on);
+  const extractList = customs.filter((c) => !c.exclude);
+  const excludeList = customs.filter((c) => c.exclude);
+  const pickMain = (c) => (c.set && c.set[0]) || [Math.round(255 * (c.val || 0)), Math.round(255 * (c.val || 0)), Math.round(255 * (c.val || 0))];
+  const inks = extractList.map(pickMain);
+  const others = excludeList.map(pickMain);
+  const hexes = extractList.concat(excludeList).map((c) => c.hex);
+  const floor = inkMFloorOf(target);
+
+  // 基础画布 ↔ 原图坐标映射（空白模式的底图是自己按 contain 画的，映射规则不同）
+  const map = blank ? { ...base._fit, sx: 0, sy: 0 }
+                    : cropMapFor(st);
+  const contentW = blank ? base._fit.w : Math.round((st.bbox ? st.bbox.w : OUT) * map.ratio);
+  const contentH = blank ? base._fit.h : Math.round((st.bbox ? st.bbox.h : OUT) * map.ratio);
+
+  const orig = getOrigData(st);
+  const ow = orig._w, oh = orig._h;
+  const N = OUT * OUT;
+  const C = new Float32Array(N * 3);
+  const inImg = new Uint8Array(N);
+  for (let y = 0; y < OUT; y++) {
+    const inRow = (y >= map.dy && y < map.dy + contentH);
+    const oy = Math.min(oh - 1, Math.max(0, Math.round(map.sy + (y - map.dy) / map.ratio)));
+    const rowO = oy * ow;
+    for (let x = 0; x < OUT; x++) {
+      const i = y * OUT + x;
+      if (!inRow || x < map.dx || x >= map.dx + contentW) continue;   // 留边不参与
+      const ox = Math.min(ow - 1, Math.max(0, Math.round(map.sx + (x - map.dx) / map.ratio)));
+      const oi = (rowO + ox) * 4;
+      const i3 = i * 3;
+      C[i3] = orig.data[oi]; C[i3 + 1] = orig.data[oi + 1]; C[i3 + 2] = orig.data[oi + 2];
+      inImg[i] = 1;
+    }
+  }
+
+  const res = inkMRun(C, inImg, OUT, OUT, N, inks, others, hexes, floor, ink.paperRGB || null);
+  let added = 0, removed = 0;
+  for (let i = 0; i < N; i++) {
+    const i4 = i * 4;
+    const baseA = img.data[i4 + 3] / 255;
+    let m = 0, keepBase = 0;
+    if (inImg[i]) {
+      const inkAmt = res.aIn[i];
+      // 自动提取的结果只在"确实有墨"时才保留：预设色带会把纸底整片泛洪进来，
+      // 这些像素的墨量低于 0.1（实测本类图 80% 如此），保留它们就是"糊成一片"的根源
+      keepBase = blank ? 0 : baseA * inkMSmoothstep(0.12, 0.28, inkAmt);
+      m = inkMRamp(inkAmt, floor) * res.conf[i];
+    }
+    const a = Math.max(keepBase, m) * (1 - inkMRamp(res.bOt[i], floor));
+    const px = Math.round(Math.max(0, Math.min(1, a)) * 255);
+    if (px > img.data[i4 + 3] + 8) added++;
+    else if (px + 8 < img.data[i4 + 3]) removed++;
+    img.data[i4 + 3] = px;
+    if (inImg[i] && m >= baseA && m > 0.02) {           // 分解新增的像素用原图颜色
+      const i3 = i * 3;
+      img.data[i4] = C[i3]; img.data[i4 + 1] = C[i3 + 1]; img.data[i4 + 2] = C[i3 + 2];
+    }
+  }
+
+  g.putImageData(img, 0, 0);
+  st.enhanceFactor = 1;                                  // 分解结果自带软边，不再做颜色加深
+  st._inkHits = res.hits;
+  st._inkPaper = Array.from(res.P0).map((v) => Math.round(v));
+  let dw2 = null;
+  try {
+    const manualInk = customs.length > 0;
+    if (!blank && !st.circleLock && !manualInk) dw2 = dewarpExtracted(target, cur);
+  } catch (e) { dw2 = null; }
+  let finalCanvas = dw2 ? dw2.canvas : cur;
+  if (st.circleLock) { try { finalCanvas = circleCropCanvas(finalCanvas, st.circleLock); } catch (e) {} }
+  st.extracted = finalCanvas;
+  st.warpInfo = dw2 ? { ratio: dw2.ell.ratio, a: dw2.ell.a, b: dw2.ell.b } : null;
+  st.inkSpec = activeInkSpec(target);
+  st._sig = (st._sig || 0) + 1;
+  st._lastDelta = { added, removed };
+  drawExtractedPreview(target, st.extracted);
+  return st._lastDelta;
 }
 
 function recomputeManual(target) {
@@ -7769,11 +8117,17 @@ function inkFillRatio(canvasEl, ell) {
 }
 
 // 取色/剔除的匹配方式：hue=按色相+彩度（默认，抓相邻深浅）；rgb=只认与所选颜色相近的像素
+// 取色/剔除的匹配方式：ink=墨量分解（默认，按"纸底→墨色"的浓度判墨，淡章不丢、纸底不吃）
+//                  hue=按色相+彩度（旧，抓相邻深浅）；rgb=只认与所选颜色相近的像素（旧）
 function inkMatchMode() {
-  try { return localStorage.getItem('stamp.matchMode') === 'rgb' ? 'rgb' : 'hue'; } catch (e) { return 'hue'; }
+  try {
+    const v = localStorage.getItem('stamp.matchMode');
+    return (v === 'hue' || v === 'rgb') ? v : 'ink';
+  } catch (e) { return 'ink'; }
 }
 function setInkMatchMode(m) {
-  try { localStorage.setItem('stamp.matchMode', m === 'rgb' ? 'rgb' : 'hue'); } catch (e) {}
+  const v = (m === 'hue' || m === 'rgb') ? m : 'ink';
+  try { localStorage.setItem('stamp.matchMode', v); } catch (e) {}
 }
 
 function dewarpEnabled() {
@@ -7925,6 +8279,10 @@ function recomputeExtracted(target) {
     st.enhanceFactor = 1;
     drawExtractedPreview(target, st.extracted);
     return { added: 0, removed: 0 };
+  }
+  // 墨量分解（默认匹配方式）：有手工色时走新模型；纯手工勾选时同样以它为准
+  if (inkMatchMode() === 'ink' && (manualInkOn() || state.ink[target].customs.some((c) => c.on))) {
+    return recomputeInkModel(target);
   }
   if (manualInkOn() && (manualBlankOn() || state.ink[target].customs.some((c) => c.on))) {
     return recomputeManual(target);
@@ -8906,6 +9264,7 @@ function ovHitHandle(clientX, clientY) {
 
 function ovSetMode(mode) {
   try { window.__ovSyncMatch && window.__ovSyncMatch(); } catch (e) {}
+  try { window.__ovSyncTol && window.__ovSyncTol(); } catch (e) {}
   OV.mode = mode;
   const el = OV.el || document.getElementById('origin-viewer');
   if (el) el.dataset.mode = mode;
@@ -9151,6 +9510,36 @@ function ovRenderColors() {
     }
     return;
   }
+  // 纸底项：指定的纸底色会参与分解（删除后恢复自动判定）
+  const paperRGB = ink && ink.paperRGB;
+  if (paperRGB && paperRGB.length === 3) {
+    const pchip = document.createElement('span');
+    pchip.className = 'ov-chip';
+    pchip.title = '已手动指定纸底色（点 × 恢复自动判定）';
+    const psw = document.createElement('span');
+    psw.className = 'sw';
+    psw.style.background = '#' + paperRGB.map((v) => v.toString(16).padStart(2, '0')).join('');
+    const ptag = document.createElement('span');
+    ptag.className = 'tag';
+    ptag.textContent = '纸底';
+    const phex = document.createElement('span');
+    phex.className = 'hex';
+    phex.textContent = '#' + paperRGB.map((v) => v.toString(16).padStart(2, '0')).join('');
+    const pdel = document.createElement('button');
+    pdel.type = 'button';
+    pdel.className = 'del';
+    pdel.innerHTML = uiIcon('close');
+    pdel.title = '恢复自动判定纸底';
+    pdel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      delete state.ink[OV.target].paperRGB;
+      ovRenderColors();
+      applyInkSelection(OV.target, '已恢复自动判定纸底');
+      setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
+    });
+    pchip.append(psw, ptag, phex, pdel);
+    box.appendChild(pchip);
+  }
   list.forEach((c, i) => {
     const chip = document.createElement('span');
     chip.className = 'ov-chip' + (c.on ? '' : ' off');
@@ -9223,24 +9612,10 @@ function ovPickFromResult(clientX, clientY) {
     showStatus('这里没有像素，请点提取结果里的笔画');
     return;
   }
-  const R = 3;
-  const sx = Math.max(0, ix - R), sy = Math.max(0, iy - R);
-  const ww = Math.min(src.width - 1, ix + R) - sx + 1;
-  const hh = Math.min(src.height - 1, iy + R) - sy + 1;
-  const d = src.getContext('2d').getImageData(sx, sy, ww, hh).data;
-  let best = null, bestScore = -1;
-  for (let yy = 0; yy < hh; yy++) {
-    for (let xx = 0; xx < ww; xx++) {
-      const i = (yy * ww + xx) * 4;
-      if (d[i + 3] < 30) continue;
-      const rr = d[i], gg = d[i + 1], bb = d[i + 2];
-      const mx = Math.max(rr, gg, bb), mn = Math.min(rr, gg, bb);
-      const v = mx / 255, s2 = mx > 0 ? (mx - mn) / mx : 0;
-      const score = s2 * 0.5 + (1 - Math.abs(v - 0.45));
-      if (score > bestScore) { bestScore = score; best = [rr, gg, bb]; }
-    }
-  }
-  if (!best) { showStatus('这一点是透明的，请点笔画上'); return; }
+  // 所见即所得：取光标正下方那个像素（结果图上的颜色）
+  const d = src.getContext('2d').getImageData(ix, iy, 1, 1).data;
+  if (d[3] < 30) { showStatus('这一点是透明的，请点笔画上'); return; }
+  const best = [d[0], d[1], d[2]];
   const ok = addCustomInk(OV.target, best[0], best[1], best[2], true, [best]);
   if (!ok) { const info = document.getElementById('ov-info'); if (info) info.textContent = inkNotice() || '没有可排除的颜色'; }
   if (ok) {
@@ -9370,27 +9745,13 @@ function ovPickAt(clientX, clientY, exclude) {
   const p = ovScreenToImage(clientX, clientY);
   const nx = Math.round(p.x), ny = Math.round(p.y);
   if (nx < 0 || ny < 0 || nx >= OV.imgW || ny >= OV.imgH) return;
-  const R = 3;
-  const sx = Math.max(0, nx - R), sy = Math.max(0, ny - R);
-  const w = Math.min(OV.imgW - 1, nx + R) - sx + 1;
-  const h = Math.min(OV.imgH - 1, ny + R) - sy + 1;
-  const d = st.original.getContext('2d').getImageData(sx, sy, w, h).data;
-  const near = [];
-  let best = null, bestScore = -1;
-  for (let yy = 0; yy < h; yy++) {
-    for (let xx = 0; xx < w; xx++) {
-      const i = (yy * w + xx) * 4;
-      const r = d[i], g = d[i + 1], b = d[i + 2];
-      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      const v = mx / 255, s2 = mx > 0 ? (mx - mn) / mx : 0;
-      if (v < 0.10 || v > 0.96) continue;            // 跳过近黑/近白
-      near.push([r, g, b]);
-      const score = s2 * 2 + (1 - Math.abs(v - 0.45)); // 偏爱有彩且中间调的墨
-      if (score > bestScore) { bestScore = score; best = [r, g, b]; }
-    }
-  }
-  if (!best) { showStatus('这里没有可提取的颜色，请点印章笔画上'); return; }
-  const set = collectColorSet(best, near);
+  // 所见即所得：取光标正下方那一个像素（放大镜读数就是这个像素），不再到邻域里挑"最像墨"的颜色。
+  // 同一笔画的深浅由墨量分解负责，取色这一步只负责"用户指的是哪种墨"
+  const d = st.original.getContext('2d').getImageData(nx, ny, 1, 1).data;
+  const best = [d[0], d[1], d[2]];
+  const mxv = Math.max(d[0], d[1], d[2]);
+  if (mxv <= 4) { showStatus('这里没有可提取的颜色（纯黑/透明），请点印章笔画上'); return; }
+  const set = [best];
   const ok = addCustomInk(OV.target, best[0], best[1], best[2], exclude, set);
   if (ok) {
     // 标记这次取色的位置（原图坐标），让用户看得见"我点了哪儿"，也方便回看/复现
@@ -9445,12 +9806,32 @@ function ovPickAt(clientX, clientY, exclude) {
         : '点击墨迹处添加颜色 · 顶部可切换「排除」';
     });
   });
+  // 「取纸底」：按下后下一次点击纸面即把该色指定为纸底色（再点一次取消）
+  let pickPaper = false;
+  const paperBtn = document.getElementById('ov-pick-paper');
+  if (paperBtn && !paperBtn._bound) {
+    paperBtn._bound = true;
+    paperBtn.addEventListener('click', () => {
+      pickPaper = !pickPaper;
+      paperBtn.classList.toggle('active', pickPaper);
+      paperBtn.textContent = pickPaper ? '🖱 点纸面…' : '🖱 取纸底';
+      const info = document.getElementById('ov-info');
+      if (info) info.textContent = pickPaper ? '点击纸面（印章外的空白纸）来指定纸底色 · 再点按钮取消' : '已取消取纸底';
+      OV.pickPaper = pickPaper;
+    });
+  }
   const tolInput = document.getElementById('ov-tol');
   const tolVal = document.getElementById('ov-tol-val');
   const syncTol = () => {
-    const v = Math.round((state.ink[OV.target] && state.ink[OV.target].pickTol || 0.14) * 100);
+    const inkNow = state.ink[OV.target] || {};
+    const inkMode = inkMatchMode() === 'ink';
+    const v = Math.round((inkMode ? (inkNow.floor || INK_M_FLOOR) : (inkNow.pickTol || 0.14)) * 100);
     tolInput.value = String(v);
     tolVal.textContent = v + '%';
+    const wrap = document.getElementById('ov-tol-wrap');
+    if (wrap) wrap.title = inkMode
+      ? '浓度下限：笔画比纸底“浓”到多少才算墨。调大 → 更干净（淡笔画会被舍去）；调小 → 抓得更全（纸底噪点可能浮现）。提取与剔除同时生效'
+      : '剔除容差：越大越能把相邻的深浅笔画一起去掉';
   };
   window.__ovSyncTol = syncTol;
 
@@ -9522,18 +9903,23 @@ function ovPickAt(clientX, clientY, exclude) {
     applyEnhFromViewer();
   });
   tolInput.addEventListener('input', () => {
-    const v = Math.max(4, Math.min(40, parseInt(tolInput.value, 10) || 14));
+    const inkMode = inkMatchMode() === 'ink';
+    const v = Math.max(15, Math.min(65, parseInt(tolInput.value, 10) || 30));
     tolVal.textContent = v + '%';
-    state.ink[OV.target].pickTol = v / 100;
-    // 已有排除色时立即重算，让滑杆能"边拖边看"
-    if (state.ink[OV.target].customs.some(c => c.exclude && c.on)) {
+    if (!state.ink[OV.target]) return;
+    if (inkMode) state.ink[OV.target].floor = v / 100;
+    else state.ink[OV.target].pickTol = v / 100;
+    // 已有任何手工色就重算：下限对"提取"同样生效，不能只在有排除色时才刷新
+    if (state.ink[OV.target].customs.some(c => c.on)) {
       clearTimeout(_inkTimers[OV.target]);
       _inkTimers[OV.target] = setTimeout(() => {
         const d = recomputeExtracted(OV.target);
         drawExtractedPreview(OV.target, state[OV.target].extracted);
         render();
         if (ovIsOpen()) ovDraw();
-        showStatus(`${stampLabel(OV.target)}剔除容差 ${v}% —— 本次剔除 ${d.removed} 像素`);
+        showStatus(inkMode
+          ? `${stampLabel(OV.target)}浓度下限 ${v}% —— 新增 ${d.added} 像素 · 剔除 ${d.removed} 像素`
+          : `${stampLabel(OV.target)}剔除容差 ${v}% —— 本次剔除 ${d.removed} 像素`);
       }, 180);
     }
   });
@@ -9568,6 +9954,7 @@ function ovPickAt(clientX, clientY, exclude) {
       OV.zoom = 1; OV.panX = 0; OV.panY = 0;
       OV.crop = (st._regionLocked && st.bbox) ? { x: st.bbox.x, y: st.bbox.y, w: st.bbox.w, h: st.bbox.h } : null;
       el.querySelectorAll('#ov-targets button').forEach(x => x.classList.toggle('active', x === b));
+      try { window.__ovSyncTol && window.__ovSyncTol(); } catch (e) {}
       ovSetMode(OV.mode);
       if (OV.updateZoom) OV.updateZoom();
     });
@@ -9762,6 +10149,24 @@ function ovPickAt(clientX, clientY, exclude) {
       const pr = OV.paneB.getBoundingClientRect();
       const inPaneB = OV.paneB && getComputedStyle(OV.paneB).display !== 'none'
         && e.clientX >= pr.left && e.clientX <= pr.right && e.clientY >= pr.top && e.clientY <= pr.bottom;
+      if (OV.pickPaper) {
+        const st2 = state[OV.target];
+        const p2 = ovScreenToImage(e.clientX, e.clientY);
+        const px2 = Math.round(p2.x), py2 = Math.round(p2.y);
+        if (st2 && st2.original && px2 >= 0 && py2 >= 0 && px2 < OV.imgW && py2 < OV.imgH) {
+          const d2 = st2.original.getContext('2d').getImageData(px2, py2, 1, 1).data;
+          state.ink[OV.target].paperRGB = [d2[0], d2[1], d2[2]];
+          const hex2 = '#' + [d2[0], d2[1], d2[2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+          const pb = document.getElementById('ov-pick-paper');
+          if (pb) { pb.classList.remove('active'); pb.textContent = '🖱 取纸底'; }
+          OV.pickPaper = false;
+          try { ovRenderColors(); } catch (e) {}
+          showStatus(`已把 ${hex2} 指定为纸底色，正在重算…`);
+          applyInkSelection(OV.target, `纸底色 ${hex2}`);
+          setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
+        }
+        return;
+      }
       if (inPaneB) {
         if (!OV.exclude) {
           showStatus('右侧是提取结果 —— 想加色请点左侧原图；想剔除请先切到「排除」');
@@ -10056,39 +10461,15 @@ function samplePreviewColor(zone, e, wantSet) {
   if (!pos) return null;
   const { img, nx, ny } = pos;
 
-  const R = 3; // 7×7 邻域
-  const IW = img.naturalWidth, IH = img.naturalHeight;
-  const sx = Math.max(0, nx - R), sy = Math.max(0, ny - R);
-  const ex = Math.min(IW - 1, nx + R), ey = Math.min(IH - 1, ny + R);
-  const w = ex - sx + 1, h = ey - sy + 1;
   const rec = pixelsOf(img);
   if (!rec) return null;
   const d = rec.data;
-  const stride = rec.w;   // 缓存按整图宽度排布，邻域内用 stride 跳行
-  // 基准色：点击处 3×3 均值（跳过近黑/近白像素，抗噪）
-  let br = 0, bg = 0, bb = 0, bn = 0;
-  const near = [];
-  for (let yy = 0; yy < h; yy++) {
-    for (let xx = 0; xx < w; xx++) {
-      const i = ((sy + yy) * stride + (sx + xx)) * 4;
-      const r = d[i], g = d[i + 1], b = d[i + 2];
-      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      const v = mx / 255, s = mx > 0 ? (mx - mn) / mx : 0;
-      if (v < 0.08 || v > 0.97) continue; // 跳过近黑与近白
-      near.push([r, g, b]);
-      if (Math.abs(xx - (nx - sx)) <= 1 && Math.abs(yy - (ny - sy)) <= 1) { br += r; bg += g; bb += b; bn++; }
-    }
-  }
-  if (!bn) {
-    // 3×3 全为极端色：退回全邻域均值（保留旧行为兜底）
-    if (!near.length) return null;
-    for (const p of near) { br += p[0]; bg += p[1]; bb += p[2]; }
-    bn = near.length;
-  }
-  const base = [Math.round(br / bn), Math.round(bg / bn), Math.round(bb / bn)];
+  const stride = rec.w;   // 缓存按整图宽度排布
+  // 所见即所得：取光标正下方那个像素（与放大镜读数一致）
+  const ci = (ny * stride + nx) * 4;
+  const base = [d[ci], d[ci + 1], d[ci + 2]];
   if (!wantSet) return base;
-  // 精确色集合：邻域内与基准色同属一笔画的颜色簇（聚类去重）
-  return collectColorSet(base, near);
+  return [base];
 }
 
 // 取色放大镜：显示光标处 4× 放大的图像区域 + 十字准线
@@ -10123,19 +10504,12 @@ function sampleCanvasColor(canvas, e, wantSet) {
   const y = Math.floor((e.clientY - rect.top) / rect.height * canvas.height);
   if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return null;
   const ctx = canvas.getContext('2d');
-  const R = Math.max(2, Math.round(canvas.width / 160 * 3)); // 160px 显示时 ±3 画布像素
-  const sx = Math.max(0, x - R), sy = Math.max(0, y - R);
-  const ex = Math.min(canvas.width - 1, x + R), ey = Math.min(canvas.height - 1, y + R);
-  const d = ctx.getImageData(sx, sy, ex - sx + 1, ey - sy + 1).data;
-  let best = null, bestA = 0;
-  const opaque = [];
-  for (let i = 3; i < d.length; i += 4) {
-    if (d[i] >= 30) opaque.push([d[i - 3], d[i - 2], d[i - 1]]);
-    if (d[i] > bestA) { bestA = d[i]; best = [d[i - 3], d[i - 2], d[i - 1]]; }
-  }
-  if (bestA < 30) return null;
+  // 所见即所得：取光标正下方那个像素
+  const d = ctx.getImageData(x, y, 1, 1).data;
+  if (d[3] < 30) return null;
+  const best = [d[0], d[1], d[2]];
   if (!wantSet) return best;
-  return collectColorSet(best, opaque);
+  return [best];
 }
 
 // 提取结果画布放大镜
