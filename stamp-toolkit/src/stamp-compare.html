@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.32</title>
+<title>印章对比工具 v3.6.33</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4534,7 +4534,7 @@
         <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
         <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.32</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.33</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5164,7 +5164,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.32';
+const APP_VERSION = '3.6.33';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6992,7 +6992,7 @@ function collectColorSet(base, pixels) {
 let _lastInkNotice = '';   // 取色失败/被合并时的原因，供查看器就地提示
 function inkNotice() { return _lastInkNotice; }
 
-// ===== 墨量分解匹配（v3.6.32）=====
+// ===== 墨量分解匹配（v3.6.33）=====
 // 为什么不用"颜色范围"：淡章墨色与纸底只差几十级，容差小则笔画只剩芯、大则连纸一起要；
 // 且不同深浅的笔画是"纸→墨"的渐变，本就不是同一个颜色。
 // 做法：把每个像素拆成"几分纸 + 几分墨"：
@@ -7279,7 +7279,7 @@ function setManualInk(v) {
   showStatus(v ? '已开启纯手工取色：只按所选 RGB 增删颜色（配置会记住）' : '已关闭纯手工取色：恢复自动提取 + 智能匹配');
 }
 
-// ===== 墨量分解的提取实现（v3.6.32）=====
+// ===== 墨量分解的提取实现（v3.6.33）=====
 // 在"基础自动提取"之上，用墨量分解结果决定每个像素的不透明度：
 //   非空白模式：a = max(基础提取, 分解) × (1 − 被排除色的量)  —— 分解只加不减，不会把自动提取的结果抹掉
 //   空白模式  ：a = 分解 × (1 − 被排除色的量)                  —— 完全按所选颜色画出印章
