@@ -7,7 +7,7 @@
   },
   "scripts": {
     "sync-web": "sh scripts/sync-web.sh",
-    "build": "npm run sync-web && tauri build",
+    "build": "npm run sync-web && tauri build && sh scripts/collect-dist.sh",
     "dev": "npm run sync-web && tauri dev"
   }
 }
