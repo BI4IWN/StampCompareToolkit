@@ -5062,9 +5062,13 @@
               <input type="range" id="ov-tol" min="15" max="65" step="1" value="30">
               <b id="ov-tol-val">30%</b>
             </label>
-            <label class="ov-tol ov-enh" id="ov-morph-wrap" title="去网点：去掉细碎的点状杂色（扫描网点、红底网点、纸张颗粒），只保留成片的笔画">
+            <label class="ov-tol" id="ov-morph-wrap" title="去网点：去掉细碎的杂点（扫描网点、纸张颗粒）。弱＝只清孤立颗粒，笔画完全不受影响；强＝压掉更密的网点，细笔画会变细甚至断">
               <span>去网点</span>
-              <input type="checkbox" id="ov-morph">
+              <select id="ov-morph">
+                <option value="0">关</option>
+                <option value="1">弱</option>
+                <option value="2">强</option>
+              </select>
             </label>
             <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
               <span>颜色加深</span>
@@ -6450,12 +6454,15 @@ function processStamp(img, target) {
   const prevTol = manualInkOn() ? (state.ink[target] && state.ink[target].pickTol) : undefined;
   const prevFloor = manualInkOn() ? (state.ink[target] && state.ink[target].floor) : undefined;
   const prevPaper = manualInkOn() ? (state.ink[target] && state.ink[target].paperRGB) : undefined;
-  const prevMorph = manualInkOn() ? (state.ink[target] && state.ink[target].morph) : undefined;
+  const prevMorphLv = manualInkOn()
+    ? ((state.ink[target] && state.ink[target].morphLevel != null) ? state.ink[target].morphLevel
+       : ((state.ink[target] && state.ink[target].morph) ? 2 : 0))
+    : undefined;
   state.ink[target] = { presets: ['red'], customs: prevCustoms, grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: prevEnhance };
   if (prevTol !== undefined) state.ink[target].pickTol = prevTol;
   if (prevFloor !== undefined) state.ink[target].floor = prevFloor;
   if (prevPaper !== undefined) state.ink[target].paperRGB = prevPaper.slice();
-  if (prevMorph !== undefined) state.ink[target].morph = prevMorph;
+  if (prevMorphLv !== undefined) { state.ink[target].morphLevel = prevMorphLv; state.ink[target].morph = prevMorphLv > 0; }
   renderInkPanel(target);
 
   state[target] = {
@@ -7368,11 +7375,16 @@ function recomputeInkModel(target) {
     }
   }
 
-  // 去网点（可选）：把细碎的点状杂色当作噪声去掉，只留成片的笔画
-  if (ink.morph) {
+  // 去网点（可选，两档）：形态学开运算去掉细碎点状杂色，只留成片的笔画
+  //   弱（半径 1）：只去 1~2 像素的孤立点（网点、颗粒），笔画几乎不受影响
+  //   强（半径 2）：再粗一档，能压掉更密的网点，但细笔画会变细、极细的可能断
+  const morphLevel = ink.morphLevel != null ? ink.morphLevel : (ink.morph ? 2 : 0);
+  if (morphLevel > 0) {
     const bin = new Uint8Array(N);
     for (let i = 0; i < N; i++) bin[i] = img.data[i * 4 + 3] >= 128 ? 1 : 0;
-    const opened = inkMOpening(bin, OUT, OUT, 2);
+    const opened = morphLevel === 1
+      ? inkMIsolated(bin, OUT, OUT, 2, 2)     // 弱：只清孤立颗粒，细线不受影响
+      : inkMOpening(bin, OUT, OUT, 2);        // 强：开运算，压掉更密的网点（细线会变细）
     let cut = 0;
     for (let i = 0; i < N; i++) {
       if (!opened[i] && img.data[i * 4 + 3] > 0) { img.data[i * 4 + 3] = 0; cut++; }
@@ -7398,6 +7410,34 @@ function recomputeInkModel(target) {
   st._lastDelta = { added, removed };
   drawExtractedPreview(target, st.extracted);
   return st._lastDelta;
+}
+
+// 孤立点滤波：只删除"8 邻域里墨像素少于 minNbr"的孤立点（2 轮）。
+// 比开运算温和得多 —— 细线的中间像素有 2 个邻居，不会被删；真正的孤立颗粒会被清掉。
+function inkMIsolated(mask, W, H, rounds, minNbr) {
+  let cur = mask;
+  for (let r = 0; r < rounds; r++) {
+    const next = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (!cur[i]) continue;
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= H) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const xx = x + dx;
+            if (xx >= 0 && xx < W && cur[yy * W + xx]) n++;
+          }
+        }
+        next[i] = n >= minNbr ? 1 : 0;
+      }
+    }
+    cur = next;
+  }
+  return cur;
 }
 
 // 二值形态学开运算（先腐蚀后膨胀）：去掉细碎的点状结构（扫描网点、红底网点），保留笔画。
@@ -9986,18 +10026,21 @@ function ovPickAt(clientX, clientY, exclude) {
       showStatus(`${stampLabel(OV.target)}颜色加深已更新（增强 ${(state[OV.target].enhanceFactor || 1).toFixed(2)}×）`);
     }, 200);
   };
-  const morphCb = document.getElementById('ov-morph');
+  const morphSel = document.getElementById('ov-morph');
+  const morphLevelOf = (inkNow) => (inkNow && inkNow.morphLevel != null) ? inkNow.morphLevel : ((inkNow && inkNow.morph) ? 2 : 0);
   const syncMorph = () => {
     const inkNow = state.ink[OV.target] || {};
-    if (morphCb) morphCb.checked = !!inkNow.morph;
+    if (morphSel) morphSel.value = String(morphLevelOf(inkNow));
   };
   window.__ovSyncMorph = syncMorph;
-  if (morphCb && !morphCb._bound) {
-    morphCb._bound = true;
+  if (morphSel && !morphSel._bound) {
+    morphSel._bound = true;
     syncMorph();
-    morphCb.addEventListener('change', () => {
-      state.ink[OV.target].morph = morphCb.checked;
-      applyInkSelection(OV.target, morphCb.checked ? '已开启去网点' : '已关闭去网点');
+    morphSel.addEventListener('change', () => {
+      const lv = Number(morphSel.value) || 0;
+      state.ink[OV.target].morphLevel = lv;
+      state.ink[OV.target].morph = lv > 0;
+      applyInkSelection(OV.target, lv === 0 ? '已关闭去网点' : (lv === 1 ? '去网点：弱' : '去网点：强'));
       setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
     });
   }
