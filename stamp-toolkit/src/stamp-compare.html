@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.35</title>
+<title>印章对比工具 v3.6.36</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4568,7 +4568,7 @@
         <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
         <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.35</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.36</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5205,7 +5205,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.35';
+const APP_VERSION = '3.6.36';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -7270,22 +7270,25 @@ function manualInkOn() {
 // ===== v3.6.35：取色范围单选（自动提取+我点的颜色 / 只用我点的颜色）与「记住配色」 =====
 // 旧的「纯手工」「空白」两个开关由单选内部维护（写入同一组 localStorage 键，旧分发逻辑不用改）；
 // 「记住配色」接替旧「纯手工」的记忆职责，默认关（不同单据的印章颜色差异大，沿用往往不合适）。
-function pickBase() {
+// 提取范围按印章独立（v3.6.36）：单选只作用于当前编辑的这枚章。
+function inkBaseOf(target) {
+  const im = target && state.ink[target];
+  if (im && (im.base === 'blank' || im.base === 'auto')) return im.base;
   try {
-    const v = localStorage.getItem('stamp.pickBase');
-    if (v === 'auto' || v === 'blank') return v;
-    // 迁移：老用户若显式开过纯手工+空白，映射为「只用我点的颜色」
-    if (localStorage.getItem('stamp.manualBlank') === '1') return 'blank';
+    // 首启迁移：仅当本印章从未设置过范围时，沿用旧会话的全局开关（一次性）
+    if (localStorage.getItem('stamp.manualBlank') === '1') {
+      if (im) im.base = 'blank';
+      return 'blank';
+    }
   } catch (e) {}
   return 'auto';
 }
-function setPickBase(v) {
+function setPickBase(v, target) {
   const blank = v === 'blank';
-  try {
-    localStorage.setItem('stamp.pickBase', blank ? 'blank' : 'auto');
-    localStorage.setItem('stamp.manualInk', blank ? '1' : '0');
-    localStorage.setItem('stamp.manualBlank', blank ? '1' : '0');
-  } catch (e) {}
+  const im = target && state.ink[target];
+  if (!im) return;
+  // v3.6.36：只写本印章的状态 —— 全局键会让另一枚章的迁移回退读到它，造成跨章影响
+  im.base = blank ? 'blank' : 'auto';
 }
 function rememberColorsOn() {
   try {
@@ -7306,23 +7309,10 @@ function manualBlankOn() {
   try { return manualInkOn() && localStorage.getItem('stamp.manualBlank') === '1'; } catch (e) { return false; }
 }
 
-function setManualBlank(v) {
-  try { localStorage.setItem('stamp.manualBlank', v ? '1' : '0'); } catch (e) {}
-  syncManualUi();
-  ['ref', 'test'].forEach((t) => {
-    if (state[t] && state[t].original) {
-      state[t].baseExtracted = null;   // 空白模式不沿用自动提取结果
-      state[t]._baseKey = null;
-      try { recomputeExtracted(t); } catch (e) {}
-    }
-  });
-  try { ovRenderColors(); } catch (e) {}
-  showStatus(v ? '已切到空白模式：不再自动取色，全部靠手工取色画出印章' : '已退出空白模式：恢复自动提取 + 手工微调');
-}
-
 function syncManualUi() {
-  const blank = manualBlankOn();
-  const base = pickBase();
+  const tgt = (typeof OV !== 'undefined' && OV && OV.target) || state.target;
+  const blank = inkBaseOf(tgt) === 'blank';
+  const base = inkBaseOf(tgt);
   // 同步两个单选
   document.querySelectorAll('#ov-base-group input[name=ov-base]').forEach((r) => { r.checked = (r.value === base); });
   // 记住配色
@@ -7380,7 +7370,7 @@ function inkMBlankBase(st) {
 
 function recomputeInkModel(target) {
   const st = state[target];
-  const blank = manualBlankOn();
+  const blank = inkBaseOf(target) === 'blank';
   const base = blank ? inkMBlankBase(st) : (st.baseExtracted || ensureBaseExtraction(target));
   if (!base) return { added: 0, removed: 0 };
   const OUT = base.width;
@@ -7570,7 +7560,7 @@ function inkMOpening(mask, W, H, r) {
 
 function recomputeManual(target) {
   const st = state[target];
-  const blank = manualBlankOn();
+  const blank = inkBaseOf(target) === 'blank';
   let base = null;
   if (blank) {
     // 空白模式：不跑自动提取，直接从原图画一张方形底图（等比 contain，居中留白）
@@ -7718,7 +7708,7 @@ function addCustomInk(target, r, g, b, exclude, colorSet) {
   if (!exclude) {
     const tolNow = state.ink[target].pickTol || 0.14;
     const hueWinNew = Math.min(22, 6 + tolNow * 40);
-    const rgbMode = inkMatchMode() === 'rgb';
+    const rgbMode = inkMatchMode(target) === 'rgb';
     const rgbTol = Math.max(6, tolNow * 120);
     ink.customs = ink.customs.filter(c => {
       if (!c.exclude || !c.on) return true;
@@ -8337,15 +8327,20 @@ function inkFillRatio(canvasEl, ell) {
 // 取色/剔除的匹配方式：hue=按色相+彩度（默认，抓相邻深浅）；rgb=只认与所选颜色相近的像素
 // 取色/剔除的匹配方式：ink=墨量分解（默认，按"纸底→墨色"的浓度判墨，淡章不丢、纸底不吃）
 //                  hue=按色相+彩度（旧，抓相邻深浅）；rgb=只认与所选颜色相近的像素（旧）
-function inkMatchMode() {
+// 匹配方式按印章独立（v3.6.36）：参考章/待验章的墨色往往不同，
+// 改一枚的匹配方式不应影响另一枚。localStorage 仅作首次迁移默认。
+function inkMatchMode(target) {
+  const im = target && state.ink[target];
+  if (im && im.matchMode) return im.matchMode;
   try {
     const v = localStorage.getItem('stamp.matchMode');
     return (v === 'hue' || v === 'rgb') ? v : 'ink';
   } catch (e) { return 'ink'; }
 }
-function setInkMatchMode(m) {
+function setInkMatchMode(m, target) {
   const v = (m === 'hue' || m === 'rgb') ? m : 'ink';
-  try { localStorage.setItem('stamp.matchMode', v); } catch (e) {}
+  if (target && state.ink[target]) state.ink[target].matchMode = v;
+  else { try { localStorage.setItem('stamp.matchMode', v); } catch (e) {} }
 }
 
 function dewarpEnabled() {
@@ -8499,10 +8494,11 @@ function recomputeExtracted(target) {
     return { added: 0, removed: 0 };
   }
   // 墨量分解（默认匹配方式）：有手工色时走新模型；纯手工勾选时同样以它为准
-  if (inkMatchMode() === 'ink' && (manualInkOn() || state.ink[target].customs.some((c) => c.on))) {
+  const pickBaseNow = inkBaseOf(target);
+  if (inkMatchMode(target) === 'ink' && (pickBaseNow === 'blank' || state.ink[target].customs.some((c) => c.on))) {
     return recomputeInkModel(target);
   }
-  if (manualInkOn() && (manualBlankOn() || state.ink[target].customs.some((c) => c.on))) {
+  if (pickBaseNow === 'blank') {
     return recomputeManual(target);
   }
   const base = ensureBaseExtraction(target);
@@ -8552,7 +8548,7 @@ function recomputeExtracted(target) {
     };
 
     // 1) 提取色 + 2) 排除色：单遍扫描像素，内部逐色判断（颜色多时避免 N 次全图扫描）
-    const RGBMODE = inkMatchMode() === 'rgb';
+    const RGBMODE = inkMatchMode(target) === 'rgb';
     // 精确 RGB 的容差：不能直接用 tolV（它在下面才声明，会踩 TDZ）
     const rgbTolNow = () => Math.max(6, (state.ink[target].pickTol || 0.14) * 120);
     const extractColors = customs.filter(c => !c.exclude && c.on !== false);
@@ -9596,7 +9592,7 @@ function ovBuildHints(target) {
   const covPct = stats.coverage * 100;
   const customs = (state.ink[target].customs || []).filter((c) => c.on);
   const picked = customs.filter((c) => !c.exclude).length;
-  const base = pickBase();
+  const base = inkBaseOf(target);
   const dismissed = _ovHintDismissed[target] || {};
 
   if (covPct > 55) {
@@ -9612,7 +9608,7 @@ function ovBuildHints(target) {
   }
   if (base === 'auto' && stats.modelAddedPct >= 0 && stats.modelAddedPct < 0.02 && covPct > 25) {
     hints.push({ id: 'autoDominant', msg: '当前结果主要是自动提取的内容（我点的颜色贡献很小）',
-      act: '只用我点的颜色', fn: () => { setPickBase('blank'); syncManualUi(); recomputeExtracted(target); showStatus('已切换：只用我点的颜色'); } });
+      act: '只用我点的颜色', fn: () => { setPickBase('blank', target); syncManualUi(); recomputeExtracted(target); showStatus('已切换：只用我点的颜色'); } });
   }
   return hints.filter((h) => !dismissed[h.id]).slice(0, 2);
 }
@@ -9736,6 +9732,11 @@ function openOriginViewer(target, mode, exclude) {
   OV.ptsEdited = false;
   OV.el.classList.add('visible');
   OV.el.querySelectorAll('#ov-targets button').forEach(b => b.classList.toggle('active', b.dataset.ovtarget === target));
+  // 打开/切换目标时同步该印章自己的取色配置到面板（v3.6.36：设置按印章分离）
+  try { window.__ovSyncTol && window.__ovSyncTol(); } catch (e) {}
+  try { window.__ovSyncMorph && window.__ovSyncMorph(); } catch (e) {}
+  try { window.__ovSyncMatch && window.__ovSyncMatch(); } catch (e) {}
+  try { syncManualUi(); } catch (e) {}
   ovSetMode(mode || 'browse');
   requestAnimationFrame(() => {
     ovResize();
@@ -10147,15 +10148,17 @@ function ovPickAt(clientX, clientY, exclude) {
     r._bound = true;
     r.addEventListener('change', () => {
       if (!r.checked) return;
-      setPickBase(r.value);
+      // v3.6.36：取色设置按印章分离 —— 只作用于当前编辑的这枚章
+      setPickBase(r.value, OV.target);
       syncManualUi();
-      ['ref', 'test'].forEach((t) => {
-        if (state[t] && (state[t].original || state[t].extracted)) { try { recomputeExtracted(t); } catch (e) {} }
-      });
+      if (state[OV.target] && (state[OV.target].original || state[OV.target].extracted)) {
+        try { recomputeExtracted(OV.target); } catch (e) {}
+      }
       try { ovRenderColors(); } catch (e) {}
-      showStatus(r.value === 'blank'
-        ? '已切换：只用我点的颜色（自动提取不再参与，全部靠点选）'
-        : '已切换：自动提取 + 我点的颜色');
+      const name = OV.target === 'ref' ? '参考章' : '待验章';
+      showStatus(name + (r.value === 'blank'
+        ? '：只用我点的颜色（另一枚印章的取色设置不受影响）'
+        : '：自动提取 + 我点的颜色（另一枚印章的取色设置不受影响）'));
     });
   });
   // 记住配色
@@ -10205,21 +10208,21 @@ function ovPickAt(clientX, clientY, exclude) {
 
   // 匹配方式：色相 / 精确RGB（全局设置，切换后两枚章都重算）
   const matchSel = document.getElementById('ov-match');
-  const syncMatch = () => { if (matchSel) matchSel.value = inkMatchMode(); };
+  const syncMatch = () => { if (matchSel) matchSel.value = inkMatchMode(OV.target); };
   window.__ovSyncMatch = syncMatch;
   if (matchSel && !matchSel._bound) {
     matchSel._bound = true;
     syncMatch();
     matchSel.addEventListener('change', () => {
-      setInkMatchMode(matchSel.value);
-      for (const t of ['ref', 'test']) {
-        const st = state[t];
-        if (st && st.original) { st._baseKey = null; recomputeExtracted(t); }
-      }
+      // v3.6.36：匹配方式按印章独立 —— 只重算当前编辑的这枚章
+      setInkMatchMode(matchSel.value, OV.target);
+      const stNow = state[OV.target];
+      if (stNow && stNow.original) { stNow._baseKey = null; recomputeExtracted(OV.target); }
       try { ovRenderColors(); ovDraw(); } catch (e) {}
-      showStatus(matchSel.value === 'rgb'
-        ? '匹配方式：精确RGB —— 只保留/剔除与所选颜色相近（±' + Math.round((state.ink[OV.target] && state.ink[OV.target].pickTol || 0.14) * 120) + '）的像素'
-        : '匹配方式：色相 —— 按色相+彩度抓相邻深浅，适合扫描件');
+      const stampName = OV.target === 'ref' ? '参考章' : '待验章';
+      showStatus(stampName + (matchSel.value === 'rgb'
+        ? ' 匹配方式：精确RGB —— 只保留/剔除与所选颜色相近（±' + Math.round((state.ink[OV.target] && state.ink[OV.target].pickTol || 0.14) * 120) + '）的像素'
+        : ' 匹配方式：色相 —— 按色相+彩度抓相邻深浅，适合扫描件'));
     });
   }
 
