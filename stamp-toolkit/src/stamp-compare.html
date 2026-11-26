@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.34</title>
+<title>印章对比工具 v3.6.35</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -2007,6 +2007,40 @@
   }
 
   .ov-tol.disabled { opacity: .45; pointer-events: none; }
+  /* v3.6.35：取色工具栏三层布局 + 高级抽屉 + 情境提示 */
+  .ov-actions { flex-wrap: wrap; row-gap: 6px; }
+  #ov-base-group { display: flex; align-items: center; gap: 4px; }
+  .ov-base { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: #4a5160;
+             padding: 6px 10px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
+  .ov-base:has(input:checked) { color: #b03d31; background: rgba(192,57,43,0.08); border-color: rgba(192,57,43,0.35); font-weight: 600; }
+  .ov-base input { accent-color: #c0392b; margin: 0; }
+  #ov-adv { position: absolute; right: 12px; bottom: 52px; z-index: 60; display: flex; flex-direction: column; gap: 10px;
+            background: #fff; border: 1px solid #dfe3ea; border-radius: 10px; padding: 12px 14px;
+            box-shadow: 0 10px 34px rgba(20,30,45,0.18); }
+  #ov-adv[hidden] { display: none; }
+  #ov-adv .ov-tol { justify-content: space-between; }
+  #ov-adv-toggle.active { color: #c0392b; border-color: #c0392b; }
+  #ov-hints { position: absolute; left: 12px; bottom: 12px; z-index: 55; display: flex; flex-direction: column; gap: 6px; max-width: 46%; }
+  .ov-hint { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.96); border: 1px solid #e7cdb8;
+             border-left: 3px solid #d98b3a; border-radius: 8px; padding: 7px 10px;
+             font: 12.5px/1.4 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color: #5a4a3a;
+             box-shadow: 0 4px 14px rgba(20,30,45,0.12); }
+  .ov-hint .h-msg { flex: 1; }
+  .ov-hint .h-act { border: 0; background: #d98b3a; color: #fff; border-radius: 5px; padding: 5px 10px;
+                    font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .ov-hint .h-act:hover { filter: brightness(1.08); }
+  .ov-hint .h-x { border: 0; background: none; color: #9a9a9a; cursor: pointer; font-size: 13px; padding: 2px 4px; }
+  #ov-hints { position: absolute; left: 12px; bottom: 12px; z-index: 55; display: flex; flex-direction: column; gap: 6px; max-width: 46%; }
+  .ov-hint-card { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.96); border: 1px solid #e7cdb8;
+                  border-left: 3px solid #d98b3a; border-radius: 8px; padding: 7px 10px;
+                  font: 12.5px/1.4 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color: #5a4a3a;
+                  box-shadow: 0 4px 14px rgba(20,30,45,0.14); }
+  .ov-hint-card .h-msg { flex: 1; }
+  .ov-hint-card .h-act { border: 0; background: #d98b3a; color: #fff; border-radius: 5px; padding: 5px 10px;
+                         font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .ov-hint-card .h-act:hover { filter: brightness(1.08); }
+  .ov-hint-card .h-x { border: 0; background: none; color: #9a9a9a; cursor: pointer; font-size: 13px; padding: 2px 4px; }
+  .ov-actions button:disabled { opacity: .45; pointer-events: none; }
   .ov-tol.on { color: #c44133; }
 
   /* 页面左上角：识别方式切换（本地 / AI） */
@@ -4534,7 +4568,7 @@
         <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
         <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.34</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.35</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -4672,9 +4706,7 @@
           <div class="scp-custom" id="scp-exclude-ref"></div>
         </div>
         <div class="scp-row">
-          <button class="btn btn-icon scp-crop" id="crop-ref" data-target="ref" title="框选印章区域：在预览图上拖出印章范围，只提取框内内容（适合黑白扫描件/正文压章）"><svg class="ui-icon" aria-hidden="true"><use href="#i-crop"/></svg> 框选</button>
-          <button class="btn btn-icon scp-pick" id="pick-ref" data-target="ref" data-exclude="0" title="提取取色：点击后在参考章原图预览上点选要保留的印章墨水颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-extract"/></svg> 提取</button>
-          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-ref" data-target="ref" data-exclude="1" title="排除取色：点击后在参考章原图预览上点选要从印章中排除的颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-exclude"/></svg> 排除</button>
+          <button class="btn btn-icon scp-pick" id="pick-ref" data-target="ref" data-exclude="0" title="打开修提取面板：点墨加色 / 点排除删色 / 取纸底 / 圆形裁切，都在面板里"><svg class="ui-icon" aria-hidden="true"><use href="#i-extract"/></svg> 修提取</button>
           <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-ref" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 提取</button>
         </div>
         <div class="scp-hint">提取＝保留所选颜色作印章墨迹　·　排除＝从结果中去除所选颜色</div>
@@ -4719,9 +4751,7 @@
           <div class="scp-custom" id="scp-exclude-test"></div>
         </div>
         <div class="scp-row">
-          <button class="btn btn-icon scp-crop" id="crop-test" data-target="test" title="框选印章区域：在预览图上拖出印章范围，只提取框内内容（适合黑白扫描件/正文压章）"><svg class="ui-icon" aria-hidden="true"><use href="#i-crop"/></svg> 框选</button>
-          <button class="btn btn-icon scp-pick" id="pick-test" data-target="test" data-exclude="0" title="提取取色：点击后在待验章原图预览上点选要保留的印章墨水颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-extract"/></svg> 提取</button>
-          <button class="btn btn-icon scp-pick scp-pick-exclude" id="pick-exclude-test" data-target="test" data-exclude="1" title="排除取色：点击后在待验章原图预览上点选要从印章中排除的颜色"><svg class="ui-icon" aria-hidden="true"><use href="#i-exclude"/></svg> 排除</button>
+          <button class="btn btn-icon scp-pick" id="pick-test" data-target="test" data-exclude="0" title="打开修提取面板：点墨加色 / 点排除删色 / 取纸底 / 圆形裁切，都在面板里"><svg class="ui-icon" aria-hidden="true"><use href="#i-extract"/></svg> 修提取</button>
           <button class="btn btn-icon scp-pick scp-ai" id="ai-pick-test" title="AI 提取印章：由视觉模型定位印章并裁剪，直接用于叠加对比（无需按颜色筛选）"><svg class="ui-icon" aria-hidden="true"><use href="#i-sparkles"/></svg> AI 提取</button>
         </div>
         <div class="scp-hint">提取＝保留所选颜色作印章墨迹　·　排除＝从结果中去除所选颜色</div>
@@ -5024,6 +5054,7 @@
       <div class="ov-pane ov-pane-b" id="ov-pane-b">
         <canvas id="ov-canvas2"></canvas>
         <span class="ov-tag" id="ov-tag-b">提取结果 · 实时</span>
+        <div id="ov-hints"></div>
       </div>
       <div class="ov-hint" id="ov-hint"></div>
     </div>
@@ -5032,31 +5063,25 @@
       <div class="ov-foot-bar">
         <div class="ov-info" id="ov-info">滚轮缩放 · 拖动平移</div>
         <div class="ov-actions" id="ov-actions">
+          <!-- ① 我要做什么（动词） -->
           <div class="ov-group ov-mode-group">
             <div class="ov-pickmode" id="ov-pickmode">
-              <button type="button" class="active" data-pick="add">提取</button>
-              <button type="button" data-pick="exclude">排除</button>
+              <button type="button" class="active" data-pick="add" title="点印章墨迹：把这种颜色加进提取">🖱 点墨</button>
+              <button type="button" data-pick="exclude" title="点要删掉的颜色：从提取结果里去除（如正文、底纹）">⊘ 排除</button>
             </div>
-            <button type="button" class="btn" id="ov-pick-paper" title="点一下纸面：指定纸底色（纸底深浅不均、或自动判定偏亮/偏暗时用）">🖱 取纸底</button>
-            <label class="ov-tol" id="ov-match-wrap" title="匹配方式：墨量分解＝按“纸底→墨色”的浓度判墨（淡章不丢、纸底不吃，推荐）；色相/精确RGB 为旧方式">
-              <span>匹配</span>
-              <select id="ov-match">
-                <option value="ink">墨量分解</option>
-                <option value="hue">色相（旧）</option>
-                <option value="rgb">精确RGB（旧）</option>
-              </select>
-            </label>
+            <button type="button" class="btn" id="ov-pick-paper" title="点一下纸面：指定纸底色（纸底深浅不均、或自动判定偏亮/偏暗时用）">取纸底</button>
           </div>
           <span class="ov-vsep" aria-hidden="true"></span>
+          <!-- ② 从什么开始（范围，单选） -->
+          <div class="ov-group" id="ov-base-group">
+            <label class="ov-base" title="保留自动提取的笔画，再按我点的颜色增删 —— 日常推荐">
+              <input type="radio" name="ov-base" value="auto" checked><span>自动提取 + 我点的颜色</span></label>
+            <label class="ov-base" title="忽略自动提取，只保留我点过的颜色画出的印章 —— 底色杂乱、正文压章时用">
+              <input type="radio" name="ov-base" value="blank"><span>只用我点的颜色</span></label>
+          </div>
+          <span class="ov-vsep" aria-hidden="true"></span>
+          <!-- ③ 结果微调 -->
           <div class="ov-group ov-params-group">
-            <label class="ov-tol ov-enh" id="ov-manual-wrap" title="纯手工模式：只按所选 RGB 保留/删除颜色，不做色相、背景、加深等任何额外计算；开关与配色会记住，清空比对也不会丢">
-              <span>纯手工</span>
-              <input type="checkbox" id="ov-manual">
-            </label>
-            <label class="ov-tol ov-enh" id="ov-manual-blank-wrap" title="空白模式（需先开纯手工）：不做任何自动取色，从一张空白画布开始，完全靠手工取色画出印章">
-              <span>空白</span>
-              <input type="checkbox" id="ov-manual-blank">
-            </label>
             <label class="ov-tol" id="ov-tol-wrap" title="浓度下限：笔画比纸底“浓”到多少才算墨。调大 → 更干净（淡笔画会被舍去）；调小 → 抓得更全（纸底噪点可能浮现）。提取与剔除同时生效">
               <span>浓度下限</span>
               <input type="range" id="ov-tol" min="15" max="65" step="1" value="30">
@@ -5070,19 +5095,35 @@
                 <option value="2">强</option>
               </select>
             </label>
-            <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数">
-              <span>颜色加深</span>
-              <input type="checkbox" id="ov-enh-auto" checked>
-              <input type="range" id="ov-enh-thr" min="1" max="3" step="0.1" value="1" disabled>
-              <b id="ov-enh-val">自动</b>
-            </label>
           </div>
           <span class="ov-spacer" aria-hidden="true"></span>
+          <button type="button" class="btn" id="ov-adv-toggle" aria-expanded="false">⚙ 高级</button>
           <div class="ov-group ov-end-group">
             <button type="button" class="btn" id="ov-reset" title="清除当前框选/取色标记，恢复自动定位"><svg class="ui-icon" aria-hidden="true"><use href="#i-reset"/></svg>清除标记</button>
             <button type="button" class="btn" id="ov-cancel">取消</button>
             <button type="button" class="btn btn-primary" id="ov-apply">应用框选</button>
           </div>
+        </div>
+        <!-- ⚙ 高级抽屉：默认收起，浮动在工具栏上方 -->
+        <div class="ov-adv" id="ov-adv" hidden>
+          <label class="ov-tol" id="ov-match-wrap" title="匹配方式：墨量分解＝按“纸底→墨色”的浓度判墨（淡章不丢、纸底不吃，推荐）；色相/精确RGB 为旧方式，遇到特殊材料时可切回排查">
+            <span>匹配方式</span>
+            <select id="ov-match">
+              <option value="ink">墨量分解（推荐）</option>
+              <option value="hue">色相（旧）</option>
+              <option value="rgb">精确RGB（旧）</option>
+            </select>
+          </label>
+          <label class="ov-tol ov-enh" id="ov-enh-wrap" title="颜色加深：把淡章笔画压实、提亮；自动档按墨迹浓度估算倍数。只影响观感，不改判定">
+            <span>颜色加深</span>
+            <input type="checkbox" id="ov-enh-auto" checked>
+            <input type="range" id="ov-enh-thr" min="1" max="3" step="0.1" value="1" disabled>
+            <b id="ov-enh-val">自动</b>
+          </label>
+          <label class="ov-tol" id="ov-remember-wrap" title="换一张图片时沿用这次的配色与参数（默认关：不同单据的印章颜色差异大，沿用往往不合适）">
+            <span>记住配色</span>
+            <input type="checkbox" id="ov-remember">
+          </label>
         </div>
       </div>
     </div>
@@ -5164,7 +5205,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.34';
+const APP_VERSION = '3.6.35';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6450,11 +6491,12 @@ function processStamp(img, target) {
   // 新图重置墨色选择（自动提取默认红章，手工颜色清空）
   const prevEnhance = (state.ink[target] && state.ink[target].enhance) || { auto: true, factor: 1 };
   // 纯手工模式下配色是"设置"：换图也沿用上次选好的颜色
-  const prevCustoms = manualInkOn() ? ((state.ink[target] && state.ink[target].customs) || []) : [];
-  const prevTol = manualInkOn() ? (state.ink[target] && state.ink[target].pickTol) : undefined;
-  const prevFloor = manualInkOn() ? (state.ink[target] && state.ink[target].floor) : undefined;
-  const prevPaper = manualInkOn() ? (state.ink[target] && state.ink[target].paperRGB) : undefined;
-  const prevMorphLv = manualInkOn()
+  const keepCfg = rememberColorsOn();
+  const prevCustoms = keepCfg ? ((state.ink[target] && state.ink[target].customs) || []) : [];
+  const prevTol = keepCfg ? (state.ink[target] && state.ink[target].pickTol) : undefined;
+  const prevFloor = keepCfg ? (state.ink[target] && state.ink[target].floor) : undefined;
+  const prevPaper = keepCfg ? (state.ink[target] && state.ink[target].paperRGB) : undefined;
+  const prevMorphLv = keepCfg
     ? ((state.ink[target] && state.ink[target].morphLevel != null) ? state.ink[target].morphLevel
        : ((state.ink[target] && state.ink[target].morph) ? 2 : 0))
     : undefined;
@@ -7225,6 +7267,41 @@ function manualInkOn() {
   try { return localStorage.getItem('stamp.manualInk') === '1'; } catch (e) { return false; }
 }
 
+// ===== v3.6.35：取色范围单选（自动提取+我点的颜色 / 只用我点的颜色）与「记住配色」 =====
+// 旧的「纯手工」「空白」两个开关由单选内部维护（写入同一组 localStorage 键，旧分发逻辑不用改）；
+// 「记住配色」接替旧「纯手工」的记忆职责，默认关（不同单据的印章颜色差异大，沿用往往不合适）。
+function pickBase() {
+  try {
+    const v = localStorage.getItem('stamp.pickBase');
+    if (v === 'auto' || v === 'blank') return v;
+    // 迁移：老用户若显式开过纯手工+空白，映射为「只用我点的颜色」
+    if (localStorage.getItem('stamp.manualBlank') === '1') return 'blank';
+  } catch (e) {}
+  return 'auto';
+}
+function setPickBase(v) {
+  const blank = v === 'blank';
+  try {
+    localStorage.setItem('stamp.pickBase', blank ? 'blank' : 'auto');
+    localStorage.setItem('stamp.manualInk', blank ? '1' : '0');
+    localStorage.setItem('stamp.manualBlank', blank ? '1' : '0');
+  } catch (e) {}
+}
+function rememberColorsOn() {
+  try {
+    let v = localStorage.getItem('stamp.rememberColors');
+    if (v === null) {
+      // 迁移：老用户开过纯手工 = 他们想沿用配色
+      v = localStorage.getItem('stamp.manualInk') === '1' ? '1' : '0';
+      try { localStorage.setItem('stamp.rememberColors', v); } catch (e) {}
+    }
+    return v === '1';
+  } catch (e) { return false; }
+}
+function setRememberColors(v) {
+  try { localStorage.setItem('stamp.rememberColors', v ? '1' : '0'); } catch (e) {}
+}
+
 function manualBlankOn() {
   try { return manualInkOn() && localStorage.getItem('stamp.manualBlank') === '1'; } catch (e) { return false; }
 }
@@ -7244,26 +7321,24 @@ function setManualBlank(v) {
 }
 
 function syncManualUi() {
-  const on = manualInkOn();
   const blank = manualBlankOn();
-  const blankCb = document.getElementById('ov-manual-blank');
-  if (blankCb) { blankCb.checked = blank; blankCb.disabled = !on; }
-  const blankWrap = document.getElementById('ov-manual-blank-wrap');
-  if (blankWrap) blankWrap.classList.toggle('disabled', !on);
-  const cb = document.getElementById('ov-manual');
-  if (cb) cb.checked = on;
-  const wrap = document.getElementById('ov-manual-wrap');
-  if (wrap) wrap.classList.toggle('on', on);
-  // 纯手工时把「匹配 / 颜色加深」置灰：这套模式下它们不生效
-  ['ov-match-wrap', 'ov-enh-wrap'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('disabled', on);
-  });
+  const base = pickBase();
+  // 同步两个单选
+  document.querySelectorAll('#ov-base-group input[name=ov-base]').forEach((r) => { r.checked = (r.value === base); });
+  // 记住配色
+  const rem = document.getElementById('ov-remember');
+  if (rem) rem.checked = rememberColorsOn();
+  // 「颜色加深」只在“只用我点的颜色”下不生效（该模式不做增强）
+  const enhWrap = document.getElementById('ov-enh-wrap');
+  if (enhWrap) enhWrap.classList.toggle('disabled', blank);
+  // 空白模式下纸底/取纸底没有意义：纸底只服务于自动提取基底
+  const paperBtn = document.getElementById('ov-pick-paper');
+  if (paperBtn) paperBtn.disabled = blank;
   const info = document.getElementById('ov-info');
   if (info && OV && (OV.mode === 'pick' || OV.mode === 'circle')) {
-    info.textContent = on
-      ? '纯手工模式：只按所选 RGB 保留/删除颜色，不做其它计算 · 配置已记住'
-      : info.textContent;
+    info.textContent = blank
+      ? '只用我点的颜色：点过的颜色保留，其余全部清除'
+      : '自动提取 + 我点的颜色：点墨加色、点排除删色';
   }
 }
 
@@ -7409,6 +7484,7 @@ function recomputeInkModel(target) {
   st._sig = (st._sig || 0) + 1;
   st._lastDelta = { added, removed };
   drawExtractedPreview(target, st.extracted);
+  scheduleOvHints();                                   // 重算后刷新情境提示
   return st._lastDelta;
 }
 
@@ -7557,6 +7633,7 @@ function recomputeManual(target) {
   st.enhanceFactor = 1;
   st._inkHits = hits;
   drawExtractedPreview(target, cur);
+  scheduleOvHints();
   return { added, removed };
 }
 
@@ -8719,6 +8796,7 @@ function recomputeExtracted(target) {
   st._inkHits = {};
   excludeColors.forEach((c, i) => { if (c.hex) st._inkHits[c.hex] = hitCounts[i] || 0; });
   st._lastDelta = { added, removed };
+  scheduleOvHints();
   return st._lastDelta;
 }
 
@@ -8796,9 +8874,8 @@ function applyInkSelection(target, reasonMsg, afterMsg) {
     openOriginViewer(target, 'pick', false);
   });
   // ⊘ 排除取色按钮
-  $('#pick-exclude-' + target).addEventListener('click', () => {
-    openOriginViewer(target, 'pick', true);
-  });
+  const exBtn = $('#pick-exclude-' + target);
+  if (exBtn) exBtn.addEventListener('click', () => openOriginViewer(target, 'pick', true));
   // 🤖 AI 提取按钮：视觉模型定位印章 → 几何裁剪 → 直接进入叠加对比
   $('#ai-pick-' + target).addEventListener('click', () => runAIStampExtract(target));
 });
@@ -9434,6 +9511,8 @@ function ovSetMode(mode) {
     }
   } else { OV.ell = null; OV.pts = null; OV.ptsEdited = false; }
   if (typeof window.__ovSyncEnh === 'function') window.__ovSyncEnh();
+  const hintBox2 = document.getElementById('ov-hints');
+  if (hintBox2 && mode !== 'pick') hintBox2.innerHTML = '';
   requestAnimationFrame(() => { ovResize(); });
   ovDraw();
   if (typeof ovUpdateInfo === 'function') ovUpdateInfo();
@@ -9472,6 +9551,118 @@ function ovBuildPreview() {
   try { return ovRadialNormalize(base, ptsBase, Math.max(480, Math.min(1000, Math.round(Math.max(base.width, base.height) * 1.0)))); } catch (e) { return null; }
 }
 
+// ===== 情境提示（v3.6.35）：取色后按结果给出“哪里不对 + 一键修正” =====
+const OV_HINT_DEBOUNCE = 350;
+let _ovHintTimer = 0, _ovHintDismissed = {};
+
+function ovHintStats(target) {
+  const st = state[target];
+  const c = st && st.extracted;
+  if (!c) return null;
+  const S = 200;
+  const cv = document.createElement('canvas');
+  cv.width = S; cv.height = S;
+  const g = cv.getContext('2d');
+  g.drawImage(c, 0, 0, S, S);
+  const d = g.getImageData(0, 0, S, S).data;
+  const n = S * S;
+  const bin = new Uint8Array(n);
+  let opaque = 0;
+  for (let i = 0; i < n; i++) { bin[i] = d[i * 4 + 3] > 40 ? 1 : 0; if (bin[i]) opaque++; }
+  if (opaque < 30) return null;
+  let iso = 0;
+  for (let y = 1; y < S - 1; y++) {
+    for (let x = 1; x < S - 1; x++) {
+      const i = y * S + x;
+      if (!bin[i]) continue;
+      const nb = bin[i - 1] + bin[i + 1] + bin[i - S] + bin[i + S] + bin[i - S - 1] + bin[i - S + 1] + bin[i + S - 1] + bin[i + S + 1];
+      if (nb < 2) iso++;
+    }
+  }
+  const delta = state[target]._lastDelta || {};
+  const added = delta.added || 0;
+  return {
+    coverage: opaque / n,
+    opaque,
+    isolatedPct: iso / opaque,
+    modelAddedPct: (added * ((S * S) / n)) / n,
+  };
+}
+
+function ovBuildHints(target) {
+  const hints = [];
+  const stats = ovHintStats(target);
+  if (!stats) return hints;
+  const covPct = stats.coverage * 100;
+  const customs = (state.ink[target].customs || []).filter((c) => c.on);
+  const picked = customs.filter((c) => !c.exclude).length;
+  const base = pickBase();
+  const dismissed = _ovHintDismissed[target] || {};
+
+  if (covPct > 55) {
+    hints.push({ id: 'tooMuch', msg: '提取范围过大（覆盖 ' + Math.round(covPct) + '%）—— 可能点到了纸底或浅色光晕',
+      act: '撤销这次取色', fn: () => ovUndoLastPick(target) });
+  } else if (picked > 0 && covPct < 2) {
+    hints.push({ id: 'tooFew', msg: '几乎没提取到内容 —— 笔画浓度可能低于当前下限',
+      act: '下限调到 15%', fn: () => { state.ink[target].floor = 0.15; applyInkSelection(target, '浓度下限已调到 15%'); window.__ovSyncTol && window.__ovSyncTol(); } });
+  }
+  if (stats.isolatedPct > 0.08 && covPct >= 8 && covPct <= 55) {
+    hints.push({ id: 'isolated', msg: '检测到较多孤立杂点（占墨迹 ' + Math.round(stats.isolatedPct * 100) + '%）',
+      act: '开启弱去网点', fn: () => { state.ink[target].morphLevel = 1; state.ink[target].morph = true; applyInkSelection(target, '已开启弱去网点'); window.__ovSyncMorph && window.__ovSyncMorph(); } });
+  }
+  if (base === 'auto' && stats.modelAddedPct >= 0 && stats.modelAddedPct < 0.02 && covPct > 25) {
+    hints.push({ id: 'autoDominant', msg: '当前结果主要是自动提取的内容（我点的颜色贡献很小）',
+      act: '只用我点的颜色', fn: () => { setPickBase('blank'); syncManualUi(); recomputeExtracted(target); showStatus('已切换：只用我点的颜色'); } });
+  }
+  return hints.filter((h) => !dismissed[h.id]).slice(0, 2);
+}
+
+function ovRenderHints() {
+  const target = OV.target;
+  const box = document.getElementById('ov-hints');
+  if (!box || OV.mode !== 'pick') return;
+  const st = state[target];
+  if (!st || !st.extracted) { box.innerHTML = ''; return; }
+  const hints = ovBuildHints(target);
+  box.innerHTML = '';
+  for (const h of hints) {
+    const row = document.createElement('div');
+    row.className = 'ov-hint-card';
+    const msg = document.createElement('span');
+    msg.className = 'h-msg';
+    msg.textContent = h.msg;
+    const act = document.createElement('button');
+    act.type = 'button';
+    act.className = 'h-act';
+    act.textContent = h.act;
+    act.addEventListener('click', () => { h.fn(); scheduleOvHints(); });
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'h-x';
+    x.textContent = '✕';
+    x.title = '忽略这条建议';
+    x.addEventListener('click', () => { (_ovHintDismissed[target] = _ovHintDismissed[target] || {})[h.id] = 1; scheduleOvHints(); });
+    row.append(msg, act, x);
+    box.appendChild(row);
+  }
+}
+
+function scheduleOvHints() {
+  clearTimeout(_ovHintTimer);
+  _ovHintTimer = setTimeout(() => { try { ovRenderHints(); } catch (e) {} }, OV_HINT_DEBOUNCE);
+}
+
+// 撤销最近一次取色：删掉最后加入的颜色并重算
+function ovUndoLastPick(target) {
+  const ink = state.ink[target];
+  if (!ink.customs.length) { showStatus('没有可撤销的取色'); return; }
+  const last = ink.customs.pop();
+  const stM = state[target];
+  if (stM && stM.marks && stM.marks.length) stM.marks.pop();
+  applyInkSelection(target, '已撤销最近一次取色（' + last.hex + '）');
+  try { ovRenderColors(); } catch (e) {}
+}
+
 function ovDrawResult() {
   ovEls();
   const ctx = OV.ctx2;
@@ -9491,6 +9682,7 @@ function ovDrawResult() {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, x, y, w, h);
+  scheduleOvHints();
   const tag = document.getElementById('ov-tag-b');
   if (tag) {
     let ink = 0;
@@ -9565,22 +9757,8 @@ function syncEnh() {
   if (val) val.textContent = enh.auto ? '自动' : (Number(enh.factor || 1).toFixed(1) + '×');
 }
 
-// 纯手工开关：记住上次选择，打开查看器即同步
+// 取色范围/记住配色的 UI 同步（v3.6.35：旧的「纯手工/空白」复选框已由范围单选替代）
 function bindManualToggle() {
-  const cb = document.getElementById('ov-manual');
-  if (!cb) return;
-  cb.checked = manualInkOn();
-  if (!cb._bound) {
-    cb.addEventListener('change', (e) => setManualInk(e.target.checked));
-    cb._bound = true;
-  }
-  const blankCb = document.getElementById('ov-manual-blank');
-  if (blankCb && !blankCb._bound) {
-    blankCb.checked = manualBlankOn();
-    blankCb.disabled = !manualInkOn();
-    blankCb.addEventListener('change', (e) => setManualBlank(e.target.checked));
-    blankCb._bound = true;
-  }
   syncManualUi();
 }
 
@@ -9925,9 +10103,9 @@ function ovPickAt(clientX, clientY, exclude) {
     const hex = '#' + best.map(v => v.toString(16).padStart(2, '0')).join('');
     document.getElementById('ov-info').textContent = `已${exclude ? '排除' : '提取'} ${hex} · 继续点选其他颜色`
       + (state.ink[OV.target]._pickHint || '');
-    ovDraw();   // 右侧「提取结果」立即刷新
-    // applyInkSelection 有 250ms 防抖，重算完成后再刷一次，保证右侧是最终结果
-    setTimeout(() => { if (ovIsOpen()) ovDraw(); }, 320);
+    ovDraw();
+    scheduleOvHints();
+    setTimeout(() => { if (ovIsOpen()) { ovDraw(); scheduleOvHints(); } }, 320);
   }
 }
 
@@ -9962,6 +10140,53 @@ function ovPickAt(clientX, clientY, exclude) {
       if (info) info.textContent = pickPaper ? '点击纸面（印章外的空白纸）来指定纸底色 · 再点按钮取消' : '已取消取纸底';
       OV.pickPaper = pickPaper;
     });
+  }
+  // 范围单选：切“只用我点的颜色”时自动开启纯手工+空白（旧分发逻辑依赖这两个键）
+  document.querySelectorAll('#ov-base-group input[name=ov-base]').forEach((r) => {
+    if (r._bound) return;
+    r._bound = true;
+    r.addEventListener('change', () => {
+      if (!r.checked) return;
+      setPickBase(r.value);
+      syncManualUi();
+      ['ref', 'test'].forEach((t) => {
+        if (state[t] && (state[t].original || state[t].extracted)) { try { recomputeExtracted(t); } catch (e) {} }
+      });
+      try { ovRenderColors(); } catch (e) {}
+      showStatus(r.value === 'blank'
+        ? '已切换：只用我点的颜色（自动提取不再参与，全部靠点选）'
+        : '已切换：自动提取 + 我点的颜色');
+    });
+  });
+  // 记住配色
+  const remCb = document.getElementById('ov-remember');
+  if (remCb && !remCb._bound) {
+    remCb._bound = true;
+    remCb.checked = rememberColorsOn();
+    remCb.addEventListener('change', () => {
+      setRememberColors(remCb.checked);
+      showStatus(remCb.checked
+        ? '记住配色：开 —— 换图片沿用这次的配色与参数'
+        : '记住配色：关 —— 每张图重新取色');
+    });
+  }
+  // 高级抽屉
+  const advBox = document.getElementById('ov-adv');
+  const advBtn = document.getElementById('ov-adv-toggle');
+  if (advBtn && advBox && !advBtn._bound) {
+    advBtn._bound = true;
+    advBtn.addEventListener('click', () => {
+      const show = advBox.hidden;
+      advBox.hidden = !show;
+      advBtn.classList.toggle('active', show);
+      advBtn.setAttribute('aria-expanded', String(show));
+    });
+    document.addEventListener('click', (e) => {
+      if (advBox.hidden) return;
+      if (advBox.contains(e.target) || advBtn.contains(e.target)) return;
+      advBox.hidden = true; advBtn.classList.remove('active');
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !advBox.hidden) { advBox.hidden = true; advBtn.classList.remove('active'); } });
   }
   const tolInput = document.getElementById('ov-tol');
   const tolVal = document.getElementById('ov-tol-val');
@@ -10870,7 +11095,7 @@ async function clearAllComparison() {
       extCanvas.style.width = ''; extCanvas.style.height = '';
     }
     // 纯手工模式的配色是"设置"而不是"本次比对的数据"：清空时保留
-    const keepInk = manualInkOn()
+    const keepInk = rememberColorsOn()
       ? { customs: (state.ink[t].customs || []), pickTol: state.ink[t].pickTol, matchMode: state.ink[t].matchMode }
       : { customs: [] };
     state.ink[t] = { presets: ['red'], customs: keepInk.customs, grayThreshold: GRAY_DEFAULT_THRESHOLD, enhance: { auto: true, factor: 1 } };
