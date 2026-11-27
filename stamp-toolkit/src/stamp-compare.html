@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src blob: data:; connect-src * data: blob:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>印章对比工具 v3.6.36</title>
+<title>印章对比工具 v3.6.37</title>
 <meta name="author" content="李劲松 (BI4IWN)">
 <meta name="description" content="印章对比工具 — 粘贴两张印章图片，自动提取归一化后多模式对比">
 <!-- OCR 由统一启动器 stamp_app.py 提供 (PaddleOCR + HTTP 服务) -->
@@ -4568,7 +4568,7 @@
         <rect x="11.15" y="3.1" width="3.7" height="4.2" fill="#ffffff"/>
         <path d="M8.8 13.6l2.9 3.1 5.4-6" fill="none" stroke="#d92b2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.36</span></h1>
+      <h1 title="印章对比工具 v3.6.26">印章对比工具 <span class="hero-ver" id="hero-ver">v3.6.37</span></h1>
       <div class="header-rec-mode" id="rec-mode-group" role="group" aria-label="识别方式" title="文字提取方式：本地识别（默认）或已配置的 AI 模型">
         <span class="header-rec-label">识别</span>
         <button class="mode-btn active" data-rec="local" aria-pressed="true">本地</button>
@@ -5205,7 +5205,7 @@
    ============================================================ */
 // OCR 服务地址：file:// 直开时无法用相对路径，回退到默认端口 8765
 var OCR_SERVER = location.protocol === 'file:' ? 'http://127.0.0.1:8765' : '';
-const APP_VERSION = '3.6.36';
+const APP_VERSION = '3.6.37';
 
 const state = {
   ref: { original: null, extracted: null, circular: false, rotate: 0, scaleX: 100, scaleY: 100, offsetX: 0, offsetY: 0, corners: null },
@@ -6427,6 +6427,7 @@ function postDiag(target) {
 // canvas 采样在个别扫描件上差异明显，几何放到后端才可复现）。
 async function rustDewarp(target) {
   try {
+    if (!dewarpEnabled()) return;   // 圆章校正开关关闭：不走 Rust 兜底
     if (!/^127\.0\.0\.1$|^localhost$/.test(location.hostname)) return;
     const st = state[target];
     const src = st && st.baseExtracted;
@@ -6620,6 +6621,7 @@ function processStamp(img, target) {
   try {
     setTimeout(() => {
       try {
+        if (!dewarpEnabled()) return;   // 圆章校正开关关闭：加载后不做自动校正
         const st2 = state[target];
         if (!st2 || !st2.baseExtracted || st2.warpInfo || st2.circleLock) return;
         const c0 = st2.baseExtracted;

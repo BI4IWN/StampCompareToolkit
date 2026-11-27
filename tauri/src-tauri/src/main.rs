@@ -217,7 +217,7 @@ async fn diag(body: String) -> &'static str {
 }
 
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "version": "3.6.36", "ocr": true, "engine": "rust" }))
+    Json(json!({ "status": "ok", "version": "3.6.37", "ocr": true, "engine": "rust" }))
 }
 
 async fn operation_manual() -> impl axum::response::IntoResponse {
